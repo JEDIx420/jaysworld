@@ -20,37 +20,37 @@ This is an original **v0.2 playable concept**, using detailed procedural models.
 
 Use Node.js 24 or later.
 
-~~~sh
+```sh
 npm ci
 npm run dev
-~~~
+```
 
 No account, secret, paid API, or backend is required. Radio needs internet access; the rest of the site builds into static files.
 
 ## Controls
 
-| Control | Action |
-| --- | --- |
-| WASD / arrows | Drive, reverse, steer |
-| Space | Brake |
-| Shift | Boost |
-| E | Explore a nearby place |
-| M | Open Places |
-| R | Return to the tea shop |
-| H | Horn, after enabling sound |
-| Drag / scroll | Orbit / zoom camera |
-| Touch | Left stick to drive, another finger on the world to orbit |
+| Control       | Action                                                    |
+| ------------- | --------------------------------------------------------- |
+| WASD / arrows | Drive, reverse, steer                                     |
+| Space         | Brake                                                     |
+| Shift         | Boost                                                     |
+| E             | Explore a nearby place                                    |
+| M             | Open Places                                               |
+| R             | Return to the tea shop                                    |
+| H             | Horn, after enabling sound                                |
+| Drag / scroll | Orbit / zoom camera                                       |
+| Touch         | Left stick to drive, another finger on the world to orbit |
 
 Project, radio, and settings dialogs pause driving. Places provides immediate access to each exhibit. Radio continues while reading until stopped.
 
 ## Build and verification
 
-~~~sh
+```sh
 npm test
 npm run build
 npx playwright install chromium
 npm run test:browser
-~~~
+```
 
 The browser checks serve the production build and exercise the visitor journey. Set JAYSWORLD_LIVE_RADIO=1 to include a real radio playback check; CI tests the opt-in and failure paths without relying on broadcaster availability. Optional JAYSWORLD_CHROMIUM_PATH selects an existing browser, and JAYSWORLD_BASE_URL tests a deployed site.
 
@@ -70,18 +70,18 @@ The lightweight project interface loads separately from the 3D engine. The physi
 
 ## Source
 
-| File | Responsibility |
-| --- | --- |
-| src/main.ts | Interface, navigation, exhibits, state, loading, fallback |
-| src/engine.ts | Simulation, rendering, camera, lighting, map, quality |
-| src/vehicle.ts | Rapier chassis and three-wheel handling |
-| src/input.ts | Keyboard and independent touch pointer ownership |
-| src/environment.ts | Village layout, road, scenery, colliders, wildlife |
-| src/models.ts | Original procedural models and material batching |
-| src/demos.ts | Beat sequencer, reconciliation and project interactions |
-| src/radio.ts | Opt-in streams, safe directory data, playback lifecycle |
-| src/audio.ts | Original procedural engine, horn and ambience |
-| src/projects.ts | Public project content, links and world locations |
+| File               | Responsibility                                            |
+| ------------------ | --------------------------------------------------------- |
+| src/main.ts        | Interface, navigation, exhibits, state, loading, fallback |
+| src/engine.ts      | Simulation, rendering, camera, lighting, map, quality     |
+| src/vehicle.ts     | Rapier chassis and three-wheel handling                   |
+| src/input.ts       | Keyboard and independent touch pointer ownership          |
+| src/environment.ts | Village layout, road, scenery, colliders, wildlife        |
+| src/models.ts      | Original procedural models and material batching          |
+| src/demos.ts       | Beat sequencer, reconciliation and project interactions   |
+| src/radio.ts       | Opt-in streams, safe directory data, playback lifecycle   |
+| src/audio.ts       | Original procedural engine, horn and ambience             |
+| src/projects.ts    | Public project content, links and world locations         |
 
 ## Credits and scope
 
