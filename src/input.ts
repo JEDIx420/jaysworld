@@ -22,6 +22,7 @@ export class Input {
   private brakePointer: number | null = null;
   private orbitPointer: number | null = null;
   private previous = { x: 0, y: 0 };
+  private cameraTouches = new Map<number, { x: number; y: number }>();
   private abort = new AbortController();
   paused = false;
 
@@ -53,7 +54,7 @@ export class Input {
     window.addEventListener(
       'keydown',
       (e) => {
-        if (this.paused) return;
+        if (this.paused || e.defaultPrevented) return;
         if (
           (e.target as HTMLElement)?.closest?.('input,select,textarea') ||
           (['Space', 'Enter'].includes(e.code) && (e.target as HTMLElement)?.closest?.('button,a'))
@@ -64,7 +65,10 @@ export class Input {
           this.keys.add(e.code);
         }
         if (e.repeat) return;
-        if (e.code === 'KeyE' || (e.code === 'Enter' && e.target === canvas)) callbacks.interact();
+        if (e.code === 'Enter') {
+          e.preventDefault();
+          callbacks.interact();
+        }
         if (e.code === 'KeyM') callbacks.places();
         if (e.code === 'KeyR') callbacks.reset();
         if (e.code === 'KeyH') callbacks.honk();
@@ -140,7 +144,14 @@ export class Input {
     canvas.addEventListener(
       'pointerdown',
       (e) => {
-        if (this.paused || this.orbitPointer !== null) return;
+        if (this.paused) return;
+        if (e.pointerType === 'touch')
+          this.cameraTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (this.cameraTouches.size === 2) {
+          canvas.setPointerCapture(e.pointerId);
+          return;
+        }
+        if (this.orbitPointer !== null) return;
         this.orbitPointer = e.pointerId;
         this.previous = { x: e.clientX, y: e.clientY };
         canvas.setPointerCapture(e.pointerId);
@@ -151,6 +162,20 @@ export class Input {
     canvas.addEventListener(
       'pointermove',
       (e) => {
+        if (this.cameraTouches.has(e.pointerId)) {
+          const points = [...this.cameraTouches.values()];
+          const before =
+            points.length === 2
+              ? Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y)
+              : 0;
+          this.cameraTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          if (this.cameraTouches.size === 2) {
+            const next = [...this.cameraTouches.values()];
+            callbacks.zoom((before - Math.hypot(next[0].x - next[1].x, next[0].y - next[1].y)) * 2);
+            this.previous = { x: e.clientX, y: e.clientY };
+            return;
+          }
+        }
         if (e.pointerId !== this.orbitPointer) return;
         callbacks.orbit(e.clientX - this.previous.x, e.clientY - this.previous.y);
         this.previous = { x: e.clientX, y: e.clientY };
@@ -158,6 +183,7 @@ export class Input {
       { signal },
     );
     const releaseOrbit = (e: PointerEvent) => {
+      this.cameraTouches.delete(e.pointerId);
       if (e.pointerId === this.orbitPointer) this.orbitPointer = null;
     };
     for (const name of ['pointerup', 'pointercancel', 'lostpointercapture'] as const)
@@ -187,6 +213,7 @@ export class Input {
 
   clear() {
     this.keys.clear();
+    this.cameraTouches.clear();
     this.touch = { ...REST_INPUT };
     this.stickPointer = this.brakePointer = this.orbitPointer = null;
     const knob = document.getElementById('joystick-knob');

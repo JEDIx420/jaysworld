@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { AutoVehicle, FIXED_STEP, WHEEL_POINTS } from './vehicle';
 import { Input } from './input';
-import { makeAuto } from './models';
+import { makeAuto, TOWER_ROOF } from './models';
 import { createEnvironment } from './environment';
 import { makePerson } from './village-life';
 import { inWorld, waterAt, type Point } from './village';
@@ -12,17 +12,33 @@ import { CROC_NAMES } from './wildlife';
 import { groundHeight } from './terrain';
 import { shouldYield, safeTravel } from './safety';
 import { PLACES, nearestPlace, type Place } from './projects';
+import { closureTravel, nearestRoad } from './placement';
+import { createTraffic, type RivalJob } from './traffic';
+import { createWeather } from './weather';
 
 export interface JourneyOptions {
   canvas: HTMLCanvasElement;
   performance: boolean;
   isPaused: () => boolean;
+  isStarted: () => boolean;
+  competitionActive: () => boolean;
+  rivalJob: (point: Point) => RivalJob | undefined;
+  rivalArrive: (id: number, point: Point, speed: number) => boolean;
+  onTick: (dt: number) => void;
   onProgress: (progress: number, text: string) => void;
   onTelemetry: (speed: number, x: number, z: number, yaw: number) => void;
   onNear: (place: Place | undefined) => void;
   onDrive: () => void;
   onRecover: (message: string) => void;
   onError: (message: string) => void;
+  onWeather: (
+    rain: number,
+    wind: number,
+    night: number,
+    hour: number,
+    weather: string,
+    season: string,
+  ) => void;
   onAudio: (speed: number, paused: boolean, throttle: number, brake: boolean) => void;
   onView: (mode: ViewMode, title: string, detail: string) => void;
   onQuality: (performance: boolean) => void;
@@ -30,15 +46,19 @@ export interface JourneyOptions {
   places: () => void;
   honk: () => void;
 }
-export type ViewMode = 'drive' | 'storefront' | 'croc' | 'stars';
+export type ViewMode = 'drive' | 'storefront' | 'croc' | 'stars' | 'roof';
 export interface Journey {
   reset: (place?: Place) => void;
   pause: () => void;
   quality: (performance: boolean) => void;
   night: (enabled: boolean) => void;
+  time: (hour?: number) => void;
+  weather: (kind?: 'clear' | 'haze' | 'wind' | 'rain') => void;
   camera: (style?: 'close' | 'wide') => void;
   feedCroc: () => void;
   tourObservatory: () => void;
+  roof: () => void;
+  look: (x: number, y: number) => void;
   visit: (place: Place) => void;
   leaveView: () => void;
   zoom: (delta: number) => void;
@@ -47,6 +67,7 @@ export interface Journey {
   constellation: (id: string) => void;
   setPassenger: (index: number, onboard: boolean) => void;
   setDuty: (enabled: boolean) => void;
+  setOffers: (indices: number[], unavailable: number[]) => void;
   serve: (item: string) => void;
   route: (points: readonly Point[]) => void;
   dispose: () => void;
@@ -96,7 +117,26 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     vehicle = new AutoVehicle(world),
     auto = makeAuto();
   scene.add(auto.group);
+  const autoShadow = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 24),
+    new THREE.MeshBasicMaterial({
+      color: '#182c23',
+      transparent: true,
+      opacity: 0.2,
+      depthWrite: false,
+    }),
+  );
+  autoShadow.rotation.x = -Math.PI / 2;
+  autoShadow.scale.set(0.9, 1.65, 1);
+  scene.add(autoShadow);
   const sky = createSky(scene);
+  const traffic = createTraffic(
+    scene,
+    world,
+    options.performance,
+    options.rivalJob,
+    options.rivalArrive,
+  );
   const trail = new THREE.InstancedMesh(
     new THREE.BufferGeometry().setAttribute(
       'position',
@@ -126,6 +166,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     currentQ = previousQ.clone();
   const target = previous.clone(),
     desiredCamera = new THREE.Vector3();
+  const safePosition = previous.clone();
   const map = document.getElementById('minimap') as HTMLCanvasElement;
   const atlas = document.getElementById('village-atlas') as HTMLCanvasElement;
   let cameraStyle: 'close' | 'wide' = 'close';
@@ -150,7 +191,6 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       )
     : false;
   let performanceMode = options.performance || software,
-    nightTarget = 0,
     nightAmount = 0;
   let mode: ViewMode = 'drive',
     viewPlace: Place | undefined,
@@ -162,6 +202,10 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     braking = false;
   const view = (next: ViewMode, title = '', detail = '') => {
     mode = next;
+    camera.far = next === 'roof' ? 750 : 480;
+    camera.updateProjectionMatrix();
+    (scene.fog as THREE.Fog).near = next === 'roof' ? 230 : 95;
+    (scene.fog as THREE.Fog).far = next === 'roof' ? 650 : 300;
     input.clear();
     vehicle.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     vehicle.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
@@ -177,6 +221,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
   const reset = (place?: Place) => {
     if (mode !== 'drive') view('drive');
     vehicle.reset(place?.trigger.x, place?.trigger.z);
+    traffic.clearBay(vehicle.body.translation());
     input.clear();
     current.copy(vehicle.body.translation());
     previous.copy(current);
@@ -192,21 +237,21 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     honk: options.honk,
     reset: () => {
       reset();
-      options.onRecover('Back at the tea shop.');
+      options.onRecover('Back at Eagle Towers.');
     },
     orbit: (x, y) => {
       orbitYaw -= x * 0.005;
       elevation = THREE.MathUtils.clamp(
         elevation + y * 0.0035,
-        mode === 'stars' ? 0.12 : 0.16,
-        mode === 'stars' ? 1.5 : 1.15,
+        mode === 'roof' ? -0.6 : mode === 'stars' ? 0.12 : 0.16,
+        mode === 'stars' || mode === 'roof' ? 1.5 : 1.15,
       );
       manualCameraAt = elapsed;
     },
     zoom: (delta) => zoom(delta),
   });
   const zoom = (delta: number) => {
-    if (mode === 'stars') {
+    if (mode === 'stars' || mode === 'roof') {
       camera.fov = THREE.MathUtils.clamp(camera.fov + delta * 0.025, 9, 60);
       camera.updateProjectionMatrix();
     } else
@@ -229,6 +274,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     options.onQuality(value);
     resize();
   };
+  const weather = createWeather(scene, performanceMode);
   quality(performanceMode);
   window.addEventListener('resize', resize);
   const loseContext = (event: Event) => {
@@ -245,18 +291,23 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     const visualDt = Math.min(Math.max((now - lastFrame) / 1000, 0), 0.5);
     const dt = Math.min(visualDt, 0.1);
     lastFrame = now;
-    elapsed += visualDt;
+    if (!document.hidden && options.isStarted()) elapsed += visualDt;
     const inputPaused = options.isPaused() || document.hidden || contextLost;
     const paused = inputPaused || mode !== 'drive';
     input.paused = inputPaused;
+    const simulationPaused = !options.isStarted() || document.hidden || contextLost;
+    const bodyType = paused ? RAPIER.RigidBodyType.Fixed : RAPIER.RigidBodyType.Dynamic;
+    if (vehicle.body.bodyType() !== bodyType) vehicle.body.setBodyType(bodyType, true);
     let yielding = false;
     const residents = [...environment.life.residents(), ...environment.roadside.residents()];
-    if (!paused) {
+    if (!simulationPaused) {
       accumulator += dt;
       while (accumulator >= FIXED_STEP) {
         previous.copy(current);
         previousQ.copy(currentQ);
-        const command = input.read();
+        const command = paused
+          ? { throttle: 0, steer: 0, brake: true, boost: false }
+          : input.read();
         const velocity = vehicle.body.linvel();
         if (shouldYield(current, { x: velocity.x, z: velocity.z }, current.y, residents)) {
           command.brake = true;
@@ -265,11 +316,25 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
         }
         throttle = command.throttle;
         braking = command.brake;
-        vehicle.beforeStep(command);
+        if (!paused) vehicle.beforeStep(command);
+        if (options.competitionActive() && mode === 'drive') options.onTick(FIXED_STEP);
+        const trafficResidents = [
+          ...residents,
+          { x: current.x, z: current.z, y: current.y, radius: 1.2 },
+        ];
+        traffic.beforeStep(
+          FIXED_STEP,
+          trafficResidents,
+          options.competitionActive() && mode === 'drive',
+        );
         world.step();
+        traffic.afterStep(trafficResidents);
         current.copy(vehicle.body.translation());
         currentQ.copy(vehicle.body.rotation());
-        const safe = safeTravel(previous, current, current.y, residents);
+        const safe = Math.min(
+          safeTravel(previous, current, current.y, residents),
+          closureTravel(previous, current),
+        );
         if (safe < 1) {
           current.x = previous.x + (current.x - previous.x) * safe;
           current.z = previous.z + (current.z - previous.z) * safe;
@@ -283,11 +348,19 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
         }
         const invalid =
           current.y < -3 || !inWorld(current.x, current.z) || waterAt(current.x, current.z);
+        const embedded = current.y < groundHeight(current.x, current.z) - 0.5;
         recoveryTimer = vehicle.isOverturned() ? recoveryTimer + FIXED_STEP : 0;
-        if (invalid || recoveryTimer > 2.3) {
+        if (embedded) {
+          const road = nearestRoad(safePosition);
+          vehicle.reset(road.x, road.z);
+          current.copy(vehicle.body.translation());
+          previous.copy(current);
+          options.onRecover('Back on the road.');
+        } else if (invalid || recoveryTimer > 2.3) {
           reset();
           options.onRecover(invalid ? 'Back on dry land.' : 'The auto is back on its wheels.');
         }
+        if (!invalid && !embedded && !vehicle.isOverturned()) safePosition.copy(current);
         accumulator = Math.max(0, accumulator - FIXED_STEP);
       }
     } else {
@@ -303,6 +376,8 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       currentQ,
       paused ? 1 : accumulator / FIXED_STEP,
     );
+    autoShadow.position.set(current.x, groundHeight(current.x, current.z) + 0.085, current.z);
+    autoShadow.rotation.z = -new THREE.Euler().setFromQuaternion(currentQ, 'YXZ').y;
     for (let i = 0; i < 3; i++) {
       const p = WHEEL_POINTS[i],
         length = vehicle.controller.wheelSuspensionLength(i) ?? 0.3;
@@ -314,14 +389,27 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       item.mesh.position.copy(item.body.translation());
       item.mesh.quaternion.copy(item.body.rotation());
     }
+    traffic.update(dt);
     environment.update(reducedMotion && mode !== 'croc' ? 0 : elapsed, dt, current);
-    nightAmount += (nightTarget - nightAmount) * (1 - Math.exp(-visualDt * 1.1));
+    const climate = weather.update(document.hidden || !options.isStarted() ? 0 : visualDt, camera);
+    nightAmount += (climate.night - nightAmount) * (1 - Math.exp(-visualDt * 0.65));
+    environment.setRain(climate.rain);
+    vehicle.wet(climate.rain);
+    options.onWeather(
+      climate.rain,
+      climate.wind,
+      nightAmount,
+      climate.hour,
+      climate.weather,
+      climate.season,
+    );
     (scene.background as THREE.Color).copy(dayColor).lerp(nightColor, nightAmount);
     (scene.fog as THREE.Fog).color.copy(scene.background as THREE.Color);
-    hemi.intensity = 2.2 - nightAmount * 1.9;
-    sun.intensity = 3.2 - nightAmount * 2.98;
+    hemi.intensity = 2.2 - nightAmount * 1.45 - climate.rain * 0.25;
+    sun.intensity = (3.2 - nightAmount * 2.85) * (1 - climate.rain * 0.65);
     sun.color.set('#ffe0a0').lerp(new THREE.Color('#82a2de'), nightAmount);
 
+    renderer.toneMappingExposure = 1.1 + nightAmount * 0.1;
     environment.setNight(nightAmount);
     const vehicleYaw = new THREE.Euler().setFromQuaternion(currentQ, 'YXZ').y;
     if (mode === 'drive' && vehicle.speed > 1.3 && elapsed - manualCameraAt > 4) {
@@ -341,12 +429,41 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
             )
           : auto.group.position;
     target.lerp(focus, 1 - Math.exp(-dt * 5));
-    if (mode === 'stars') {
-      const p = PLACES.find((p) => p.id === 'space')!.position;
-      desiredCamera.set(p.x, groundHeight(p.x, p.z) + 8, p.z);
+    if (mode === 'stars' || mode === 'roof') {
+      const p = PLACES.find((p) => p.id === (mode === 'roof' ? 'eagle-eye' : 'space'))!.position;
+      const front =
+        mode === 'roof'
+          ? new THREE.Vector3(-12, 0, 3).normalize().multiplyScalar(4.4)
+          : new THREE.Vector3();
+      desiredCamera.set(
+        p.x + front.x,
+        groundHeight(p.x, p.z) + (mode === 'roof' ? TOWER_ROOF + 1.7 : 8),
+        p.z + front.z,
+      );
       camera.position.lerp(desiredCamera, 1 - Math.exp(-dt * 6));
       const direction = sky.direction(orbitYaw, elevation, 1);
       camera.lookAt(camera.position.clone().add(direction));
+    } else if (mode === 'storefront' && viewPlace) {
+      const front = new THREE.Vector3(
+        viewPlace.trigger.x - viewPlace.position.x,
+        0,
+        viewPlace.trigger.z - viewPlace.position.z,
+      ).normalize();
+      const ground = groundHeight(viewPlace.position.x, viewPlace.position.z);
+      const doorway = new THREE.Vector3(
+        viewPlace.position.x,
+        ground + 1.7,
+        viewPlace.position.z,
+      ).addScaledVector(front, viewPlace.id === 'eagle-eye' ? 5.8 : 4.8);
+      desiredCamera.set(
+        viewPlace.trigger.x + front.z * 1.2,
+        ground + 2.65,
+        viewPlace.trigger.z - front.x * 1.2,
+      );
+      camera.position.lerp(desiredCamera, 1 - Math.exp(-dt * 5));
+      camera.fov += (50 - camera.fov) * (1 - Math.exp(-dt * 5));
+      camera.updateProjectionMatrix();
+      camera.lookAt(doorway);
     } else {
       camera.fov += (46 - camera.fov) * (1 - Math.exp(-dt * 5));
       camera.updateProjectionMatrix();
@@ -359,6 +476,25 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
         desiredCamera.y,
         groundHeight(desiredCamera.x, desiredCamera.z) + 1.3,
       );
+      if (mode === 'drive') {
+        const eye = target.clone().add(new THREE.Vector3(0, 0.7, 0)),
+          rayDirection = desiredCamera.clone().sub(eye),
+          length = rayDirection.length();
+        rayDirection.normalize();
+        const hit = world.castRay(
+          new RAPIER.Ray(eye, rayDirection),
+          length,
+          true,
+          RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC,
+          undefined,
+          undefined,
+          vehicle.body,
+        );
+        if (hit && hit.timeOfImpact > 1.4)
+          desiredCamera
+            .copy(eye)
+            .addScaledVector(rayDirection, Math.max(2, hit.timeOfImpact - 0.6));
+      }
       if (camera.position.lengthSq() === 0) camera.position.copy(desiredCamera);
       else camera.position.lerp(desiredCamera, 1 - Math.exp(-dt * 4));
       camera.position.y = Math.max(
@@ -389,6 +525,16 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       if ((atlas.closest('dialog') as HTMLDialogElement).open)
         drawVillageMap(atlas, current, yaw, routePoints, true);
       options.onAudio(vehicle.speed, paused, throttle, braking);
+      canvas.dataset.trafficActors = JSON.stringify(
+        traffic.actors.map((a) => ({
+          kind: a.kind,
+          x: a.body.translation().x,
+          z: a.body.translation().z,
+          speed: a.speed,
+        })),
+      );
+      canvas.dataset.drawCalls = String(renderer.info.render.calls);
+      canvas.dataset.triangles = String(renderer.info.render.triangles);
     }
     const reading = !!document.querySelector('dialog[open]');
     if (!contextLost && !document.hidden && (!reading || now - lastRendered > 350)) {
@@ -405,10 +551,18 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     canvas.dataset.z = current.z.toFixed(3);
     canvas.dataset.speed = vehicle.speed.toFixed(3);
     canvas.dataset.yaw = vehicleYaw.toFixed(4);
+    canvas.dataset.upright = new THREE.Vector3(0, 1, 0).applyQuaternion(currentQ).y.toFixed(3);
     canvas.dataset.night = nightAmount.toFixed(3);
     canvas.dataset.view = mode;
-    canvas.dataset.zoom = (mode === 'stars' ? camera.fov : distance).toFixed(2);
+    canvas.dataset.zoom = (mode === 'stars' || mode === 'roof' ? camera.fov : distance).toFixed(2);
     canvas.dataset.croc = String(crocIndex);
+    canvas.dataset.traffic = String(traffic.actors.length);
+    canvas.dataset.weather = climate.weather;
+    canvas.dataset.rain = climate.rain.toFixed(3);
+    canvas.dataset.hour = climate.hour.toFixed(2);
+    canvas.dataset.season = climate.season;
+    canvas.dataset.signalTime = traffic.time.toFixed(2);
+    canvas.dataset.rival = traffic.actors[0].jobOnboard ? 'passenger' : 'available';
   }
   frame = requestAnimationFrame(render);
   canvas.dataset.ready = 'true';
@@ -422,7 +576,25 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     },
     quality,
     night(enabled) {
-      nightTarget = enabled ? 1 : 0;
+      weather.clock.setHour(enabled ? 21 : 15);
+    },
+    time(hour) {
+      weather.clock.setHour(hour);
+    },
+    weather(kind) {
+      weather.clock.setWeather(kind);
+    },
+    look(x, y) {
+      orbitYaw += x * 0.12;
+      elevation = THREE.MathUtils.clamp(elevation + y * 0.08, mode === 'roof' ? -0.6 : 0.08, 1.48);
+      manualCameraAt = elapsed;
+    },
+    roof() {
+      view('roof', 'Above Eagle Towers', 'Look around · listen to the town');
+      orbitYaw = -1.33;
+      elevation = -0.28;
+      camera.fov = 58;
+      camera.updateProjectionMatrix();
     },
     camera(style) {
       resetCamera(style);
@@ -455,12 +627,11 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     feedCroc() {
       crocIndex = 0;
       view('croc', CROC_NAMES[0], 'Swimming · drag to look, scroll to zoom');
-      orbitYaw = -1.1;
-      elevation = 0.33;
-      distance = 14;
+      orbitYaw = environment.wildlife.crocs[0].group.rotation.y + Math.PI - 0.8;
+      elevation = 0.42;
+      distance = 10;
     },
     tourObservatory() {
-      nightTarget = 1;
       view(
         'stars',
         'A little closer to the stars',
@@ -483,6 +654,9 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     setPassenger(index, onboard) {
       environment.life.setPassenger(index, onboard);
       passenger.group.visible = onboard;
+    },
+    setOffers(indices, unavailable) {
+      environment.life.setOffers(indices, unavailable);
     },
     setDuty(enabled) {
       environment.life.setDuty(enabled);
@@ -520,7 +694,10 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
         if (o instanceof THREE.Mesh || o instanceof THREE.Points || o instanceof THREE.Line) {
           o.geometry.dispose();
           const mats = Array.isArray(o.material) ? o.material : [o.material];
-          mats.forEach((m) => m.dispose());
+          mats.forEach((m) => {
+            if ('map' in m) (m.map as THREE.Texture | null)?.dispose();
+            m.dispose();
+          });
         }
       });
       renderer.dispose();

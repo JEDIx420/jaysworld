@@ -117,3 +117,29 @@ test('water recovery leaves the designated bridge crossing driveable', () => {
   assert.equal(isWater(94, 40), true);
   assert.equal(isWater(-51, 29), false);
 });
+
+test('the four-wheel traffic car stays supported, steers and brakes with real suspension', async () => {
+  await RAPIER.init();
+  const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
+  world.timestep = FIXED_STEP;
+  world.createCollider(RAPIER.ColliderDesc.cuboid(100, 0.1, 100).setTranslation(0, -0.1, 0));
+  const car = new AutoVehicle(world, 'car');
+  car.reset(0, 0);
+  try {
+    for (let n = 0; n < 240; n++) {
+      car.beforeStep({ throttle: 0.8, steer: n > 120 ? 0.25 : 0, brake: false, boost: false });
+      world.step();
+    }
+    assert.ok(car.speed > 3);
+    assert.ok(car.body.translation().x > 2);
+    assert.equal(car.isOverturned(), false);
+    assert.ok(car.body.translation().y > 0.4 && car.body.translation().y < 1.2);
+    for (let n = 0; n < 180; n++) {
+      car.beforeStep({ throttle: 0, steer: 0, brake: true, boost: false });
+      world.step();
+    }
+    assert.ok(car.speed < 0.2);
+  } finally {
+    world.free();
+  }
+});

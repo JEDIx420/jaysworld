@@ -11,6 +11,8 @@ export class JourneyAudio {
   private rattleLevel?: GainNode;
   private wind?: AudioBufferSourceNode;
   private windLevel?: GainNode;
+  private rainLevel?: GainNode;
+  private rain?: AudioBufferSourceNode;
   private birdAt = 0;
   private gear = 1;
 
@@ -88,6 +90,19 @@ export class JourneyAudio {
       metal.connect(this.rattleLevel);
       this.rattleLevel.connect(master);
       this.rattle.start();
+      const rainBuffer = c.createBuffer(1, c.sampleRate * 3, c.sampleRate),
+        data = rainBuffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.45;
+      this.rain = c.createBufferSource();
+      this.rain.buffer = rainBuffer;
+      this.rain.loop = true;
+      const filterRain = c.createBiquadFilter();
+      filterRain.type = 'lowpass';
+      filterRain.frequency.value = 2400;
+      this.rainLevel = c.createGain();
+      this.rainLevel.gain.value = 0;
+      this.rain.connect(filterRain).connect(this.rainLevel).connect(master);
+      this.rain.start();
     }
     await this.context.resume();
     this.enabled = !this.enabled;
@@ -134,6 +149,24 @@ export class JourneyAudio {
       this.birdAt = t + 9 + Math.random() * 8;
       this.tone(1800, 0.09, 0.018, 'sine', 2700);
       setTimeout(() => this.tone(2200, 0.08, 0.014, 'sine', 1400), 140);
+    }
+  }
+  weather(rain: number, wind: number, night: number) {
+    if (!this.context) return;
+    this.rainLevel?.gain.setTargetAtTime(
+      document.hidden ? 0 : rain * 0.14 + wind * 0.012,
+      this.context.currentTime,
+      0.4,
+    );
+    if (this.enabled && !document.hidden && this.context.currentTime > this.birdAt) {
+      this.birdAt = this.context.currentTime + 10 + Math.random() * 10;
+      this.tone(
+        night > 0.7 ? 540 : 1800,
+        night > 0.7 ? 0.3 : 0.1,
+        0.012,
+        'sine',
+        night > 0.7 ? 490 : 2600,
+      );
     }
   }
   private tone(
@@ -183,6 +216,7 @@ export class JourneyAudio {
     this.pulse?.stop();
     this.wind?.stop();
     this.rattle?.stop();
+    this.rain?.stop();
     if (this.context) void this.context.close();
   }
 }

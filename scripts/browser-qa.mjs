@@ -21,12 +21,15 @@ if (
 )
   throw new Error('JAYSWORLD_QA_SHARD must be a positive shard/count, such as 1/3.');
 let scenarioNumber = 0;
+const qaPort = 4172 + shardNumber;
 await mkdir(output, { recursive: true });
 const fileMode = process.env.JAYSWORLD_TEST_FILE === '1',
   external = process.env.JAYSWORLD_BASE_URL;
 const base =
   external ??
-  (fileMode ? pathToFileURL(resolve(root, 'dist/index.html')).href : 'http://127.0.0.1:4173/');
+  (fileMode
+    ? pathToFileURL(resolve(root, 'dist/index.html')).href
+    : 'http://127.0.0.1:' + qaPort + '/');
 let server;
 if (!fileMode && !external) {
   server = spawn(
@@ -37,7 +40,7 @@ if (!fileMode && !external) {
       '--host',
       '127.0.0.1',
       '--port',
-      '4173',
+      String(qaPort),
       '--strictPort',
     ],
     { cwd: root, stdio: 'pipe' },
@@ -154,11 +157,18 @@ async function run(name, contextOptions, check) {
       }),
     );
     await check(page, context, errors);
-    results.push({ test: name, status: 'pass' });
+    const diagnostics = await page.locator('#world').evaluate((c) => ({
+      drawCalls: c.dataset.drawCalls,
+      triangles: c.dataset.triangles,
+      traffic: c.dataset.trafficActors,
+      weather: c.dataset.weather,
+      hour: c.dataset.hour,
+    }));
+    results.push({ test: name, status: 'pass', diagnostics });
     console.log('PASS ' + name);
   } catch (error) {
     results.push({ test: name, status: 'fail', error: String(error) });
-    console.error('FAIL ' + name + ': ' + error);
+    console.error('FAIL ' + name + ': ' + error.stack);
     process.exitCode = 1;
   } finally {
     await browser?.close();
@@ -210,121 +220,143 @@ async function closeProject(page) {
   await page.locator('#project-dialog').waitFor({ state: 'hidden' });
 }
 
+async function park(page, id) {
+  await page.locator('#places-button').click();
+  await page.locator('[data-visit="' + id + '"]').click();
+  await page.waitForFunction(() => document.getElementById('world').dataset.view === 'storefront');
+  await page.locator('#world').focus();
+  await page.waitForTimeout(1000);
+}
+async function start(page) {
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('body.started', { state: 'attached' });
+}
+async function clean(errors) {
+  assert.deepEqual(
+    errors.filter(
+      (e) => !/(ERR_FAILED|ERR_ABORTED|ERR_CONNECTION|media|Failed to load resource)/i.test(e),
+    ),
+    [],
+  );
+}
 try {
   await run(
-    'desktop rendering, driving, braking, modal pause and reset',
+    'desktop keyboard driving, brakes, Eagle Towers and roof',
     { viewport: { width: 1440, height: 900 } },
     async (page, context, errors) => {
       await ready(page);
       await capture(page, 'desktop.png');
+      await start(page);
+      assert.ok(Math.abs(Number(await page.locator('#world').getAttribute('data-x')) + 48) < 0.1);
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(
+        () => document.getElementById('world').dataset.view === 'storefront',
+      );
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.getElementById('world').dataset.view === 'roof');
+      await page.waitForTimeout(2000);
+      await capture(page, 'roof.png');
+      const yaw = await page.locator('#world').getAttribute('data-yaw');
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => document.getElementById('world').dataset.view === 'drive');
       const before = Number(await page.locator('#world').getAttribute('data-z'));
       await page.keyboard.down('w');
       await page.waitForFunction(
-        (z) => Number(document.getElementById('world').dataset.z) < z - 1,
+        (z) => Number(document.getElementById('world').dataset.z) < z - 2,
         before,
-        { timeout: 15000 },
+        { timeout: 25000 },
       );
       await page.keyboard.up('w');
-      const after = Number(await page.locator('#world').getAttribute('data-z'));
-      assert.ok(after < before - 1, 'auto moves forward');
       await page.keyboard.down('Space');
       await page.waitForFunction(
-        () => Number(document.getElementById('world').dataset.speed) < 0.5,
+        () => Number(document.getElementById('world').dataset.speed) < 0.7,
         undefined,
-        { timeout: 10000 },
+        { timeout: 20000 },
       );
       await page.keyboard.up('Space');
-      assert.ok(
-        Number(await page.locator('#world').getAttribute('data-speed')) < 0.5,
-        'brake stops the auto',
-      );
-      await page.keyboard.down('w');
-      await page.waitForTimeout(250);
-      await places(page);
-      await page.keyboard.up('w');
-      await page.waitForTimeout(200);
-      const pausedX = await page.locator('#world').getAttribute('data-x');
-      await page.waitForTimeout(400);
-      assert.equal(
-        await page.locator('#world').getAttribute('data-x'),
-        pausedX,
-        'reading pauses physics',
-      );
-      await page.getByRole('button', { name: 'Close places' }).click();
+      await page.keyboard.press('m');
+      const x = await page.locator('#world').getAttribute('data-x');
+      await page.waitForTimeout(700);
+      assert.equal(await page.locator('#world').getAttribute('data-x'), x);
+      await page.keyboard.press('Escape');
       await page.keyboard.press('r');
-      await page.waitForTimeout(200);
-      assert.ok(Math.abs(Number(await page.locator('#world').getAttribute('data-x')) + 51) < 0.04);
-      assert.deepEqual(errors, []);
+      await page.waitForTimeout(500);
+      await page.waitForFunction(
+        () => Math.abs(Number(document.getElementById('world').dataset.x) + 48) < 0.1,
+        undefined,
+        { timeout: 15000 },
+      );
+      await clean(errors);
     },
   );
   await run(
-    'all seven exhibits, exact reconciliation, beat sequencer and evening',
+    'seven short exhibits, keyboard instruments and beat restoration',
     { viewport: { width: 1280, height: 800 } },
     async (page, context, errors) => {
       await ready(page);
-      const destinations = [
-        ['about', 'Hello, I’m Jay.'],
-        ['eagle-eye', 'Eagle Eye'],
-        ['opsflash', 'OpsFlash'],
-        ['rift', 'RIFT'],
-        ['music', 'Music & Beats'],
-        ['saltwater', 'SALTWATER'],
-        ['space', 'The Quiet Between Stars'],
-      ];
-      for (const [id, title] of destinations) {
-        await visit(page, id);
-        assert.equal(await page.locator('#project-title').textContent(), title);
-        if (id === 'rift' || id === 'music') await page.locator('[data-page="2"]').click();
-        if (id === 'rift') {
-          await page.getByRole('button', { name: 'Compare records' }).click();
-          assert.match(
-            await page.locator('.rift-result').textContent(),
-            /1 changed.*1 missing.*1 new/,
+      await start(page);
+      for (const id of ['about', 'eagle-eye', 'opsflash', 'rift', 'music', 'saltwater', 'space']) {
+        await park(page, id);
+        await page.keyboard.press('Enter');
+        if (id === 'space' || id === 'saltwater') {
+          await page.keyboard.press('Escape');
+          await page.waitForSelector('#interaction-button:not([hidden])');
+          await page.keyboard.press('Enter');
+          await page.waitForFunction(
+            () => document.getElementById('world').dataset.view === 'storefront',
           );
-          assert.equal(await page.locator('.rift-table tr.changed').count(), 3);
+          await page.keyboard.press('ArrowRight');
+          await page.keyboard.press('Enter');
+        }
+        await page.waitForSelector('#project-dialog[open]');
+        assert.equal(await page.locator('#project-dialog').getAttribute('data-venue'), id);
+        assert.ok((await page.locator('.retro-copy').textContent()).split(/\s+/).length < 20);
+        if (id === 'eagle-eye' || id === 'opsflash') {
+          for (let i = 0; i < 4; i++) await page.keyboard.press('Enter');
+          assert.equal(await page.locator('#project-dialog').getAttribute('data-progress'), '4');
+        }
+        if (id === 'rift') {
+          await page.keyboard.press('Enter');
+          assert.match(
+            await page.locator('.rift-instrument output').textContent(),
+            /0.01.*3 DIFFERENCES/,
+          );
         }
         if (id === 'music') {
-          await page.getByRole('button', { name: 'Kick, step 2' }).click();
+          await page.keyboard.press('ArrowRight');
+          await page.keyboard.press('Enter');
           assert.equal(
-            await page.getByRole('button', { name: 'Kick, step 2' }).getAttribute('aria-pressed'),
+            await page
+              .getByRole('button', { name: 'kick, step 2', exact: true })
+              .getAttribute('aria-pressed'),
             'true',
           );
-          await page.getByRole('button', { name: 'Play beat' }).click();
-          await page.getByRole('button', { name: 'Stop beat' }).waitFor();
-          await page.waitForTimeout(450);
-          assert.ok((await page.locator('.beat-row button.playing').count()) > 0);
+          await page.keyboard.press('Space');
+          await page.waitForSelector('.drum-machine[data-playing=true]');
           await capture(page, 'music.png');
-          await page.getByRole('button', { name: 'Stop beat' }).click();
-        }
-        await closeProject(page);
+          await page.keyboard.press('Space');
+          await page.waitForSelector('.drum-machine[data-playing=false]');
+        } else await page.keyboard.press('ArrowRight');
+        await page.keyboard.press('Escape');
+        await page.waitForSelector('#project-dialog:not([open])', { state: 'attached' });
+        await page.keyboard.press('Escape');
       }
       assert.equal(await page.locator('#visited-count').textContent(), '7 / 7');
-      await page.getByRole('button', { name: 'Settings and controls' }).click();
-      await page.getByRole('button', { name: 'Golden hour', exact: true }).click();
-      await page.getByRole('button', { name: 'Close settings' }).click();
-      await page.waitForFunction(
-        () => Number(document.getElementById('world').dataset.night) > 0.9,
-        undefined,
-        { timeout: 45000 },
-      );
-      assert.ok(await page.locator('body.night').count());
-      await capture(page, 'evening.png');
-      assert.deepEqual(errors, []);
+      await clean(errors);
     },
   );
   await run(
-    '390px touch driving, two-pointer orbit, cancellation and dialogs',
+    '390px touch driving, independent orbit, minimal HUD and music',
     { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 },
     async (page, context, errors) => {
       await ready(page);
-      await capture(page, 'mobile.png');
-      assert.equal(await page.locator('#quality-button').textContent(), 'Performance');
       await page.locator('#start-driving').click();
-      const box = await page.locator('#joystick').boundingBox();
-      assert.ok(box && box.width >= 90);
+      const box = await page.locator('#joystick').boundingBox(),
+        session = await context.newCDPSession(page);
       const x = box.x + box.width / 2,
         y = box.y + box.height / 2,
-        session = await context.newCDPSession(page),
         before = Number(await page.locator('#world').getAttribute('data-z'));
       await session.send('Input.dispatchTouchEvent', {
         type: 'touchStart',
@@ -332,374 +364,275 @@ try {
       });
       await session.send('Input.dispatchTouchEvent', {
         type: 'touchMove',
-        touchPoints: [{ id: 1, x: x + 9, y: y - 36 }],
+        touchPoints: [{ id: 1, x: x + 7, y: y - 37 }],
       });
       await page.waitForFunction(
         (z) => Number(document.getElementById('world').dataset.z) < z - 1,
         before,
-        { timeout: 15000 },
-      );
-      assert.ok(
-        Number(await page.locator('#world').getAttribute('data-z')) < before - 1,
-        'touch drives the auto',
+        { timeout: 25000 },
       );
       await session.send('Input.dispatchTouchEvent', {
         type: 'touchStart',
         touchPoints: [
-          { id: 1, x: x + 9, y: y - 36 },
-          { id: 2, x: 230, y: 430 },
+          { id: 1, x: x + 7, y: y - 37 },
+          { id: 2, x: 230, y: 400 },
         ],
       });
       await session.send('Input.dispatchTouchEvent', {
         type: 'touchMove',
         touchPoints: [
-          { id: 1, x: x + 9, y: y - 36 },
-          { id: 2, x: 280, y: 450 },
+          { id: 1, x: x + 7, y: y - 37 },
+          { id: 2, x: 275, y: 420 },
         ],
       });
       await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
       assert.equal(await page.locator('#joystick-knob').evaluate((e) => e.style.transform), '');
-      assert.equal(
-        await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
-        false,
-      );
-      await places(page);
-      const atlasBox = await page.locator('#village-atlas').boundingBox();
-      assert.ok(atlasBox);
-      await page.touchscreen.tap(
-        atlasBox.x + atlasBox.width * (0.5 + 27 / 580),
-        atlasBox.y + atlasBox.height * (0.5 - 4 / 580),
-      );
-      await page.waitForSelector('#navigation-card:not([hidden])');
-      assert.match(await page.locator('#navigation-destination').textContent(), /riverside studio/);
-      const cards = await Promise.all(
-        ['#fare-card', '#navigation-card', '#interaction-button', '#toast'].map((id) =>
-          page.locator(id).boundingBox(),
-        ),
-      );
-      const overlaps = (a, b) =>
-        a &&
-        b &&
-        a.x < b.x + b.width &&
-        a.x + a.width > b.x &&
-        a.y < b.y + b.height &&
-        a.y + a.height > b.y;
-      assert.ok(
-        !overlaps(cards[0], cards[1]) && !overlaps(cards[1], cards[2]),
-        'phone directions leave other controls clear',
-      );
-      assert.ok(
-        !overlaps(cards[3], cards[0]) &&
-          !overlaps(cards[3], cards[1]) &&
-          !overlaps(cards[3], cards[2]),
-        'phone route confirmation leaves directions and parking clear',
-      );
       await capture(page, 'mobile-riding.png');
-      await page.locator('#navigation-clear').click();
-      await visit(page, 'music');
-      await capture(page, 'mobile-exhibit.png');
-      assert.equal(await page.locator('#project-title').textContent(), 'Music & Beats');
+      await park(page, 'music');
+      await page.locator('[data-venue=act]').click();
+      await page.waitForSelector('#project-dialog[open]');
+      await capture(page, 'mobile-music.png');
       assert.equal(
         await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
         false,
       );
-      assert.deepEqual(errors, []);
+      const pads = await page.locator('.drum-pad:visible').count();
+      assert.equal(pads, 12);
+      await page.locator('.beat-bank').click();
+      assert.equal(await page.locator('.drum-machine').getAttribute('data-bank'), '1');
+      await clean(errors);
     },
   );
   await run(
-    '320px layout and direct-link reload',
+    '320px and 430px layout, direct links and orientation change',
     { viewport: { width: 320, height: 640 }, hasTouch: true, isMobile: true },
     async (page, context, errors) => {
       await ready(page, '#rift');
-      assert.equal(await page.locator('#project-title').textContent(), 'RIFT');
-      assert.equal(
-        await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
-        false,
-      );
+      assert.equal(await page.locator('#project-title').textContent(), 'One paisa.');
       await page.reload();
-      await page.waitForSelector('#project-dialog[open]', { timeout: 30000 });
-      assert.equal(await page.locator('#project-title').textContent(), 'RIFT');
-      await closeProject(page);
-      await places(page);
-      assert.equal(
-        await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
-        false,
-      );
-      await capture(page, 'small-screen.png');
-      assert.deepEqual(errors, []);
+      await page.waitForSelector('#project-dialog[open]', { timeout: 45000 });
+      await page.keyboard.press('Escape');
+      await page.locator('#start-driving').click();
+      for (const size of [
+        { width: 320, height: 640 },
+        { width: 430, height: 932 },
+        { width: 844, height: 390 },
+      ]) {
+        await page.setViewportSize(size);
+        await page.waitForTimeout(400);
+        assert.equal(
+          await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+          false,
+        );
+        await capture(page, 'layout-' + size.width + '.png');
+      }
+      await clean(errors);
     },
   );
   await run(
-    'radio starts with experience, station recovery, effects and stop',
+    'radio first gesture, real media, rapid seek, failure and power preference',
     { viewport: { width: 1100, height: 800 } },
     async (page, context, errors) => {
-      await page.route('https://*.api.radio-browser.info/**', (route) =>
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: '{}',
-          headers: { 'Access-Control-Allow-Origin': '*' },
-        }),
-      );
-      let initialRadioRequests = 0;
+      let requests = 0;
       page.on('request', (r) => {
-        if (/cast1|digitalmalayali|octosignals|securenetsystems/.test(r.url()))
-          initialRadioRequests++;
+        if (/cast1.my-control/.test(r.url())) requests++;
       });
       await ready(page);
-      assert.equal(initialRadioRequests, 0, 'stream starts with the first experience gesture');
-      await page.locator('#start-driving').click();
-      await page.waitForFunction(
-        () => document.getElementById('radio-now-name').textContent === 'Ente Radio 91.2',
-      );
-      assert.equal(await page.locator('#effects-controls').isEnabled(), true);
+      assert.equal(requests, 0);
+      await start(page);
+      await page.waitForSelector('#radio-dialog[data-phase=playing]', {
+        state: 'attached',
+        timeout: 25000,
+      });
       assert.equal(await page.locator('#world').getAttribute('data-sound'), 'on');
-      await page.getByRole('button', { name: 'Radio', exact: true }).click();
-      await page.locator('#fx-preset').selectOption('dub');
-      assert.equal(await page.locator('#fx-echo').inputValue(), '0.65');
+      await page.keyboard.press('q');
       await page.route('https://radio.digitalmalayali.in/**', (route) => route.abort('failed'));
-      await page.getByRole('button', { name: 'Play Radio Digital Malayali', exact: true }).click();
-      await page.waitForFunction(
-        () => document.getElementById('radio-status').textContent.includes('unavailable'),
-        undefined,
-        { timeout: 18000 },
+      await page.keyboard.press('ArrowRight');
+      await page.waitForSelector('#radio-dialog[data-phase=unavailable]', { timeout: 20000 });
+      await page.route('https://icecast.octosignals.com/**', (route) =>
+        route.fulfill({ status: 200, contentType: 'audio/wav', body: testAudio() }),
       );
-      await page.unroute('https://radio.digitalmalayali.in/**');
-      if (process.env.JAYSWORLD_LIVE_RADIO !== '1')
-        await page.route('https://icecast.octosignals.com/radiomacfast', (route) =>
-          route.fulfill({ status: 200, contentType: 'audio/wav', body: testAudio() }),
-        );
-      try {
-        await page.getByRole('button', { name: 'Play Radio MACFAST 90.4', exact: true }).click();
-        await page.waitForFunction(
-          () => document.getElementById('radio-status').textContent.startsWith('Live:'),
-          undefined,
-          { timeout: 20000 },
-        );
-        assert.equal(await page.locator('#radio-now').isVisible(), true);
-        await capture(page, 'radio.png');
-        await page.getByRole('button', { name: 'Stop Radio MACFAST 90.4', exact: true }).click();
-        assert.match(await page.locator('#radio-status').textContent(), /Radio off/);
-      } catch (error) {
-        throw new Error(
-          String(error) +
-            '; player status: ' +
-            (await page.locator('#radio-status').textContent()) +
-            '; console: ' +
-            errors.join(' | '),
-        );
-      }
-      assert.deepEqual(
-        errors.filter((e) => !e.includes('net::ERR_FAILED')),
-        [],
-      );
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('ArrowLeft');
+      await page.keyboard.press('ArrowRight');
+      await page.waitForSelector('#radio-dialog[data-phase=playing]', { timeout: 25000 });
+      assert.equal(await page.locator('#radio-name').textContent(), 'Radio MACFAST 90.4');
+      await capture(page, 'radio.png');
+      await page.keyboard.press('Enter');
+      assert.equal(await page.locator('#radio-dialog').getAttribute('data-phase'), 'off');
+      await page.keyboard.press('Escape');
+      await page.reload();
+      await page.waitForSelector('#world[data-ready=true]', { timeout: 45000 });
+      await start(page);
+      assert.equal(await page.locator('#radio-dialog').getAttribute('data-phase'), 'off');
+      await clean(errors);
     },
   );
   await run(
-    'storefront, newspaper paging, funded tea purchases, crocodiles and telescope',
-    { viewport: { width: 1440, height: 900 } },
+    'crocodile stalking, catch, observer keys and hilltop stars',
+    { viewport: { width: 1280, height: 800 } },
     async (page, context, errors) => {
-      await page.addInitScript(() =>
+      await ready(page);
+      await start(page);
+      await park(page, 'saltwater');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.getElementById('world').dataset.view === 'croc');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(
+        () => document.getElementById('view-detail').textContent.includes('Stalking'),
+        undefined,
+        { timeout: 20000 },
+      );
+      await capture(page, 'croc-stalk.png');
+      await page.waitForFunction(
+        () => document.getElementById('view-detail').textContent.includes('Catching'),
+        undefined,
+        { timeout: 45000 },
+      );
+      await capture(page, 'croc-catch.png');
+      await page.keyboard.press('BracketRight');
+      await page.waitForFunction(() => document.getElementById('world').dataset.croc === '1');
+      await page.keyboard.press('Escape');
+      await park(page, 'space');
+      assert.ok(Number(await page.locator('#world').getAttribute('data-elevation')) > 20);
+      await capture(page, 'observatory.png');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.getElementById('world').dataset.view === 'stars');
+      await page.keyboard.press('Enter');
+      assert.match(await page.locator('#view-title').textContent(), /Dipper/);
+      const zoom = Number(await page.locator('#world').getAttribute('data-zoom'));
+      await page.keyboard.press('Equal');
+      await page.waitForTimeout(200);
+      assert.ok(Number(await page.locator('#world').getAttribute('data-zoom')) < zoom);
+      await capture(page, 'stars.png');
+      await clean(errors);
+    },
+  );
+  await run(
+    'traffic moves, taxi offers, free roaming and saved wallet',
+    { viewport: { width: 1360, height: 850 } },
+    async (page, context, errors) => {
+      await context.addInitScript(() =>
         localStorage.setItem(
           'jaysworld-duty-v1',
-          JSON.stringify({ version: 1, wallet: 50, completed: 1, tea: 0, snacks: 0 }),
+          JSON.stringify({ version: 1, wallet: 250, completed: 2, tea: 1, snacks: 0 }),
         ),
       );
       await ready(page);
-      await page.locator('#start-driving').click();
-      await places(page);
-      await page.locator('[data-visit="about"]').click();
-      await page.waitForSelector('#world[data-view="storefront"]');
-      await page.locator('[data-buy="tea"]').click();
-      await page.locator('[data-buy="pazhampori"]').click();
-      assert.equal(await page.locator('#wallet').textContent(), '₹25');
-      const wallet = await page.evaluate(() =>
-        JSON.parse(localStorage.getItem('jaysworld-duty-v1')),
-      );
-      assert.equal(wallet.tea, 1);
-      assert.equal(wallet.snacks, 1);
-      await page.waitForTimeout(800);
-      await capture(page, 'tea-storefront.png');
-      await page.locator('#read-paper').click();
-      assert.equal(await page.locator('#project-summary').isVisible(), true);
-      await capture(page, 'newspaper.png');
-      await page.locator('#paper-next').click();
-      assert.equal(await page.locator('#project-summary').isVisible(), false);
-      assert.equal(await page.locator('#project-details').isVisible(), true);
-      await page.locator('#paper-next').click();
-      assert.equal(await page.locator('#paper-page-number').textContent(), 'PAGE 3 / 3');
-      assert.equal(await page.locator('#paper-next').isDisabled(), true);
-      await closeProject(page);
-      await page.locator('#view-back').click();
-      await places(page);
-      await page.locator('[data-visit="saltwater"]').click();
-      await page.locator('#view-experience').click();
-      await page.waitForSelector('#world[data-view="croc"]');
-      const zoom = Number(await page.locator('#world').getAttribute('data-zoom'));
-      await page.locator('#zoom-in').click();
+      await start(page);
+      assert.equal(await page.locator('#wallet').textContent(), '₹250');
+      await page.keyboard.press('t');
+      assert.equal(await page.locator('#fare-offers button').count(), 4);
+      const before = JSON.parse(await page.locator('#world').getAttribute('data-traffic-actors'));
       await page.waitForFunction(
-        (z) => Number(document.getElementById('world').dataset.zoom) < z,
-        zoom,
-      );
-      await page.locator('#croc-select').selectOption('1');
-      await page.waitForSelector('#world[data-croc="1"]');
-      await page.locator('#croc-hunt').click();
-      await page.waitForFunction(
-        () => document.getElementById('view-detail').textContent.includes('Catching a fish'),
-        undefined,
+        (before) =>
+          JSON.parse(document.getElementById('world').dataset.trafficActors).some(
+            (a, i) => Math.hypot(a.x - before[i].x, a.z - before[i].z) > 3,
+          ),
+        before,
         { timeout: 45000 },
       );
-      await capture(page, 'crocodiles.png');
-      await page.locator('#view-back').click();
-      await places(page);
-      await page.locator('[data-visit="space"]').click();
-      await page.locator('#view-experience').click();
-      await page.waitForSelector('#world[data-view="stars"]');
-      await page.locator('[data-star="crux"]').click();
-      assert.equal(await page.locator('#view-title').textContent(), 'The Southern Cross');
-      await page.waitForFunction(
-        () => Number(document.getElementById('world').dataset.night) > 0.9,
-        undefined,
-        { timeout: 45000 },
+      const progressed = JSON.parse(
+        await page.locator('#world').getAttribute('data-traffic-actors'),
       );
-      await capture(page, 'telescope.png');
-      await page.locator('#zoom-in').click();
-      await page.waitForFunction(() => Number(document.getElementById('world').dataset.zoom) < 34);
-      await page.locator('#view-back').click();
-      await page.waitForSelector('#world[data-view="drive"]');
-      assert.deepEqual(errors, []);
+      console.log(
+        'TRAFFIC ' +
+          JSON.stringify(
+            progressed.map((a, i) => ({
+              kind: a.kind,
+              moved: Math.hypot(a.x - before[i].x, a.z - before[i].z).toFixed(2),
+              speed: a.speed.toFixed(2),
+            })),
+          ),
+      );
+      await page.locator('#fare-offers button').nth(2).click();
+      assert.equal(await page.locator('#fare-offers button[aria-pressed=true]').count(), 1);
+      await page.keyboard.press('t');
+      assert.equal(await page.locator('#fare-card').getAttribute('data-duty'), 'false');
+      await park(page, 'about');
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('Enter');
+      assert.equal(await page.locator('#wallet').textContent(), '₹240');
+      await capture(page, 'tea.png');
+      await clean(errors);
     },
   );
   await run(
-    'passenger pickup, cancellation, wallet protection and unfunded tea',
-    { viewport: { width: 900, height: 700 } },
+    'day/night and rain remain visible with reduced motion',
+    { viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' },
     async (page, context, errors) => {
       await ready(page);
-      await page.locator('#start-driving').click();
-      await page.locator('#taxi-toggle').click();
-      await page.locator('#fare-action').click();
-      await page.waitForSelector('#fare-card[data-onboard="true"]');
-      assert.match(await page.locator('#fare-description').textContent(), /passenger on board/);
-      await places(page);
-      await page.locator('[data-visit="about"]').click();
-      assert.equal(await page.locator('#fare-card').getAttribute('data-onboard'), 'false');
-      assert.equal(await page.locator('#wallet').textContent(), '₹0');
-      await page.locator('[data-buy="tea"]').click();
-      assert.equal(await page.locator('#wallet').textContent(), '₹0');
-      assert.match(await page.locator('#toast').textContent(), /Take a passenger fare/);
-      assert.deepEqual(errors, []);
-    },
-  );
-  await run(
-    'first click audio, free roam, clickable atlas, taxi toggle and elevated observatory',
-    { viewport: { width: 1440, height: 900 } },
-    async (page, context, errors) => {
-      await ready(page);
-      assert.equal(await page.locator('#taxi-toggle').getAttribute('aria-pressed'), 'false');
-      await places(page); // First pointer gesture is a menu, not Start driving.
+      await start(page);
+      await page.locator('#settings-button').click();
+      await page.locator('#time-button').click();
+      await page.locator('#time-button').click();
+      await page.locator('#weather-button').click();
+      await page.locator('#weather-button').click();
+      await page.keyboard.press('Escape');
       await page.waitForFunction(
-        () => document.getElementById('radio-now-name').textContent === 'Ente Radio 91.2',
-      );
-      assert.equal(await page.locator('#world').getAttribute('data-sound'), 'on');
-      await capture(page, 'village-atlas.png');
-      const rect = await page.locator('#village-atlas').boundingBox();
-      assert.ok(rect);
-      await page.mouse.click(
-        rect.x + rect.width * (0.5 + 130 / 580),
-        rect.y + rect.height * (0.5 - 212 / 580),
-      );
-      await page.locator('#places-dialog').waitFor({ state: 'hidden' });
-      await page.waitForFunction(
-        () => Number(document.getElementById('world').dataset.route) > 100,
-      );
-      assert.match(
-        await page.locator('#navigation-destination').textContent(),
-        /hilltop observatory/,
+        () =>
+          Number(document.getElementById('world').dataset.night) > 0.8 &&
+          Number(document.getElementById('world').dataset.rain) > 0.7,
+        undefined,
+        { timeout: 45000 },
       );
       assert.ok(
-        Math.abs(Number(await page.locator('#world').getAttribute('data-x')) + 51) < 0.2,
-        'directions do not teleport the auto',
+        Number(await page.locator('#world').getAttribute('data-upright')) > 0.9,
+        'parked auto stays upright beside traffic',
       );
-      assert.equal(await page.locator('#fare-action').isVisible(), false);
-      await capture(page, 'close-ride.png');
-      await page.locator('#radio-stop').click();
-      await page.locator('#taxi-toggle').click();
-      assert.equal(await page.locator('#taxi-toggle').getAttribute('aria-pressed'), 'true');
-      await page.locator('#fare-action').click();
-      await page.waitForSelector('#fare-card[data-onboard=true]');
-      await page.locator('#taxi-toggle').click();
-      assert.equal(await page.locator('#fare-card').getAttribute('data-onboard'), 'false');
-      assert.equal(await page.locator('#wallet').textContent(), '₹0');
-      assert.equal(
-        await page.locator('#radio-now').isVisible(),
-        false,
-        'radio stays stopped after later clicks',
-      );
-      await places(page);
-      await page.locator('#atlas-zoom-in').click();
-      assert.ok(Number(await page.locator('#village-atlas').getAttribute('data-zoom')) > 1);
-      const mapBox = await page.locator('#village-atlas').boundingBox();
-      assert.ok(mapBox);
-      const beforePan = await page.locator('#village-atlas').getAttribute('data-center-x');
-      await page.mouse.move(mapBox.x + mapBox.width * 0.5, mapBox.y + mapBox.height * 0.5);
-      await page.mouse.down();
-      await page.mouse.move(mapBox.x + mapBox.width * 0.7, mapBox.y + mapBox.height * 0.5, {
-        steps: 6,
-      });
-      await page.mouse.up();
-      assert.notEqual(
-        await page.locator('#village-atlas').getAttribute('data-center-x'),
-        beforePan,
-      );
-      assert.equal(
-        await page.locator('#places-dialog').isVisible(),
-        true,
-        'panning does not select a destination',
-      );
-      await page.locator('#village-atlas').focus();
-      await page.keyboard.press('Home');
-      await page.keyboard.press('ArrowRight');
-      assert.equal(await page.locator('#village-atlas').getAttribute('data-selected'), 'eagle-eye');
-      await page.keyboard.press('Enter');
-      await page.locator('#places-dialog').waitFor({ state: 'hidden' });
-      assert.match(await page.locator('#navigation-destination').textContent(), /riverside studio/);
-      await places(page);
-      await page.locator('[data-visit="space"]').click();
+      await capture(page, 'rain-night.png');
+      await page.locator('#settings-button').click();
+      await page.locator('#time-button').click();
+      await page.keyboard.press('Escape');
       await page.waitForFunction(
-        () => Number(document.getElementById('world').dataset.elevation) > 22,
+        () => Number(document.getElementById('world').dataset.night) < 0.2,
+        undefined,
+        { timeout: 45000 },
       );
-      await page.locator('#view-back').click();
-      await page.waitForFunction(() => Number(document.getElementById('world').dataset.zoom) < 14);
-      await page.getByRole('button', { name: 'Settings and controls' }).click();
-      await page.locator('#camera-wide').click();
-      await page.waitForFunction(() => Number(document.getElementById('world').dataset.zoom) > 24);
-      await capture(page, 'ridge-arrival.png');
-      await visit(page, 'space');
-      await capture(page, 'observatory-journal.png');
-      await closeProject(page);
-      await visit(page, 'rift');
-      await capture(page, 'workshop-log.png');
-      await closeProject(page);
-      assert.deepEqual(errors, []);
+      await capture(page, 'rain-day.png');
+      await clean(errors);
     },
   );
   await run(
-    'no-JavaScript public content',
-    { javaScriptEnabled: false, viewport: { width: 900, height: 700 } },
-    async (page) => {
-      await page.goto(base);
-      await page.getByRole('heading', { name: 'Jayanand — Jay' }).waitFor({ state: 'visible' });
-      await page
-        .getByRole('link', { name: 'Music & Beats', exact: true })
-        .waitFor({ state: 'visible' });
-      assert.equal(await page.locator('#loading').isVisible(), false);
+    'slow radio keeps static until playback and times out a missing signal',
+    { viewport: { width: 1000, height: 700 } },
+    async (page, context, errors) => {
+      let releaseSignal;
+      const signalGate = new Promise((resolve) => {
+        releaseSignal = resolve;
+      });
+      await page.route('https://cast1.my-control-panel.com/**', async (route) => {
+        await signalGate;
+        await route
+          .fulfill({ status: 200, contentType: 'audio/wav', body: testAudio() })
+          .catch(() => {});
+      });
+      await ready(page);
+      await start(page);
+      await page.waitForSelector('#radio-dialog[data-phase=tuning]', { state: 'attached' });
+      await page.waitForTimeout(300);
+      releaseSignal();
+      await page.waitForSelector('#radio-dialog[data-phase=playing]', {
+        state: 'attached',
+        timeout: 20000,
+      });
+      await page.keyboard.press('q');
+      await page.route('https://radio.digitalmalayali.in/**', async (route) => {
+        await new Promise((r) => setTimeout(r, 18000));
+        await route.abort('failed').catch(() => {});
+      });
+      await page.keyboard.press('ArrowRight');
+      await page.waitForSelector('#radio-dialog[data-phase=tuning]', { state: 'attached' });
+      await page.waitForSelector('#radio-dialog[data-phase=unavailable]', { timeout: 17000 });
+      assert.match(await page.locator('#radio-status').textContent(), /NO SIGNAL/);
+      await clean(errors);
     },
   );
   await run(
-    'no-WebGL project navigation',
-    { viewport: { width: 900, height: 700 } },
-    async (page) => {
-      await page.addInitScript(() => {
+    'WebGL fallback retains all public links and readable projects',
+    { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true },
+    async (page, context) => {
+      await context.addInitScript(() => {
         const original = HTMLCanvasElement.prototype.getContext;
         HTMLCanvasElement.prototype.getContext = function (type, ...args) {
           return type === 'webgl' || type === 'webgl2' ? null : original.call(this, type, ...args);
@@ -708,9 +641,11 @@ try {
       await page.goto(base);
       await page.waitForSelector('#places-dialog[open]', { timeout: 30000 });
       assert.equal(await page.locator('.place-row').count(), 7);
-      await page.locator('[data-place="eagle-eye"]').click();
-      assert.equal(await page.locator('#project-title').textContent(), 'Eagle Eye');
-      await page.getByRole('link', { name: 'Talk about a project' }).waitFor({ state: 'visible' });
+      await page.locator('[data-place=eagle-eye]').click();
+      assert.equal(await page.locator('#project-title').textContent(), 'Useful AI.');
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('ArrowRight');
+      assert.ok((await page.locator('.retro-links a').count()) > 0);
     },
   );
 } finally {

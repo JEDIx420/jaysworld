@@ -1,4 +1,3 @@
-import { RadioEffects } from './radio-effects';
 export interface Station {
   id: string;
   name: string;
@@ -102,212 +101,165 @@ export function directoryStations(values: unknown): Station[] {
 }
 
 const $ = (id: string) => document.getElementById(id)!;
+export type RadioPhase = 'off' | 'tuning' | 'playing' | 'buffering' | 'unavailable';
 export class VillageRadio {
   private stations: Station[] = [...CURATED_STATIONS];
   private audio?: HTMLAudioElement;
   private generation = 0;
   private timeout = 0;
-  private current?: Station;
-  private playing = false;
-  private effects?: RadioEffects;
-  private fileUrl?: string;
+  private index = 0;
+  private phase: RadioPhase = 'off';
+  private level = 0.32;
+  private ducked = false;
+  private context?: AudioContext;
+  private hiss?: GainNode;
+  private noise?: AudioBufferSourceNode;
   private abort?: AbortController;
-  private mirrors = [
-    'https://de1.api.radio-browser.info',
-    'https://de2.api.radio-browser.info',
-    'https://fi1.api.radio-browser.info',
-  ];
   constructor() {
+    $('radio-prev').addEventListener('click', () => this.seek(-1));
+    $('radio-next').addEventListener('click', () => this.seek(1));
+    $('radio-power').addEventListener('click', () => this.power());
+    $('radio-volume').addEventListener('input', () => {
+      this.level = Number(($('radio-volume') as HTMLInputElement).value);
+      this.volume();
+    });
     this.render();
-    for (const id of ['fx-filter', 'fx-bass', 'fx-echo', 'fx-room', 'fx-wobble'])
-      $(id).addEventListener('input', () => this.updateEffects());
-    $('fx-preset').addEventListener('change', () => {
-      const presets: Record<string, number[]> = {
-        clean: [18000, 0, 0, 0, 0],
-        tea: [3200, 2, 0.08, 0.15, 0.1],
-        dub: [6800, 7, 0.65, 0.22, 0.2],
-        dream: [2400, 1, 0.3, 0.65, 0.7],
-      };
-      const v = presets[($('fx-preset') as HTMLSelectElement).value];
-      ['fx-filter', 'fx-bass', 'fx-echo', 'fx-room', 'fx-wobble'].forEach(
-        (id, i) => (($(id) as HTMLInputElement).value = String(v[i])),
+  }
+  private staticBus() {
+    if (!this.context) {
+      const ctx = (this.context = new AudioContext());
+      const buffer = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      this.noise = ctx.createBufferSource();
+      this.noise.buffer = buffer;
+      this.noise.loop = true;
+      const band = ctx.createBiquadFilter();
+      band.type = 'bandpass';
+      band.frequency.value = 1800;
+      band.Q.value = 0.7;
+      this.hiss = ctx.createGain();
+      this.hiss.gain.value = 0;
+      this.noise.connect(band).connect(this.hiss).connect(ctx.destination);
+      this.noise.start();
+    }
+    void this.context.resume().catch(() => {});
+  }
+  private volume() {
+    const level = this.level * (this.ducked ? 0.16 : 1);
+    if (this.audio) this.audio.volume = level;
+    if (this.context && this.hiss) {
+      this.hiss.gain.setTargetAtTime(
+        ['tuning', 'buffering'].includes(this.phase) ? level * 0.11 : 0,
+        this.context.currentTime,
+        0.12,
       );
-      this.updateEffects();
-    });
-    $('radio-file').addEventListener('change', () => {
-      const file = ($('radio-file') as HTMLInputElement).files?.[0];
-      if (!file) return;
-      if (file.size > 100 * 1024 * 1024) {
-        this.status('Choose an audio file under 100 MB.');
-        return;
-      }
-      this.stop(false);
-      this.fileUrl = URL.createObjectURL(file);
-      this.play({
-        id: 'local-file',
-        name: file.name.slice(0, 80),
-        description: 'Your audio · stays in this browser',
-        url: this.fileUrl,
-        homepage: 'https://www.radio-browser.info/',
-        effects: true,
-      });
-    });
-    ($('radio-volume') as HTMLInputElement).addEventListener('input', () => {
-      if (this.audio) this.audio.volume = Number(($('radio-volume') as HTMLInputElement).value);
-    });
-    $('radio-stop').addEventListener('click', () => this.stop());
-    $('radio-refresh').addEventListener('click', () => void this.discover());
+    }
+    $('radio-dialog').style.setProperty('--volume', String(this.level));
   }
-  playDefault() {
-    this.play(CURATED_STATIONS[0]);
-  }
-  private updateEffects() {
-    if (!this.effects) return;
-    const v = (id: string) => Number(($(id) as HTMLInputElement).value);
-    this.effects.set(v('fx-filter'), v('fx-bass'), v('fx-echo'), v('fx-room'), v('fx-wobble'));
-  }
-  private status(text: string) {
-    $('radio-status').textContent = text;
+  private state(phase: RadioPhase) {
+    this.phase = phase;
+    this.volume();
+    this.render();
   }
   private render() {
-    const list = $('radio-stations');
-    list.replaceChildren();
-    for (const station of this.stations) {
-      const row = document.createElement('div');
-      row.className = 'radio-station' + (this.current?.id === station.id ? ' active' : '');
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.setAttribute(
-        'aria-label',
-        (this.current?.id === station.id && this.playing ? 'Stop ' : 'Play ') + station.name,
-      );
-      const icon = document.createElement('span');
-      icon.className = 'station-icon';
-      icon.textContent = this.current?.id === station.id && this.playing ? 'Ⅱ' : '▶';
-      const copy = document.createElement('span'),
-        name = document.createElement('strong'),
-        meta = document.createElement('small');
-      name.textContent = station.name;
-      meta.textContent = station.description;
-      copy.append(name, meta);
-      button.append(icon, copy);
-      button.addEventListener('click', () => {
-        if (this.current?.id === station.id && this.playing) this.stop();
-        else this.play(station);
-      });
-      const source = document.createElement('a');
-      source.href = station.homepage;
-      source.target = '_blank';
-      source.rel = 'noopener noreferrer';
-      source.textContent = 'Station';
-      source.setAttribute('aria-label', station.name + ' station website');
-      row.append(button, source);
-      list.append(row);
+    const station = this.stations[this.index];
+    $('radio-dialog').dataset.phase = this.phase;
+    $('radio-name').textContent = station.name;
+    $('radio-status').textContent = {
+      off: 'POWER OFF',
+      tuning: 'SEEKING SIGNAL…',
+      playing: 'LIVE SIGNAL',
+      buffering: 'SIGNAL FADING…',
+      unavailable: 'NO SIGNAL · TRY NEXT',
+    }[this.phase];
+    $('radio-needle').style.left =
+      8 + (84 * this.index) / Math.max(1, this.stations.length - 1) + '%';
+    $('radio-indicator').classList.toggle('on', this.phase === 'playing');
+    $('radio-power').setAttribute('aria-pressed', String(this.phase !== 'off'));
+    ($('radio-source') as HTMLAnchorElement).href = station.homepage;
+  }
+  playDefault() {
+    try {
+      if (localStorage.getItem('jaysworld-radio-off') === 'true') return;
+    } catch {
+      /* Optional. */
     }
+    this.index = 0;
+    this.play(this.stations[0]);
+  }
+  seek(direction: number) {
+    this.index = (this.index + direction + this.stations.length) % this.stations.length;
+    this.play(this.stations[this.index]);
+  }
+  adjustVolume(direction: number) {
+    this.level = Math.max(0, Math.min(1, this.level + direction * 0.05));
+    ($('radio-volume') as HTMLInputElement).value = String(this.level);
+    this.volume();
+  }
+  duck(active: boolean) {
+    this.ducked = active;
+    this.volume();
+  }
+  power() {
+    if (this.phase === 'off') this.play(this.stations[this.index]);
+    else this.stop();
   }
   play(station: Station) {
-    const fileUrl = station.id === 'local-file' ? station.url : undefined;
-    this.stop(false, !!fileUrl);
-    this.fileUrl = fileUrl;
+    this.stop(false);
+    this.index = Math.max(
+      0,
+      this.stations.findIndex((s) => s.id === station.id),
+    );
+    try {
+      localStorage.setItem('jaysworld-radio-off', 'false');
+      this.staticBus();
+    } catch {
+      /* Direct audio still works. */
+    }
     const generation = ++this.generation;
-    this.current = station;
-    this.render();
-    this.status('Tuning in to ' + station.name + '…');
-    if (!publicHttps(station.url) && station.id !== 'local-file') {
-      this.status('This station does not have a supported secure stream. Choose another station.');
+    this.state('tuning');
+    if (!publicHttps(station.url)) {
+      this.state('unavailable');
       return;
     }
-    const urls = [station.url, ...(station.alternates ?? []).filter(publicHttps)];
-    let attempt = 0;
-    const open = () => {
-      if (generation !== this.generation) return;
-      this.audio?.pause();
-      const audio = new Audio();
-      audio.preload = 'none';
-      if (station.effects) {
-        audio.crossOrigin = 'anonymous';
-        try {
-          this.effects = new RadioEffects(audio);
-          this.updateEffects();
-        } catch {
-          this.status('Audio effects are unavailable in this browser.');
-        }
-      }
-      ($('effects-controls') as HTMLFieldSetElement).disabled = !this.effects;
-      $('effects-status').textContent = this.effects
-        ? 'Studio effects are connected. Try a preset or turn the knobs.'
-        : 'This station plays directly. Choose Ente Radio, Digital Malayali, or your own file to use effects.';
-      audio.volume = Number(($('radio-volume') as HTMLInputElement).value);
-      this.audio = audio;
-      audio.src = urls[attempt];
-      const fail = () => {
-        if (generation !== this.generation || this.audio !== audio) return;
-        clearTimeout(this.timeout);
-        audio.pause();
-        audio.removeAttribute('src');
-        audio.load();
-        if (attempt + 1 < urls.length) {
-          attempt++;
-          open();
-          return;
-        }
-        this.effects?.dispose();
-        this.effects = undefined;
-        ($('effects-controls') as HTMLFieldSetElement).disabled = true;
-        this.playing = false;
-        $('radio-now').hidden = true;
-        $('radio-indicator').classList.remove('on');
-        this.status(
-          station.name + ' is unavailable right now. Choose another station, or open its website.',
-        );
-        this.render();
-      };
-      audio.addEventListener('playing', () => {
-        if (generation !== this.generation || this.audio !== audio) return;
-        clearTimeout(this.timeout);
-        this.playing = true;
-        $('radio-now').hidden = false;
-        $('radio-now-name').textContent = station.name;
-        $('radio-indicator').classList.add('on');
-        this.status((station.id === 'local-file' ? 'Playing: ' : 'Live: ') + station.name);
-        this.render();
-      });
-      audio.addEventListener('ended', () => {
-        if (generation !== this.generation) return;
-        this.stop(false);
-        this.status(
-          station.id === 'local-file'
-            ? 'Your audio finished. Choose a file or station to play again.'
-            : 'The station stopped sending audio. Tap it to reconnect.',
-        );
-      });
-      audio.addEventListener('waiting', () => {
-        if (generation === this.generation) this.status('Buffering ' + station.name + '…');
-      });
-      audio.addEventListener('error', fail, { once: true });
-      this.timeout = window.setTimeout(fail, 14000);
-      void audio.play().catch((error) => {
-        if (generation !== this.generation || this.audio !== audio) return;
-        if (error instanceof DOMException && error.name === 'NotAllowedError') {
-          clearTimeout(this.timeout);
-          this.status('Tap the station again to allow audio playback.');
-        } else fail();
-      });
+    const audio = (this.audio = new Audio());
+    audio.preload = 'none';
+    audio.volume = this.level * (this.ducked ? 0.16 : 1);
+    // Keep the live stream on the native media path: station CORS policies need not permit Web Audio.
+    audio.src = station.url;
+    const current = () => generation === this.generation && this.audio === audio;
+    const fail = () => {
+      if (!current()) return;
+      clearTimeout(this.timeout);
+      audio.pause();
+      audio.removeAttribute('src');
+      audio.load();
+      this.state('unavailable');
     };
-    open();
-    if (station.uuid)
-      void fetch(this.mirrors[0] + '/json/url/' + encodeURIComponent(station.uuid), {
-        signal: AbortSignal.timeout(4000),
-      }).catch(() => undefined);
+    const deadline = () => {
+      clearTimeout(this.timeout);
+      this.timeout = window.setTimeout(fail, 14000);
+    };
+    audio.addEventListener('playing', () => {
+      if (current()) {
+        clearTimeout(this.timeout);
+        this.state('playing');
+      }
+    });
+    audio.addEventListener('waiting', () => {
+      if (current() && ['tuning', 'playing', 'buffering'].includes(this.phase)) {
+        // Initial media loading is still a search for the first signal.
+        // A fading signal only exists after the station has started playing.
+        if (this.phase !== 'tuning') this.state('buffering');
+        deadline();
+      }
+    });
+    audio.addEventListener('error', fail);
+    deadline();
+    void audio.play().catch(fail);
   }
-  stop(announce = true, keepFile = false) {
-    this.effects?.dispose();
-    this.effects = undefined;
-    if (this.fileUrl && !keepFile) {
-      URL.revokeObjectURL(this.fileUrl);
-      this.fileUrl = undefined;
-    }
-    ($('effects-controls') as HTMLFieldSetElement).disabled = true;
+  stop(explicit = true) {
     this.generation++;
     clearTimeout(this.timeout);
     this.audio?.pause();
@@ -316,74 +268,42 @@ export class VillageRadio {
       this.audio.load();
     }
     this.audio = undefined;
-    this.current = undefined;
-    this.playing = false;
-    $('radio-now').hidden = true;
-    $('radio-indicator').classList.remove('on');
-    if (announce) this.status('Radio off. Choose a station to tune in.');
-    this.render();
+    if (explicit) {
+      try {
+        localStorage.setItem('jaysworld-radio-off', 'true');
+      } catch {
+        /* Optional. */
+      }
+    }
+    this.state('off');
   }
   async discover() {
     this.abort?.abort();
-    this.abort = new AbortController();
-    const abort = this.abort;
-    this.status('Looking for Malayalam stations…');
-    ($('radio-refresh') as HTMLButtonElement).disabled = true;
-    try {
+    const abort = (this.abort = new AbortController());
+    for (const mirror of ['de1', 'de2', 'fi1']) {
       try {
-        const response = await fetch(this.mirrors[0] + '/json/servers', {
-          signal: AbortSignal.any([abort.signal, AbortSignal.timeout(4000)]),
-        });
-        const values: unknown = await response.json();
-        if (Array.isArray(values)) {
-          const found = values
-            .map((v) =>
-              v && typeof v === 'object' ? (v as Record<string, unknown>).name : undefined,
-            )
-            .filter(
-              (v): v is string =>
-                typeof v === 'string' && /^[a-z0-9-]+\.api\.radio-browser\.info$/i.test(v),
-            )
-            .map((v) => 'https://' + v);
-          if (found.length)
-            this.mirrors = [...new Set(found)].sort(() => Math.random() - 0.5).slice(0, 4);
-        }
+        const response = await fetch(
+          'https://' +
+            mirror +
+            '.api.radio-browser.info/json/stations/search?language=malayalam&hidebroken=true&is_https=true&limit=60&order=clickcount&reverse=true',
+          { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(5000)]) },
+        );
+        if (!response.ok) continue;
+        const found = directoryStations(await response.json());
+        if (!found.length || abort.signal.aborted) continue;
+        const seen = new Set(this.stations.map((s) => s.url));
+        this.stations.push(...found.filter((s) => !seen.has(s.url)));
+        this.render();
+        return;
       } catch {
         if (abort.signal.aborted) return;
       }
-      for (const mirror of this.mirrors) {
-        if (abort.signal.aborted) return;
-        try {
-          const response = await fetch(
-            mirror +
-              '/json/stations/search?language=malayalam&hidebroken=true&is_https=true&limit=60&order=clickcount&reverse=true',
-            { signal: AbortSignal.any([abort.signal, AbortSignal.timeout(5000)]) },
-          );
-          if (!response.ok) continue;
-          const stations = directoryStations(await response.json());
-          if (!stations.length) continue;
-          const seen = new Set(CURATED_STATIONS.map((s) => s.url));
-          this.stations = [...CURATED_STATIONS, ...stations.filter((s) => !seen.has(s.url))];
-          this.render();
-          this.status(
-            this.playing && this.current
-              ? 'Live: ' + this.current.name
-              : 'More stations found. Choose one to tune in.',
-          );
-          return;
-        } catch {
-          continue;
-        }
-      }
-      this.status(
-        'The directory is taking a break. The stations above are still available to try.',
-      );
-    } finally {
-      if (this.abort === abort) ($('radio-refresh') as HTMLButtonElement).disabled = false;
     }
   }
   dispose() {
     this.abort?.abort();
     this.stop(false);
+    this.noise?.stop();
+    void this.context?.close().catch(() => {});
   }
 }

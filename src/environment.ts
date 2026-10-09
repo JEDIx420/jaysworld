@@ -28,6 +28,7 @@ export interface Environment {
   markers: { mesh: THREE.Mesh; x: number; z: number }[];
   setQuality: (performance: boolean) => void;
   setNight: (amount: number) => void;
+  setRain: (amount: number) => void;
   feedCroc: () => void;
   crocPosition: THREE.Vector3;
   life: ReturnType<typeof createVillageLife>;
@@ -129,7 +130,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
   const asphaltMaterial = new THREE.MeshStandardMaterial({ color: '#48514b', roughness: 1 });
   for (const [i, curve] of curves.entries()) {
     const shoulder = strip(curve, ROADS[i].width + 2.6, shoulderMaterial, 0.025);
-    const road = strip(curve, ROADS[i].width, asphaltMaterial);
+    const road = strip(curve, ROADS[i].width, asphaltMaterial, 0.06 + i * 0.0008);
     // The wheels raycast the same raised road triangles the visitor sees.
     world.createCollider(
       RAPIER.ColliderDesc.trimesh(
@@ -282,7 +283,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       sign.rotation.y = -Math.PI / 2;
       statics.add(sign);
     } else {
-      const { group, width, depth } = makeBuilding(
+      const { group, width, depth, height } = makeBuilding(
         place.id,
         place.id === 'music' ? '#c89368' : place.id === 'opsflash' ? '#a2b4a0' : undefined,
       );
@@ -294,7 +295,16 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       group.position.set(place.position.x, baseY, place.position.z);
       group.rotation.y = yaw;
       statics.add(group);
-      fixedBox(world, width, 3.3, depth, place.position.x, baseY + 1.65, place.position.z, yaw);
+      fixedBox(
+        world,
+        width,
+        height,
+        depth,
+        place.position.x,
+        baseY + height / 2,
+        place.position.z,
+        yaw,
+      );
       fixedBox(
         world,
         width + 1.5,
@@ -586,6 +596,8 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       side = n % 2 ? 1 : -1;
     const x = p.x - tangent.z * side * 5.1,
       z = p.z + tangent.x * side * 5.1;
+    if (PLACES.some((place) => Math.hypot(x - place.trigger.x, z - place.trigger.z) < 5.5))
+      continue;
     cylinder(statics, 0.06, 0.1, 3.1, [x, 1.55, z], materials.darkWood, 8);
     box(statics, [0.45, 0.48, 0.45], [x, 3.2, z], materials.lamp);
     const cap = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.27, 4), materials.darkWood);
@@ -657,6 +669,12 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
   const life = createVillageLife(scene, world, statics);
   const roadside = createRoadside(scene, world, statics);
   bakeStatic(statics);
+  const towerWindows = new Set<THREE.MeshStandardMaterial>();
+  statics.traverse((o) => {
+    if (o instanceof THREE.Mesh)
+      for (const m of Array.isArray(o.material) ? o.material : [o.material])
+        if (m.name === 'tower:windows') towerWindows.add(m);
+  });
   return {
     dynamics,
     markers,
@@ -672,8 +690,13 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       rice.visible = !performance;
       egrets.forEach((e, i) => (e.visible = !performance || i < 2));
     },
+    setRain(amount) {
+      asphaltMaterial.roughness = 1 - amount * 0.57;
+      asphaltMaterial.color.set('#48514b').lerp(new THREE.Color('#354742'), amount * 0.3);
+    },
     setNight(amount) {
       night = amount;
+      towerWindows.forEach((m) => (m.emissiveIntensity = amount * 0.25));
       waterMaterial.uniforms.night.value = amount;
       lamps.forEach((l) => (l.intensity = amount * 33));
       materials.lamp.emissiveIntensity = 0.55 + amount * 1.4;

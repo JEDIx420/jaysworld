@@ -13,6 +13,25 @@ export interface VillageRoad {
 export const WORLD_BOUNDS = { minX: -310, maxX: 150, minZ: -270, maxZ: 270 };
 export const ROADS: readonly VillageRoad[] = [
   {
+    id: 'eagle-forecourt',
+    name: 'Eagle Towers forecourt',
+    width: 4.2,
+    points: [
+      [-53, -4],
+      [-48, -4],
+    ],
+  },
+  {
+    id: 'observatory-drive',
+    name: 'Observatory terrace',
+    width: 4.5,
+    points: [
+      [50, -212],
+      [56, -207],
+      [57, -202],
+    ],
+  },
+  {
     id: 'old-town',
     name: 'Old village road',
     width: 7,
@@ -257,12 +276,12 @@ export const TAXI_STOPS = [
   { id: 'market', label: 'The market', x: -145, z: 30, npcX: -150, npcZ: 34 },
   { id: 'ferry', label: 'Ferry landing', x: -245, z: 10, npcX: -249, npcZ: 15 },
   { id: 'clinic', label: 'Clinic road', x: -148, z: -121, npcX: -154, npcZ: -124 },
-  { id: 'studio', label: 'Eagle Eye studio', x: -53, z: -4, npcX: -58, npcZ: -8 },
+  { id: 'studio', label: 'Eagle Towers', x: -48, z: -4, npcX: -45, npcZ: 1 },
   { id: 'workshop', label: 'RIFT workshop', x: -139, z: 132, npcX: -144, npcZ: 135 },
   { id: 'records', label: 'The record shop', x: -235, z: 168, npcX: -231, npcZ: 173 },
   { id: 'jetty', label: 'Wetland jetty', x: 55, z: 8, npcX: 62, npcZ: 17 },
   { id: 'paddy', label: 'Paddy shelter', x: -68, z: 113, npcX: -72, npcZ: 118 },
-  { id: 'stars', label: 'Observatory', x: 50, z: -212, npcX: 57, npcZ: -210 },
+  { id: 'stars', label: 'Observatory', x: 57, z: -202, npcX: 61, npcZ: -199 },
   { id: 'south', label: 'Southern bend', x: -91, z: 214, npcX: -94, npcZ: 220 },
 ] as const;
 export type TaxiStopId = (typeof TAXI_STOPS)[number]['id'];

@@ -23,6 +23,9 @@ export class FareGame {
   private onboard = false;
   private travelled = 0;
   private previous?: Point;
+  private selected = 0;
+  private cooldown = new Map<number, number>();
+  private rivalIndex?: number;
   constructor(saved?: unknown) {
     if (saved && typeof saved === 'object') {
       const s = saved as Record<string, unknown>;
@@ -44,9 +47,70 @@ export class FareGame {
           snacks: s.snacks as number,
         };
     }
+    this.selected = this.data.completed % PASSENGERS.length;
   }
   get passenger() {
-    return PASSENGERS[this.data.completed % PASSENGERS.length];
+    return PASSENGERS[this.selected];
+  }
+  get offers() {
+    const available: number[] = [];
+    for (let offset = 0; offset < PASSENGERS.length && available.length < 4; offset++) {
+      const index = (this.selected + offset) % PASSENGERS.length;
+      if (
+        !this.cooldown.has(index) &&
+        index !== this.rivalIndex &&
+        !(this.onboard && index === this.selected)
+      )
+        available.push(index);
+    }
+    return available;
+  }
+  get unavailable() {
+    return [
+      ...this.cooldown.keys(),
+      ...(this.rivalIndex === undefined ? [] : [this.rivalIndex]),
+      ...(this.onboard ? [this.selected] : []),
+    ];
+  }
+  select(index: number) {
+    if (this.onboard || !this.offers.includes(index)) return false;
+    this.selected = index;
+    this.previous = undefined;
+    return true;
+  }
+  tick(dt: number) {
+    for (const [index, time] of this.cooldown) {
+      if (time <= dt) this.cooldown.delete(index);
+      else this.cooldown.set(index, time - dt);
+    }
+  }
+  rivalJob(point: Point): { id: number; target: Point; onboard: boolean } | undefined {
+    if (this.rivalIndex !== undefined)
+      return {
+        id: this.rivalIndex,
+        target: stopById(PASSENGERS[this.rivalIndex].to),
+        onboard: true,
+      };
+    const choices = this.offers.map((id) => ({
+      id,
+      target: stopById(PASSENGERS[id].from),
+      onboard: false,
+    }));
+    return choices.sort((a, b) => distance2(point, a.target) - distance2(point, b.target))[0];
+  }
+  rivalArrive(id: number, point: Point, speed: number) {
+    const job = this.rivalJob(point);
+    if (!job || job.id !== id || speed > 1.2 || distance2(point, job.target) > 7) return false;
+    if (this.rivalIndex === id) {
+      this.rivalIndex = undefined;
+      this.cooldown.set(id, 40);
+      return true;
+    }
+    if (!this.offers.includes(id)) return false;
+    this.rivalIndex = id;
+    if (this.selected === id && !this.onboard)
+      this.selected = this.offers[0] ?? (id + 1) % PASSENGERS.length;
+    return true;
   }
   get pickup() {
     return stopById(this.passenger.from);
@@ -60,7 +124,7 @@ export class FareGame {
   get snapshot(): FareSnapshot {
     return {
       ...this.data,
-      passengerIndex: this.data.completed % PASSENGERS.length,
+      passengerIndex: this.selected,
       onboard: this.onboard,
       travelled: this.travelled,
       fare: this.fare,
@@ -82,6 +146,11 @@ export class FareGame {
     this.previous = { ...point };
   }
   actionAt(point: Point, speed: number): 'pickup' | 'dropoff' | undefined {
+    if (!this.onboard) {
+      const near = this.offers.find((id) => distance2(point, stopById(PASSENGERS[id].from)) <= 7);
+      if (near !== undefined && speed <= 1.2) return 'pickup';
+      return undefined;
+    }
     if (speed > 1.2 || distance2(point, this.target) > 7) return undefined;
     if (!this.onboard) return 'pickup';
     const minimum = distance2(this.pickup, this.destination) * 0.8;
@@ -94,6 +163,9 @@ export class FareGame {
     const action = this.actionAt(point, speed);
     if (!action) return;
     if (action === 'pickup') {
+      this.selected = this.offers.find(
+        (id) => distance2(point, stopById(PASSENGERS[id].from)) <= 7,
+      )!;
       this.onboard = true;
       this.travelled = 0;
       this.previous = { ...point };
@@ -103,7 +175,9 @@ export class FareGame {
       name = this.passenger.name;
     this.data.wallet += amount;
     this.data.completed++;
+    this.cooldown.set(this.selected, 45);
     this.onboard = false;
+    this.selected = this.offers[0] ?? this.data.completed % PASSENGERS.length;
     this.travelled = 0;
     this.previous = { ...point };
     return { kind: action, message: `${name}: Thank you! ₹${amount} paid.`, amount };

@@ -10,9 +10,11 @@ import {
   clearCameraFoliage,
 } from './models';
 import { makePerson } from './village-life';
+import { makeCar, makePolice } from './traffic-models';
 import { ROAD_CLOSURES, ROAD_PATHS, roadClearance, waterAt } from './village';
 import { groundHeight } from './terrain';
 import type { Resident } from './safety';
+import { vergePosition, CLOSURE_WIDTH, CLOSURE_DEPTH } from './placement';
 
 function animal(kind: 'cow' | 'goat', color: string) {
   const group = new THREE.Group(),
@@ -151,7 +153,19 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
   const flags: THREE.Mesh[] = [],
     machines: ReturnType<typeof excavator>[] = [];
   const residents: Resident[] = [];
-  const personAt = (x: number, z: number, color: string, phase: number, yaw = 0) => {
+  const personAt = (
+    x: number,
+    z: number,
+    color: string,
+    phase: number,
+    yaw = 0,
+    closed = false,
+  ) => {
+    if (!closed) {
+      const safe = vergePosition({ x, z });
+      x = safe.x;
+      z = safe.z;
+    }
     const person = makePerson(color);
     person.group.position.set(x, groundHeight(x, z), z);
     person.group.rotation.y = yaw;
@@ -169,6 +183,62 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
       new THREE.Vector3(x, 0, z)
         .applyAxisAngle(new THREE.Vector3(0, 1, 0), closure.yaw)
         .add(g.position);
+    const patrol = makeCar(true);
+    const parked = local(8, -4);
+    patrol.group.position.set(parked.x, groundHeight(parked.x, parked.z) + 0.8, parked.z);
+    patrol.group.rotation.y = closure.yaw + 0.3;
+    scene.add(patrol.group);
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(1, 1, 2)
+        .setTranslation(parked.x, groundHeight(parked.x, parked.z) + 1, parked.z)
+        .setRotation(patrol.group.quaternion),
+    );
+    for (let n = 0; n < 3; n++) {
+      const p = local(-7 + n * 2.1, 1.8),
+        safe = vergePosition(p),
+        cop = makePolice(n === 0);
+      cop.group.position.set(safe.x, groundHeight(safe.x, safe.z), safe.z);
+      cop.group.rotation.y = closure.yaw;
+      scene.add(cop.group);
+      people.push({ person: cop, base: cop.group.position.clone(), phase: n });
+      residents.push({ x: safe.x, z: safe.z, y: cop.group.position.y, radius: 0.55 });
+    }
+    // Continuous visible perimeter, matching placement.ts's swept closed volume.
+    const wall = (ax: number, az: number, bx: number, bz: number) => {
+      const length = Math.hypot(bx - ax, bz - az),
+        steps = Math.ceil(length / 3);
+      for (let n = 0; n < steps; n++) {
+        const t = (n + 0.5) / steps,
+          p = local(ax + (bx - ax) * t, az + (bz - az) * t);
+        const y = groundHeight(p.x, p.z),
+          yaw = closure.yaw + Math.atan2(bx - ax, bz - az);
+        const stone = box(
+          statics,
+          [0.6, 1.25, length / steps + 0.08],
+          [p.x, y + 0.6, p.z],
+          materials.laterite,
+        );
+        stone.rotation.y = yaw;
+        const rail = box(
+          statics,
+          [0.13, 0.9, length / steps + 0.08],
+          [p.x, y + 1.62, p.z],
+          materials.darkWood,
+        );
+        rail.rotation.y = yaw;
+        world.createCollider(
+          RAPIER.ColliderDesc.cuboid(0.32, 1.15, length / steps / 2 + 0.08)
+            .setTranslation(p.x, y + 1.15, p.z)
+            .setRotation(stone.quaternion),
+        );
+      }
+    };
+    const half = CLOSURE_WIDTH / 2;
+    wall(-half, 0, -5, 0);
+    wall(5, 0, half, 0);
+    wall(-half, 0, -half, -CLOSURE_DEPTH);
+    wall(half, 0, half, -CLOSURE_DEPTH);
+    wall(-half, -CLOSURE_DEPTH, half, -CLOSURE_DEPTH);
     box(g, [10, 0.7, 0.28], [0, 0.8, 0], materials.cream);
     for (let x = -4.5; x <= 4.5; x += 0.75) {
       const stripe = box(
@@ -192,7 +262,7 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
     );
     for (let i = 0; i < closure.people; i++) {
       const p = local(((i % 6) - 2.5) * 1.15, -2.5 - Math.floor(i / 6) * 1.3);
-      const person = personAt(p.x, p.z, closure.color, i * 1.7, closure.yaw);
+      const person = personAt(p.x, p.z, closure.color, i * 1.7, closure.yaw, true);
       if (closure.kind !== 'works' && i % 4 === 0) {
         cylinder(person.group, 0.025, 0.025, 2.5, [0.28, 1.7, 0], materials.wood, 6);
         const flag = box(
@@ -250,15 +320,15 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
   }
   // Small social groups outside shops and beside the ferry, away from the carriageway.
   for (const [x, z] of [
-    [-44, 40],
-    [-45, 42],
+    [-43, 24],
+    [-40, 23],
     [-162, 13],
     [-180, 14],
     [-221, 13],
     [-251, 21],
     [-118, 142],
     [-106, 225],
-    [40, -202],
+    [62, -192],
   ])
     personAt(x, z, ['#ddd8bf', '#729292', '#a77164'][people.length % 3], people.length, 0.5);
 
@@ -540,7 +610,10 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
         const angle = t * 0.065 + a.index * 1.2,
           x = a.x + Math.cos(angle) * a.radius,
           z = a.z + Math.sin(angle) * a.radius;
-        if (!driver || Math.hypot(driver.x - x, driver.z - z) > 3.1)
+        if (
+          roadClearance(x, z) > (a.kind === 'cow' ? 2.5 : 2) &&
+          (!driver || Math.hypot(driver.x - x, driver.z - z) > 3.1)
+        )
           a.model.group.position.set(x, groundHeight(x, z), z);
         a.model.group.rotation.y = -angle;
         a.model.head.rotation.x = 0.15 + Math.max(0, Math.sin(t * 0.4 + a.index)) * 0.55;

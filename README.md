@@ -1,109 +1,66 @@
-# Jay's World — A Kerala Journey
+# Jay’s World — The Living Town
 
-A driveable personal portfolio set in a Kerala-inspired backwater village. Take a black-and-yellow auto-rickshaw through Jay's work in AI, growth systems, music, and games.
+A Kerala-inspired portfolio you drive through in a black-and-yellow auto. Start at **Eagle Towers**, follow the roads to seven projects, make a beat, have a chaya or stay for the stars.
 
-**GitHub Pages URL:** https://jedix420.github.io/jaysworld/ (successful main builds publish automatically).
+**Live:** https://jedix420.github.io/jaysworld/
 
-## The ridge and village edition
+**v0.5** extends the existing Three.js and Rapier game. Everything builds into static files for GitHub Pages; no account, secret or backend is required.
 
-- A larger 460 × 540 metre village boundary, fourteen connected road paths, six districts, eleven passenger stops, a market, ferry landing, paddy lanes, houses, and two canal crossings.
-- A three-wheel auto with progressive acceleration and braking, speed-sensitive steering, suspension, matching terrain/road collisions, a close driving camera with a scenic preset, and original procedural exhaust, rattle, road, brake, horn, and village sounds.
-- Free roam by default. Toggle taxi duty on for passenger pickup/drop-off journeys and game rupees, then off whenever you want to explore. Buy chaya, pazhampori, or samosas; wallet, purchase totals and duty preference persist on your device.
-- Seven storefronts for Jay, Eagle Eye, OpsFlash, RIFT, Music & Beats, SALTWATER, and The Quiet Between Stars. Free three-page reading surfaces introduce each project and its interactive exhibit: a tea-shop newspaper, studio notes, operations brief, workshop log, record sleeve, wetland field journal and observatory journal.
-- An elevated, winding observatory climb with continuous guardrails, a level summit landing, wooded slopes and terrace planting. Crop beds and bunds leave asphalt and shoulders clear.
-- Cows and goats graze and wander; banana gardens, wells, laundry and social groups bring life to the verges. Plain red/orange processions, a white-clothed village gathering and two animated excavators close the outward roads with physical barriers. People and animals have early-yield and swept protection.
-- Three crocodiles to observe swimming, surfacing, submerging, and hunting fish, with resident selection, orbit, and zoom.
-- A telescope view with illustrated constellations and magnification, plus golden-hour and evening lighting.
-- Ente Radio starts on the first click after loading, including a menu click, or the first driving input. The mixing desk adds filter, bass, echo, room, and wobble effects to supported streams or your local audio. The beat sequencer remains available on the record sleeve’s interactive page.
-- Keyboard and touch controls, a local minimap and clickable village atlas with zoom/pan and keyboard selection. Directions follow the curved roads with gold arrows, a heading cue and remaining distance. Project links and no-WebGL/no-JavaScript fallbacks remain available.
+## This release
 
-This is **v0.4**, extending the existing Three.js / Rapier setup. The setting and detailed procedural assets are original. It is a fictional Kerala village; bespoke hero assets and physical-device performance measurements remain further craft work.
+- A 460 × 540 metre town with sixteen connected road paths, eleven passenger stops, markets, tiled houses, paddy, canal bridges and a winding hill climb. The observatory has its own side terrace and driveway.
+- Glass-and-steel Eagle Towers, a roof lift and a first-person panorama with birds, clouds and the town’s traffic below.
+- Keyboard-first visits: choose a physical object with arrows and use Enter. Short project postcards, CRT workflow terminals, exact RIFT comparisons and a tactile drum machine replace the long readers and mixing-desk form.
+- A compact driving HUD and touch controls. The map supports routes, pan, zoom and keyboard selection. Gold passenger markers and small passenger buttons let you choose a fare.
+- Off duty by default. Taxi mode offers four passengers at once; a rival auto competes for available pickups and carries its own passengers. A boarded passenger cannot be stolen. Fares fund tea and snacks; the existing version-1 wallet is preserved.
+- Cars and the rival auto use real raycast suspension, steering, brakes, collision bodies and CCD. Motorcycles and cycles use stable lane controllers with obstacle sweeps. Seven major junctions share green/amber/all-red signal timing and stop-line decisions.
+- Kerala-inspired police officers and patrol vehicles at the fictional red/orange processions, white-clothed meeting and JCB roadworks. Continuous visible perimeters and swept closed regions prevent mountain/side bypasses. People and animals remain protected from vehicle impacts.
+- A shared day/night clock, dry/monsoon cycle, haze, dusty wind, rain, wet-road appearance and a modest grip change. Gradual transitions, lamp/window glow, procedural rain sound, flowers, grazing animals and flying birds bring life to the scene.
+- Three crocodiles with independent swimming prey, an intercept and lunge, mouth-aligned capture, articulated jaws/tails/feet, smaller splashes and continuous recovery. Choose residents, orbit and zoom.
+- An illustrated telescope sky with constellation selection and an optional Nightfall action.
+- Ente Radio starts on the first click or Enter/driving input after loading, unless you previously switched it off. A retro tuner seeks backward/forward with static until actual playback. Missing signals time out; beat playback ducks the radio and restores its volume afterward.
 
-## Run locally
+The setting, models, illustrations and synthesized sound are original. Public workflow demonstrations are illustrative; the telescope is an illustrated sky. This is a fictional Kerala town, not a geographic recreation.
 
-Use Node.js 24 or later.
+## Controls
+
+| Context                    | Keys                                                                                   |
+| -------------------------- | -------------------------------------------------------------------------------------- |
+| Driving                    | WASD / arrows · Space brake · Shift boost · H horn                                     |
+| Nearby stop or passenger   | Enter                                                                                  |
+| Global driving controls    | M map · Q radio · T taxi duty · R return to Eagle Towers · Escape settings             |
+| Shop                       | Arrows choose object · Enter use · Escape return                                       |
+| Project instrument         | Arrows change section · Enter advance/compare · Escape close                           |
+| Drum machine               | Arrows choose pad · Enter toggle pad · Space play/stop · +/− tempo                     |
+| Radio                      | ←/→ seek · ↑/↓ volume · Enter power · Escape close                                     |
+| Roof / wetland / telescope | Arrows or drag look · +/− or pinch zoom · Escape return                                |
+| Wetland / telescope        | [ / ] choose target · Enter hunt / next constellation · N nightfall at telescope       |
+| Map                        | Arrows choose project · Enter set route · Home/End first/last · drag pan               |
+| Phone                      | Left stick drive · another finger drag view · brake/horn buttons · tap object controls |
+
+Menus and visits park your auto. Ambient traffic continues; passenger competition pauses while you browse, visit or hide the tab. Direct visits, resets and switching off duty cancel an active fare without paying it. Radio can continue independently.
+
+## Development and checks
+
+Use Node.js 24:
 
 ```sh
 npm ci
 npm run dev
 ```
 
-No account, secret, paid API, or backend is required. Radio needs internet access; the rest of the site builds into static files.
-
-## Controls
-
-| Control       | Action                                                    |
-| ------------- | --------------------------------------------------------- |
-| WASD / arrows | Drive, reverse, steer                                     |
-| Space         | Brake                                                     |
-| Shift         | Boost                                                     |
-| E             | Pick up / drop off a passenger, or visit a nearby place   |
-| M             | Open Places                                               |
-| R             | Return to the tea shop                                    |
-| H             | Horn, after starting the experience                       |
-| Drag / scroll | Orbit / zoom camera                                       |
-| Touch         | Left stick to drive, another finger on the world to orbit |
-
-The first click after loading enables Ente Radio and auto sounds; either can be muted. Project, radio, and settings dialogs pause driving. Storefront, crocodile, and telescope modes park the auto while allowing camera input. Places provides free project notes, pointer/keyboard directions, zoom/pan and direct storefront visits. In the atlas, arrows select a stop and Enter sets directions; Home/End select the first/last stop. Switching taxi duty off, direct visits and resets cancel an active fare without payment. Radio continues while reading until stopped.
-
-## Build and verification
+Production checks:
 
 ```sh
+npm run format:check
 npm test
 npm run build
 npx playwright install chromium
 npm run test:browser
 ```
 
-The browser checks serve the production build and exercise the visitor journey. Set JAYSWORLD_LIVE_RADIO=1 to include a real radio playback check; CI tests gesture-triggered default playback, effects, and failure paths without relying on broadcaster availability. Optional JAYSWORLD_CHROMIUM_PATH selects an existing browser, and JAYSWORLD_BASE_URL tests a deployed site.
+The browser suite serves the production build and runs ten desktop/touch/media/fallback journeys. `JAYSWORLD_QA_SHARD=1/3` selects a worker; `JAYSWORLD_CHROMIUM_PATH` selects an installed browser; `JAYSWORLD_BASE_URL` checks a deployed site. Deterministic PCM fixtures verify browser playback independently of station uptime. `JAYSWORLD_LIVE_RADIO=1` uses the real Ente broadcast.
 
-GitHub runs all ten browser journeys across three workers. JAYSWORLD_QA_SHARD=1/3 selects the first worker's portion locally; the default local command runs the complete suite. Each worker keeps separate diagnostics, and publication waits for all three to pass.
+Main pushes run formatting, unit/physics tests, build and all three browser workers. Pages deployment waits for every worker to succeed. Relative Vite asset paths support the `/jaysworld/` project path. The v0.4 rollback commit is `96ea480d3796642a00a0480cf4552ce3f96c51aa`.
 
-See [validation](docs/VALIDATION.md), [the design roadmap](docs/BUILD_PLAN.md), and [radio sources](docs/RADIO_SOURCES.md).
-
-## GitHub Pages
-
-Every push to main tests and builds the site, runs production browser checks, and uploads the dist directory as a Pages artifact. When all three workers pass, the deploy job publishes that artifact to GitHub Pages.
-
-1. In repository **Settings → Pages**, select **GitHub Actions** as the source.
-2. Push to main, or use **Actions → Check and publish Jay's World → Run workflow** to publish the current main again.
-3. Wait for all three checks and the deploy job to succeed, then open https://jedix420.github.io/jaysworld/.
-
-Relative assets and fragment links support the /jaysworld/ project path; opening a project does not need server-side routing. No secret or personal access token is needed by this workflow.
-
-The lightweight project interface loads separately from the 3D engine. The physics compatibility package embeds its WASM in the engine bundle; this is the largest download and a future optimisation item.
-
-## Source
-
-| File                 | Responsibility                                                    |
-| -------------------- | ----------------------------------------------------------------- |
-| src/main.ts          | Interface, navigation, exhibits, state, loading, fallback         |
-| src/engine.ts        | Simulation, rendering, camera, lighting, map, quality             |
-| src/vehicle.ts       | Rapier chassis and three-wheel handling                           |
-| src/input.ts         | Keyboard and independent touch pointer ownership                  |
-| src/environment.ts   | Village layout, road, scenery, colliders, wildlife                |
-| src/models.ts        | Original procedural models and material batching                  |
-| src/demos.ts         | Beat sequencer, reconciliation and project interactions           |
-| src/radio.ts         | Default station, safe directory data, playback lifecycle          |
-| src/radio-effects.ts | Live filter, EQ, echo, reverb and wobble                          |
-| src/village.ts       | Shared roads, districts, stops, passengers and routing            |
-| src/fares.ts         | Validated local economy and pickup / drop-off rules               |
-| src/village-life.ts  | Market, ferry, NPCs, scenery and tea table                        |
-| src/wildlife.ts      | Crocodile swim / dive / hunt animation                            |
-| src/sky.ts           | Illustrated stars and constellation patterns                      |
-| src/map.ts           | Curved map, atlas hit testing, zoom/pan projection and directions |
-| src/terrain.ts       | Shared indexed mountain surface and exact triangle heights        |
-| src/surfaces.ts      | Visible/physical ground and road-safe field beds                  |
-| src/roadside.ts      | Livestock, gardens, ridge forest, crowds and roadwork models      |
-| src/safety.ts        | Early yielding and swept resident/animal protection               |
-| src/exhibit-art.ts   | Original vector covers and venue-specific reader identities       |
-| src/audio.ts         | Original procedural engine, horn and ambience                     |
-| src/projects.ts      | Public project content, links and world locations                 |
-
-## Credits and scope
-
-Bruno Simon's [portfolio](https://bruno-simon.com/) and [public implementation](https://github.com/brunosimon/folio-2025) informed the interaction and architecture. The world, vehicle, procedural assets, map, and implementation here are original; no Bruno assets or source are copied.
-
-Radio Browser is an open-source station directory. Station broadcasts are external audio streams owned by their broadcasters; music is not downloaded, bundled, or relicensed by this project. Station links and credits are present in the player.
-
-Third-party runtime notices are in THIRD_PARTY_NOTICES.md and LICENSES/. Professional exhibits use public descriptions and illustrative data, with no client records or private repository source.
+See [the release plan](docs/NEXT_RELEASE_PLAN.md), [validation](docs/VALIDATION.md) and [radio sources](docs/RADIO_SOURCES.md). Physical iPhone/Safari testing and measured hardware FPS remain unverified; touch emulation is recorded separately.

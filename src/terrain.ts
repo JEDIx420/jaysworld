@@ -15,7 +15,9 @@ function altitude(x: number, z: number) {
   const northPeak = 13 * Math.exp(-(((x - 8) / 45) ** 2 + ((z + 285) / 26) ** 2));
   const ridge = (24 + forestPeak + northPeak) * ascent * west * east;
   const landing = 1 - smooth((Math.hypot(x - 40, z + 206) - 19) / 16);
-  return ridge + (23 - ridge) * landing;
+  const roadLanding = ridge + (23 - ridge) * landing;
+  const observatory = 1 - smooth((Math.hypot(x - 65, z + 193) - 11) / 12);
+  return roadLanding + (23 - roadLanding) * observatory;
 }
 const cols = TERRAIN.width / TERRAIN.step + 1,
   rows = TERRAIN.depth / TERRAIN.step + 1;

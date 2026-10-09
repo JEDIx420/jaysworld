@@ -1,13 +1,13 @@
 import './style.css';
+import './retro.css';
 import '@fontsource/noto-sans-malayalam/malayalam-400.css';
 import { PLACES, nearestPlace, type Place } from './projects';
 import { VillageRadio } from './radio';
-import { renderDemo, renderDetails } from './demos';
+import { VenueControls, RetroExhibit } from './retro';
 import { JourneyAudio } from './audio';
 import { FareGame, type Snack } from './fares';
-import { districtAt, routeBetween, distance2, type Point } from './village';
-import { drawVillageMap, atlasHit, navigationCue } from './map';
-import { READERS, exhibitArt } from './exhibit-art';
+import { districtAt, routeBetween, distance2, PASSENGERS, stopById, type Point } from './village';
+import { drawVillageMap, atlasHit, atlasOfferHit, setMapOffers, navigationCue } from './map';
 import type { Journey, ViewMode } from './engine';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -37,19 +37,18 @@ try {
 let journey: Journey | undefined,
   activePlace: Place | undefined,
   visitingPlace: Place | undefined,
-  demoDispose = () => {},
   toastTimer = 0,
-  night = false,
+  timeMode = 0,
+  weatherMode = 0,
   performanceMode = matchMedia('(pointer: coarse)').matches,
   lastPlace = '',
   booted = false,
   sceneFailed = false,
   experienceStarted = false,
-  paperPage = 0,
   viewMode: ViewMode = 'drive',
   routePlace: Place | undefined,
   atlasRoute: readonly Point[] = [],
-  position: Point = { x: -51, z: 29 },
+  position: Point = { x: -48, z: -4 },
   speed = 0,
   yaw = 0,
   lastPassenger = '',
@@ -80,6 +79,11 @@ function closeDialogs() {
 function open(dialog: HTMLDialogElement) {
   closeDialogs();
   dialog.showModal();
+  if (dialog === project || dialog === radioDialog) {
+    dialog.tabIndex = -1;
+    dialog.focus({ preventScroll: true });
+  }
+  if (dialog === places) $('village-atlas').focus({ preventScroll: true });
   journey?.pause();
 }
 function cancelRide() {
@@ -99,6 +103,9 @@ function updateDuty() {
     state.wallet,
     state.completed,
     state.onboard,
+    state.passengerIndex,
+    fares.offers.join(),
+    fares.unavailable.join(),
     Math.round(position.x),
     Math.round(position.z),
     speed < 1.2,
@@ -114,6 +121,35 @@ function updateDuty() {
     journey?.setPassenger(state.passengerIndex, state.onboard);
     journey?.setDuty(taxiEnabled);
   }
+  journey?.setOffers(taxiEnabled ? fares.offers : [], fares.unavailable);
+  setMapOffers(
+    taxiEnabled
+      ? fares.offers.map((id) => ({
+          ...stopById(PASSENGERS[id].from),
+          id,
+          name: PASSENGERS[id].name,
+        }))
+      : [],
+  );
+  const offers = $('fare-offers');
+  offers.replaceChildren();
+  if (taxiEnabled && !state.onboard)
+    fares.offers.forEach((id) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = PASSENGERS[id].name;
+      button.setAttribute(
+        'aria-label',
+        'Route to ' + PASSENGERS[id].name + ' at ' + stopById(PASSENGERS[id].from).label,
+      );
+      button.setAttribute('aria-pressed', String(id === state.passengerIndex));
+      button.addEventListener('click', () => {
+        fares.select(id);
+        routePlace = undefined;
+        updateDuty();
+      });
+      offers.append(button);
+    });
   $('wallet').textContent = '₹' + state.wallet;
   $('taxi-toggle').setAttribute('aria-pressed', String(taxiEnabled));
   $('taxi-toggle').innerHTML = (taxiEnabled ? 'ON DUTY' : 'OFF DUTY') + '<i></i>';
@@ -138,7 +174,7 @@ function updateDuty() {
   $('fare-route').textContent = taxiEnabled ? 'Show fare route' : 'Choose a place';
   const action = taxiEnabled ? fares.actionAt(position, speed) : undefined;
   $('fare-action').hidden = !action || viewMode !== 'drive';
-  $('fare-action').textContent = action === 'dropoff' ? 'Drop off · E' : 'Pick up · E';
+  $('fare-action').textContent = action === 'dropoff' ? 'Drop off ↵' : 'Pick up ↵';
   const route = target ? routeBetween(position, target).points : [];
   atlasRoute = route;
   const cue = navigationCue(position, yaw, route);
@@ -234,80 +270,41 @@ function updatePlaces() {
   });
   $('visited-count').textContent = visited.size + ' / ' + PLACES.length;
 }
-function turnPage(page: number) {
-  paperPage = Math.max(0, Math.min(2, page));
-  project
-    .querySelectorAll<HTMLElement>('[data-paper-page]')
-    .forEach((el) => (el.hidden = Number(el.dataset.paperPage) !== paperPage));
-  project
-    .querySelectorAll<HTMLButtonElement>('[data-page]')
-    .forEach((el) =>
-      el.setAttribute('aria-pressed', String(Number(el.dataset.page) === paperPage)),
-    );
-  $('paper-page-number').textContent = 'PAGE ' + (paperPage + 1) + ' / 3';
-  $<HTMLButtonElement>('paper-prev').disabled = paperPage === 0;
-  $<HTMLButtonElement>('paper-next').disabled = paperPage === 2;
-  audio.cue('paper');
-  project.scrollTop = 0;
+const exhibit = new RetroExhibit(project, {
+  close: () => project.close(),
+  crocs: observeCrocs,
+  stars: observeStars,
+  playback: (active) => radio.duck(active),
+  cue: () => audio.cue('paper'),
+});
+const venue = new VenueControls($('view-panel'), {
+  paper: showProject,
+  roof: () => journey?.roof(),
+  crocs: observeCrocs,
+  stars: observeStars,
+  leave: () => journey?.leaveView(),
+  cue: () => audio.cue('paper'),
+  buy,
+});
+function buy(item: Snack) {
+  const result = fares.buy(
+    item,
+    nearestPlace(position.x, position.z, 9)?.id === 'about' && visitingPlace?.id === 'about',
+  );
+  toast(result.message);
+  if (result.ok) {
+    save();
+    journey?.serve(item);
+    audio.cue(item === 'tea' ? 'tea' : 'coins');
+  }
+  updateDuty();
 }
 function showProject(place: Place) {
-  demoDispose();
-  demoDispose = () => {};
+  closeDialogs();
   visited.add(place.id);
   updatePlaces();
+  exhibit.show(place);
   open(project);
-  project.dataset.venue = place.id;
-  const reader = READERS[place.id];
-  $('reader-masthead').textContent = reader.title;
-  $('reader-edition').textContent = reader.edition;
-  $('reader-subtitle').textContent = reader.subtitle;
-  $('project-art').innerHTML = exhibitArt(place.id);
-  $('project-category').textContent = place.category;
-  $('project-number').textContent = String(PLACES.indexOf(place) + 1).padStart(2, '0');
-  $('project-location').textContent = place.location;
-  $('project-title').textContent = place.name;
-  $('project-summary').textContent = place.summary;
-  $('project-body').textContent = place.body;
-  const links = $('project-links');
-  links.replaceChildren();
-  for (const link of place.links) {
-    const a = document.createElement('a');
-    a.textContent = link.label;
-    a.href = link.href;
-    a.target = '_blank';
-    a.rel = 'noopener noreferrer';
-    links.append(a);
-  }
-  renderDetails(place.id, $('project-details'));
-  demoDispose = renderDemo(place.id, $('project-demo'), {
-    onMusic: () => radio.stop(),
-    watchCroc: () => {
-      if (!journey || sceneFailed) {
-        toast(
-          'The wetland view needs 3D graphics. The project links and paper are still available.',
-        );
-        return;
-      }
-      project.close();
-      observeCrocs();
-    },
-    watchStars: () => {
-      if (!journey || sceneFailed) {
-        toast(
-          'The telescope needs 3D graphics. The star chart and project links are still available.',
-        );
-        return;
-      }
-      project.close();
-      observeStars();
-    },
-  });
-  if (!$('project-demo').childElementCount)
-    $('project-demo').textContent =
-      place.id === 'about'
-        ? 'Your next story is outside: pick up a passenger, earn a fare, and return for tea and a newspaper.'
-        : 'Take a look at the storefront, or follow the project link on the front page.';
-  turnPage(0);
   history.replaceState(null, '', '#' + place.id);
   announce(place.name);
 }
@@ -316,11 +313,10 @@ function showPlaces() {
   updateDuty();
   open(places);
 }
-function applyNight() {
-  document.body.classList.toggle('night', night);
-  $('time-button').textContent = night ? 'Evening' : 'Golden hour';
-  $('time-button').setAttribute('aria-pressed', String(night));
-  journey?.night(night);
+function applyTime() {
+  const labels = ['Time · auto', 'Time · dusk', 'Time · night', 'Time · day'];
+  $('time-button').textContent = labels[timeMode];
+  journey?.time([undefined, 18, 21, 13][timeMode]);
 }
 function observeCrocs() {
   startExperience();
@@ -328,8 +324,6 @@ function observeCrocs() {
 }
 function observeStars() {
   startExperience();
-  night = true;
-  applyNight();
   journey?.tourObservatory();
 }
 function startExperience() {
@@ -360,9 +354,39 @@ window.addEventListener(
   },
   { capture: true },
 );
+let observerIndex = 0;
+function observerTarget(delta: number) {
+  observerIndex = (observerIndex + delta + 3) % 3;
+  if (viewMode === 'croc') journey?.selectCroc(observerIndex);
+  else if (viewMode === 'stars') journey?.constellation(['orion', 'dipper', 'crux'][observerIndex]);
+}
+function observerAction() {
+  if (viewMode === 'croc') journey?.hunt();
+  else if (viewMode === 'stars') observerTarget(1);
+}
+$('view-panel').addEventListener('click', (e) => {
+  const action = (e.target as HTMLElement).closest<HTMLElement>('[data-observer]')?.dataset
+    .observer;
+  if (action === 'previous') observerTarget(-1);
+  if (action === 'next') observerTarget(1);
+  if (action === 'action') observerAction();
+  if (action === 'night') {
+    timeMode = 2;
+    applyTime();
+  }
+  if (action === 'closer') journey?.zoom(-160);
+  if (action === 'wider') journey?.zoom(160);
+});
 window.addEventListener(
   'keydown',
   (e) => {
+    const el = e.target as HTMLElement;
+    if (el.closest('input,textarea,select') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.code === 'Enter' && !experienceStarted && booted && !dialogs.some((d) => d.open)) {
+      e.preventDefault();
+      startExperience();
+      return;
+    }
     if (
       !dialogs.some((d) => d.open) &&
       ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(
@@ -370,6 +394,91 @@ window.addEventListener(
       )
     )
       startExperience();
+    const nativeEnter = e.code === 'Enter' && !!el.closest('button,a');
+    if (e.code === 'Escape') {
+      const dialog = dialogs.find((d) => d.open);
+      if (dialog) {
+        e.preventDefault();
+        dialog.close();
+        journey?.pause();
+      } else if (viewMode !== 'drive') {
+        e.preventDefault();
+        journey?.leaveView();
+      } else {
+        e.preventDefault();
+        open(settings);
+      }
+      return;
+    }
+    if (project.open) {
+      if (!nativeEnter && exhibit.key(e.code)) e.preventDefault();
+      return;
+    }
+    if (radioDialog.open) {
+      if (nativeEnter) return;
+      if (e.code === 'ArrowLeft') radio.seek(-1);
+      else if (e.code === 'ArrowRight') radio.seek(1);
+      else if (e.code === 'ArrowUp') radio.adjustVolume(1);
+      else if (e.code === 'ArrowDown') radio.adjustVolume(-1);
+      else if (e.code === 'Enter') radio.power();
+      else return;
+      e.preventDefault();
+      return;
+    }
+    if (places.open) {
+      if (el === atlas || nativeEnter) return;
+      if (e.code.startsWith('Arrow') || e.code === 'Enter') {
+        e.preventDefault();
+        atlas.focus();
+        atlas.dispatchEvent(
+          new KeyboardEvent('keydown', { code: e.code, bubbles: false, cancelable: true }),
+        );
+      }
+      return;
+    }
+    if (settings.open) {
+      if (e.code.startsWith('Arrow')) {
+        const buttons = [...settings.querySelectorAll<HTMLButtonElement>('button')];
+        const index = buttons.indexOf(el as HTMLButtonElement),
+          delta = ['ArrowLeft', 'ArrowUp'].includes(e.code) ? -1 : 1;
+        buttons[(index + delta + buttons.length) % buttons.length]?.focus();
+        e.preventDefault();
+      }
+      return;
+    }
+    if (viewMode !== 'drive') {
+      if (nativeEnter) return;
+      if (viewMode === 'storefront') {
+        if (['ArrowLeft', 'ArrowUp'].includes(e.code)) venue.change(-1);
+        else if (['ArrowRight', 'ArrowDown'].includes(e.code)) venue.change(1);
+        else if (e.code === 'Enter') venue.activate();
+        else return;
+      } else {
+        if (e.code === 'ArrowLeft') journey?.look(-1, 0);
+        else if (e.code === 'ArrowRight') journey?.look(1, 0);
+        else if (e.code === 'ArrowUp') journey?.look(0, 1);
+        else if (e.code === 'ArrowDown') journey?.look(0, -1);
+        else if (e.code === 'Equal' || e.code === 'NumpadAdd') journey?.zoom(-160);
+        else if (e.code === 'Minus' || e.code === 'NumpadSubtract') journey?.zoom(160);
+        else if (e.code === 'KeyN' && viewMode === 'stars') {
+          timeMode = 2;
+          applyTime();
+        } else if (e.code === 'BracketLeft') observerTarget(-1);
+        else if (e.code === 'BracketRight') observerTarget(1);
+        else if (e.code === 'Enter') observerAction();
+        else return;
+      }
+      e.preventDefault();
+      return;
+    }
+    if (e.code === 'KeyQ') {
+      e.preventDefault();
+      open(radioDialog);
+    }
+    if (e.code === 'KeyT') {
+      e.preventDefault();
+      $('taxi-toggle').click();
+    }
   },
   { capture: true },
 );
@@ -383,9 +492,7 @@ $('about-link').addEventListener('click', (e) => {
 });
 $('radio-button').addEventListener('click', () => open(radioDialog));
 $('settings-button').addEventListener('click', () => open(settings));
-$('interaction-button').addEventListener('click', () => {
-  if (activePlace) visit(activePlace);
-});
+$('interaction-button').addEventListener('click', act);
 $('fare-action').addEventListener('click', act);
 $('fare-route').addEventListener('click', () => {
   if (!taxiEnabled) {
@@ -394,7 +501,7 @@ $('fare-route').addEventListener('click', () => {
   }
   routePlace = undefined;
   updateDuty();
-  toast('Follow the gold arrows. Stop beside the passenger and press E.');
+  toast('Follow the gold arrows. Stop beside the passenger and press Enter.');
 });
 $('taxi-toggle').addEventListener('click', () => {
   taxiEnabled = !taxiEnabled;
@@ -454,7 +561,27 @@ atlas.addEventListener('click', (event) => {
   if (atlasDragged) return;
   const place = atlasPointerHit(event);
   if (place) navigate(place);
-  else toast('Tap one of the seven numbered project stops.');
+  else {
+    const rect = atlas.getBoundingClientRect(),
+      fit = Math.min(rect.width / atlas.width, rect.height / atlas.height);
+    const left = rect.left + (rect.width - atlas.width * fit) / 2,
+      top = rect.top + (rect.height - atlas.height * fit) / 2;
+    const offer = atlasOfferHit(
+      (event.clientX - left) / fit,
+      (event.clientY - top) / fit,
+      atlas.width,
+      atlas.height,
+      Number(atlas.dataset.zoom ?? 1),
+      atlasCenter(),
+    );
+    if (offer && fares.select(offer.id)) {
+      routePlace = undefined;
+      closeDialogs();
+      journey?.leaveView();
+      updateDuty();
+      toast('Picking up ' + offer.name + '.');
+    } else toast('Choose a numbered stop or a gold passenger marker.');
+  }
 });
 atlas.addEventListener('pointerdown', (event) => {
   atlasDragged = false;
@@ -533,68 +660,11 @@ function zoomAtlas(delta: number) {
 }
 $('atlas-zoom-in').addEventListener('click', () => zoomAtlas(1.5));
 $('atlas-zoom-out').addEventListener('click', () => zoomAtlas(1 / 1.5));
-$('view-back').addEventListener('click', () => journey?.leaveView());
-$('read-paper').addEventListener('click', () => {
-  if (visitingPlace) showProject(visitingPlace);
-});
-$('view-experience').addEventListener('click', () => {
-  if (!visitingPlace) return;
-  if (visitingPlace.id === 'saltwater') observeCrocs();
-  else if (visitingPlace.id === 'space') observeStars();
-  else if (visitingPlace.id === 'music') open(radioDialog);
-  else {
-    showProject(visitingPlace);
-    turnPage(2);
-  }
-});
-$('zoom-in').addEventListener('click', () => journey?.zoom(-160));
-$('zoom-out').addEventListener('click', () => journey?.zoom(160));
-$('croc-select').addEventListener('change', () =>
-  journey?.selectCroc(Number($<HTMLSelectElement>('croc-select').value)),
-);
-$('croc-hunt').addEventListener('click', () => journey?.hunt());
-document
-  .querySelectorAll<HTMLButtonElement>('[data-star]')
-  .forEach((b) => b.addEventListener('click', () => journey?.constellation(b.dataset.star!)));
-document.querySelectorAll<HTMLButtonElement>('[data-buy]').forEach((b) =>
-  b.addEventListener('click', () => {
-    const result = fares.buy(
-      b.dataset.buy as Snack,
-      nearestPlace(position.x, position.z, 9)?.id === 'about' && visitingPlace?.id === 'about',
-    );
-    toast(result.message);
-    if (result.ok) {
-      save();
-      journey?.serve(b.dataset.buy!);
-      audio.cue(b.dataset.buy === 'tea' ? 'tea' : 'coins');
-      $('tea-receipt').textContent = result.message;
-    }
-    updateDuty();
-  }),
-);
-project
-  .querySelectorAll<HTMLButtonElement>('[data-page]')
-  .forEach((b) => b.addEventListener('click', () => turnPage(Number(b.dataset.page))));
-$('paper-prev').addEventListener('click', () => turnPage(paperPage - 1));
-$('paper-next').addEventListener('click', () => turnPage(paperPage + 1));
-let swipeStart = 0;
-project.addEventListener('touchstart', (e) => (swipeStart = e.changedTouches[0].clientX), {
-  passive: true,
-});
-project.addEventListener(
-  'touchend',
-  (e) => {
-    if ((e.target as HTMLElement).closest('button,input,canvas,select,a')) return;
-    const delta = e.changedTouches[0].clientX - swipeStart;
-    if (Math.abs(delta) > 80) turnPage(paperPage + (delta < 0 ? 1 : -1));
-  },
-  { passive: true },
-);
 $('reset-button').addEventListener('click', () => {
   cancelRide();
   journey?.reset();
   closeDialogs();
-  toast('Back at the tea shop.');
+  toast('Back at Eagle Towers.');
 });
 $('camera-button').addEventListener('click', () => {
   journey?.camera();
@@ -616,8 +686,14 @@ $('quality-button').addEventListener('click', () => {
   $('quality-button').textContent = performanceMode ? 'Performance' : 'Balanced';
 });
 $('time-button').addEventListener('click', () => {
-  night = !night;
-  applyNight();
+  timeMode = (timeMode + 1) % 4;
+  applyTime();
+});
+$('weather-button').addEventListener('click', () => {
+  weatherMode = (weatherMode + 1) % 5;
+  const kinds = [undefined, 'clear', 'rain', 'wind', 'haze'] as const;
+  journey?.weather(kinds[weatherMode]);
+  $('weather-button').textContent = 'Weather · ' + (kinds[weatherMode] ?? 'auto');
 });
 $('sound-button').addEventListener('click', async () => {
   try {
@@ -633,8 +709,7 @@ for (const dialog of dialogs) {
   dialog.querySelector('[data-close]')!.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => {
     if (dialog === project && !project.open) {
-      demoDispose();
-      demoDispose = () => {};
+      exhibit.dispose();
     }
     journey?.pause();
     if (!paused() && booted) canvas.focus({ preventScroll: true });
@@ -677,6 +752,18 @@ void import('./engine')
       canvas,
       performance: performanceMode,
       isPaused: paused,
+      isStarted: () => experienceStarted,
+      competitionActive: () => taxiEnabled && !paused() && viewMode === 'drive',
+      rivalJob: (point) => fares.rivalJob(point),
+      rivalArrive: (id, point, speed) => {
+        const claimed = fares.rivalArrive(id, point, speed);
+        if (claimed) {
+          lastDutySignature = '';
+          updateDuty();
+        }
+        return claimed;
+      },
+      onTick: (dt) => fares.tick(dt),
       onProgress: progress,
       onDrive: () => {
         $('welcome').classList.add('quiet');
@@ -698,38 +785,18 @@ void import('./engine')
           $('interaction-place').textContent = place.location.toUpperCase();
           $('interaction-label').textContent = 'Park at ' + place.location;
           if (lastPlace !== place.id)
-            announce(place.location + '. Press E to visit, or pick up a waiting passenger.');
+            announce(place.location + '. Press Enter to visit, or pick up a waiting passenger.');
         }
         lastPlace = place?.id ?? '';
       },
       onView: (mode, title, detail) => {
+        const changed = viewMode !== mode;
         viewMode = mode;
         document.body.classList.toggle('visiting', mode !== 'drive');
-        $('view-panel').hidden = mode === 'drive';
-        $('view-title').textContent = title;
-        $('view-detail').textContent = detail;
-        $('view-kicker').textContent =
-          mode === 'croc'
-            ? 'WETLAND FIELD NOTES'
-            : mode === 'stars'
-              ? 'THE OBSERVATORY'
-              : 'PARKED UP · ' + (visitingPlace?.location.toUpperCase() ?? '');
-        $('read-paper').hidden = mode !== 'storefront';
-        $('read-paper').textContent = visitingPlace
-          ? READERS[visitingPlace.id].label
-          : 'Read the newspaper';
-        $('view-experience').hidden = mode !== 'storefront' || visitingPlace?.id === 'about';
-        $('view-experience').textContent =
-          visitingPlace?.id === 'music'
-            ? 'Open the mixing desk'
-            : visitingPlace?.id === 'space'
-              ? 'Look through the telescope'
-              : visitingPlace?.id === 'saltwater'
-                ? 'Watch the crocodiles'
-                : 'Try the exhibit';
-        $('tea-menu').hidden = mode !== 'storefront' || visitingPlace?.id !== 'about';
-        $('croc-controls').hidden = mode !== 'croc';
-        $('star-controls').hidden = mode !== 'stars';
+        if (changed) observerIndex = 0;
+        if (changed || !$('view-panel').childElementCount)
+          venue.show(mode, visitingPlace, title, detail);
+        else venue.update(title, detail);
       },
       onRecover: (message) => {
         cancelRide();
@@ -737,6 +804,10 @@ void import('./engine')
       },
       onError: fallback,
       onAudio: (v, p, t, b) => audio.update(v, p, t, b),
+      onWeather: (rain, wind, night) => {
+        audio.weather(rain, wind, night);
+        document.body.classList.toggle('night', night > 0.5);
+      },
       onQuality: (value) => {
         performanceMode = value;
         $('quality-button').textContent = value ? 'Performance' : 'Balanced';
@@ -746,7 +817,7 @@ void import('./engine')
       honk: () => audio.honk(),
     });
     booted = true;
-    journey.night(night);
+
     lastPassenger = '';
     updateDuty();
     loading.hidden = true;
@@ -759,7 +830,7 @@ void import('./engine')
   });
 window.addEventListener('pagehide', () => {
   radio.stop(false);
-  demoDispose();
+  exhibit.dispose();
   journey?.pause();
 });
 if (import.meta.hot)
@@ -767,6 +838,6 @@ if (import.meta.hot)
     journey?.dispose();
     radio.dispose();
     audio.dispose();
-    demoDispose();
+    exhibit.dispose();
     clearTimeout(toastTimer);
   });

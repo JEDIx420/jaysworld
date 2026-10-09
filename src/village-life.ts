@@ -16,6 +16,7 @@ import { PLACES } from './projects';
 import { groundHeight } from './terrain';
 import { addField } from './surfaces';
 import type { Resident } from './safety';
+import { vergePosition } from './placement';
 
 export function makePerson(color = '#b97673', seated = false) {
   const group = new THREE.Group();
@@ -223,7 +224,8 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
   }
   const npcs = TAXI_STOPS.map((stop, i) => {
     const p = makePerson(PASSENGERS[i % PASSENGERS.length].color);
-    p.group.position.set(stop.npcX, groundHeight(stop.npcX, stop.npcZ), stop.npcZ);
+    const safe = vergePosition({ x: stop.npcX, z: stop.npcZ });
+    p.group.position.set(safe.x, groundHeight(safe.x, safe.z), safe.z);
     p.group.rotation.y = Math.atan2(stop.x - stop.npcX, stop.z - stop.npcZ);
     scene.add(p.group);
     return p;
@@ -234,11 +236,21 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
   );
   halo.rotation.x = -Math.PI / 2;
   scene.add(halo);
+  let offers = [0],
+    unavailable: number[] = [];
+  const halos = [
+    halo,
+    ...[1, 2, 3].map(() => {
+      const h = halo.clone();
+      scene.add(h);
+      return h;
+    }),
+  ];
   let active = 0,
     onboard = false,
     duty = false;
   const table = new THREE.Group();
-  table.position.set(-47, 0, 36);
+  table.position.set(-44, 0, 28);
   cylinder(table, 1, 1, 0.12, [0, 0.87, 0], materials.wood, 16);
   cylinder(table, 0.09, 0.14, 0.85, [0, 0.43, 0], materials.darkWood, 8);
   bakeStatic(table);
@@ -246,12 +258,12 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
   const cup = new THREE.Group();
   cylinder(cup, 0.115, 0.08, 0.23, [0, 1.05, 0], materials.cream, 12);
   cylinder(cup, 0.105, 0.105, 0.01, [0, 1.17, 0], materials.terracotta, 12);
-  cup.position.set(-47, 0, 36);
+  cup.position.set(-44, 0, 28);
   cup.visible = false;
   scene.add(cup);
   const snack = new THREE.Mesh(new THREE.CapsuleGeometry(0.11, 0.42, 4, 8), materials.yellow);
   snack.rotation.z = Math.PI / 2;
-  snack.position.set(-46.6, 0.99, 36);
+  snack.position.set(-43.6, 0.99, 28);
   snack.visible = false;
   scene.add(snack);
   const steam = new THREE.Points(
@@ -280,6 +292,10 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
           radius: 0.55,
         }));
     },
+    setOffers(indices: number[], hidden: number[]) {
+      offers = indices;
+      unavailable = hidden;
+    },
     setDuty(enabled: boolean) {
       duty = enabled;
     },
@@ -287,7 +303,12 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
       active = index;
       onboard = isOnboard;
       const id = PASSENGERS[active].from;
-      npcs.forEach((p, i) => (p.group.visible = !(onboard && TAXI_STOPS[i].id === id)));
+      npcs.forEach(
+        (p, i) =>
+          (p.group.visible =
+            !unavailable.some((n) => PASSENGERS[n].from === TAXI_STOPS[i].id) &&
+            !(onboard && TAXI_STOPS[i].id === id)),
+      );
     },
     serve(item: string) {
       if (item === 'tea') {
@@ -299,27 +320,34 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
       groves.forEach((g) => (g.castShadow = !low));
     },
     update(t: number) {
-      const index = TAXI_STOPS.findIndex((s) => s.id === PASSENGERS[active].from);
-      npcs.forEach((p, i) => {
-        p.arm.rotation.z =
-          duty && i === index && !onboard ? -0.8 + Math.sin(t * 3) * 0.35 : 0.06 * Math.sin(t + i);
-      });
-      halo.visible = duty && !onboard;
-      halo.position.set(
-        TAXI_STOPS[index].npcX,
-        groundHeight(TAXI_STOPS[index].npcX, TAXI_STOPS[index].npcZ) + 0.04,
-        TAXI_STOPS[index].npcZ,
+      const offerStops = offers.map((n) =>
+        TAXI_STOPS.findIndex((s) => s.id === PASSENGERS[n].from),
       );
-      halo.scale.setScalar(1 + Math.sin(t * 2) * 0.1);
+      npcs.forEach((p, i) => {
+        p.group.visible = !unavailable.some((n) => PASSENGERS[n].from === TAXI_STOPS[i].id);
+        p.arm.rotation.z =
+          duty && offerStops.includes(i)
+            ? -0.8 + Math.sin(t * 3 + i) * 0.35
+            : 0.06 * Math.sin(t + i);
+      });
+      halos.forEach((h, n) => {
+        const index = offerStops[n];
+        h.visible = duty && index !== undefined;
+        if (index !== undefined) {
+          h.position.copy(npcs[index].group.position);
+          h.position.y += 0.04;
+          h.scale.setScalar(1 + Math.sin(t * 2) * 0.1);
+        }
+      });
       if (steam.visible) {
         const a = steam.geometry.attributes.position;
         for (let i = 0; i < 6; i++) {
           const y = (t * 0.25 + i * 0.12) % 1;
           a.setXYZ(
             i,
-            -47 + Math.sin(t + i) * y * 0.12,
+            -44 + Math.sin(t + i) * y * 0.12,
             1.2 + y * 0.8,
-            36 + Math.cos(t + i) * y * 0.12,
+            28 + Math.cos(t + i) * y * 0.12,
           );
         }
         a.needsUpdate = true;

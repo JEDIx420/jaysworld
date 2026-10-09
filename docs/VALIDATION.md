@@ -1,52 +1,40 @@
-# Village edition validation
+# v0.5 validation
 
-Checked 9 October 2026 for v0.4.
+The release extends v0.4 at `96ea480d3796642a00a0480cf4552ce3f96c51aa`. The implementation plan is in NEXT_RELEASE_PLAN.md. This document distinguishes local automated evidence from physical-device validation.
 
-## Checks
+## Local gates
 
-| Check                                                                         | Result                                                                                                        |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Strict TypeScript and Vite production build                                   | Passed                                                                                                        |
-| Physics, input, reconciliation, directory, fares, routing, and wildlife tests | 23 passed                                                                                                     |
-| Production browser journeys                                                   | 10 scenarios covering existing and v0.4 visitor flows                                                         |
-| Visual review                                                                 | Desktop 1440×900; phone 390×844 and 320×640; tea storefront, newspaper, crocodile hunt, telescope, radio desk |
-| Ente Radio endpoint                                                           | HTTP 200, audio/mpeg, audio bytes; CORS allows Pages and local origins                                        |
+The candidate must pass formatting, 33 unit/physics tests, the TypeScript/Vite production build, and all ten production-browser journeys before moving main. The three CI workers repeat those checks and gate deployment.
 
-The ten production browser scenarios cover:
+The unit/physics suite covers three-wheel support/acceleration/braking/steering, four-wheel traffic suspension/steering/braking, static contacts and CCD, resets, touch mapping, exact reconciliation, secure station filtering, terrain triangle agreement, physical hill climbing, field clearance, connected dry routes, resident yielding/sweeps, fare travel/payment/cancellation/save migration, concurrent player/rival claims, four available offers, cooled-down passengers, front/side/back/diagonal closure sweeps, verge placement, collision-free traffic spawn/bay clearance, mutually exclusive signals and clearance, shared day/weather progression, the side observatory terrace, crocodile separation, jaw/capture timing and continuous fish/crocodile trajectories.
 
-1. Rendering, real keyboard acceleration and braking, paused physics in dialogs, and recovery.
-2. All seven project papers, exact reconciliation, an editable playing beat, visited count, and evening lighting.
-3. Touch driving, independent camera / driving pointers, cancellation, and phone newspaper navigation.
-4. A 320px layout, direct project fragment links, and reload.
-5. No stream preloading before the starting gesture; default Ente playback through the real audio element, enabled effects, presets, failed-station recovery, direct playback, and stop.
-6. Storefront visits, three-page newspapers, funded tea/snack purchases, saved wallet accounting, crocodile selection / zoom / hunting, and telescope constellations / magnification.
-7. Passenger pickup, direct-visit cancellation, wallet protection, and refusal of unfunded tea purchases.
-8. Public content with JavaScript disabled.
-9. Project content and contact links with WebGL unavailable.
-10. First-click menu-triggered Ente audio, free-roam defaults, clicked atlas routes without teleporting, zoom/pan and keyboard selection, taxi on/off cancellation, stopped-radio persistence, elevated observatory arrival and close/scenic camera presets.
+## Production-browser journeys
 
-The fare tests include an actual Rapier drive from pickup to destination, slow drop-off, payment, tea/snack spending, and restored wallet data. Another test rejects untravelled rides and teleports. Wildlife tests sample three minutes of swim cycles to check separation, diving/surfacing, a requested hunt, jaw motion, all four legs, tail movement, and prey disappearance.
+1. Desktop keyboard start at Eagle Towers, shop entry with Enter, roof lift, driving, braking, parked menus and reset.
+2. All seven short exhibits, arrow navigation, CRT steps, exact RIFT results, beat editing/playback/stop and return to driving.
+3. 390px touch driving, independent look input, pointer cancellation, minimal HUD and the four-step phone drum bank.
+4. 320px/430px/short-landscape layouts, direct-link reload and orientation changes without page overflow.
+5. First-gesture radio with real media fixtures, rapid seeking, failed stations, recovery, power and preserved off preference.
+6. Crocodile stalking/catch, target selection, zoom, elevated observatory visits and constellation changes.
+7. Moving traffic, four offers, selected fare routes, off-duty roaming, an existing wallet and a funded tea purchase.
+8. Night/day/rain transitions and readable scenes with reduced-motion preference.
+9. Slow and missing signals: static/loading until actual playback and a bounded no-signal state.
+10. WebGL fallback with all seven projects and public links.
 
-Desktop and phone visual review led to a clearer opening screen, bounded newspaper width, usable close buttons, separate crocodile swim areas, and less rendering behind reading dialogs. Browser still captures temporarily hold only the world's animation loop and restore it immediately afterward; interaction assertions run against the normal simulation. Software-rendered hunt / lighting waits are bounded at 45 seconds.
+Still captures briefly hold only the world’s render callback and restore it immediately. Assertions use the normal simulation. Expected media failures and the explicitly tested WebGL failure are separated from application exceptions. Diagnostics record draw calls, triangle counts, actor positions and climate state. Desktop, phone, landscape, instrument, radio, roof, hill, crocodile, night and rain renders are reviewed visually.
 
-The browser journeys use the production build over HTTP. Expected station-failure and no-WebGL errors exercise explicit recovery paths. Automated screenshots and touch emulation do not establish physical-device frame rates.
+The local Chromium renderer is SwiftShader. These checks establish functional desktop/touch behavior, not 60 FPS on a physical desktop or 30 FPS on an iPhone. Real iOS Safari, safe-area/browser-toolbar behavior and hardware frame-time/memory profiling remain unverified. Performance mode limits the traffic pool, rain particles, resolution and shadows while keeping the same gameplay/safety rules.
 
-## Terrain, road and resident safety
+## Size and deployment
 
-New checks compare Rapier ray hits against the exact visible triangle interpolation at dozens of mountain points, including slopes and the summit. A real three-wheel vehicle gains more than 16 metres while driving uphill, with stable support and no overturn. The winding road remains below the tested grade limit. The formerly overlapping paddy plot leaves asphalt and verges clear.
+The interface is about 74.2 kB raw / 27.3 kB gzip. The lazy 3D/physics bundle is about 5.00 MB raw / 1.85 MB gzip, principally the embedded Rapier compatibility WASM. The Malayalam WOFF2 subset is 24.1 kB. No remote 3D assets, generated raster assets, secrets or server functions are required.
 
-All passenger-to-project routes follow shared curved samples and remain dry across the bridges. Atlas hit tests identify the intended project, and direction cues agree with the auto heading. A charging physical auto yields before a resident, maintains at least a two metre clearance, catches a long swept movement, and reverses away. The protection does not turn residents into impulse-driven rigid bodies.
+Successful main builds upload one Pages artifact after all three browser workers finish. Deployment verification checks the exact release commit/run, fetched live asset hashes and a live browser journey. The previous v0.4 commit remains the rollback point.
 
-Visual review includes the closer auto camera, clickable atlas, village/ridge scenery, record sleeve, workshop log, observatory journal and phone directions. Phone checks verify that navigation leaves the duty and parking controls clear.
+## Evidence recorded 9 October 2026
 
-## Radio boundary
+All ten local browser journeys pass against the production candidate across three shards. The physics/unit suite passes all 33 tests; formatting and build also pass. The final render review found and corrected an overlapping cycle spawn, added safe bay clearing for direct visits and verified that the parked auto remains upright with traffic.
 
-Ente's stream URL comes from its official homepage. HTTPS probes returned real MPEG audio bytes and cross-origin permission. Browser playback and effects tests use generated PCM audio fixtures to remain independent of broadcaster availability. Sustained live broadcaster playback has not been confirmed in this headless environment. Set JAYSWORLD_LIVE_RADIO=1 for the optional live check in a connected browser environment.
+Representative SwiftShader snapshots report 42 draw calls / 201,776 triangles for the phone music visit, 229 / 303,016 during a phone orientation check and 109 / 294,554 at the end of the desktop journey. Counts vary with camera/quality; they are not FPS measurements. Moving-traffic diagnostics record cars, motorcycles, cycles and the rival auto on their lanes.
 
-## Build and release
-
-The lightweight interface is about 66.1 kB raw / 24.9 kB gzip. The lazy 3D / physics bundle is about 4.98 MB raw / 1.84 MB gzip, chiefly the compatibility package's embedded WASM. Malayalam signage uses a locally hosted 24.1 kB WOFF2 subset. Separating physics WASM and measuring real-device performance remain optimisation work.
-
-GitHub repeats formatting, tests, production build, and all ten browser journeys on pushes to main. The browser journeys are partitioned across three workers with a twenty-minute budget per worker, covering every scenario once and keeping separate diagnostics. The Pages build artifact is uploaded once; publication waits for every worker to pass. Successful main pushes and manual Run workflow requests both publish the checked artifact to Pages.
-
-Road and ground physics now match the elevated terrain; water still uses recovery zones. The telescope is an illustrated sky, and the wetland is a portfolio exhibit. See BUILD_PLAN.md for further asset and terrain work.
+A fresh shell attempt to read Ente’s real broadcast timed out after eight seconds in this environment. The earlier same-day endpoint probe succeeded; sustained broadcast playback is not established by the deterministic media tests. A no-signal state remains visible and bounded when a broadcaster or network cannot be reached.

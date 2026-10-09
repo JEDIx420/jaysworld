@@ -2,6 +2,31 @@ import { ROAD_PATHS, ROAD_CLOSURES, WORLD_BOUNDS, DISTRICTS, type Point } from '
 import { PLACES } from './projects';
 import { groundHeight } from './terrain';
 
+export type MapOffer = Point & { id: number; name: string };
+let mapOffers: MapOffer[] = [];
+export function setMapOffers(offers: MapOffer[]) {
+  mapOffers = offers;
+}
+export function atlasOfferHit(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  zoom: number,
+  center: Point,
+) {
+  let result: MapOffer | undefined,
+    distance = 26;
+  for (const offer of mapOffers) {
+    const p = atlasPosition(offer, width, height, zoom, center),
+      d = Math.hypot(x - p.x, y - (p.y - 33));
+    if (d < distance) {
+      result = offer;
+      distance = d;
+    }
+  }
+  return result;
+}
 export function drawVillageMap(
   canvas: HTMLCanvasElement,
   position: Point,
@@ -113,6 +138,33 @@ export function drawVillageMap(
       ctx.fillText(String(i + 1), x(p.trigger.x), z(p.trigger.z) + 7);
     }
   });
+  for (const offer of mapOffers) {
+    const px = x(offer.x),
+      pz = z(offer.z) - (full ? 33 : 0);
+    if (full) {
+      ctx.strokeStyle = '#997541';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(px, pz + 12);
+      ctx.lineTo(px, z(offer.z));
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#c49749';
+    ctx.beginPath();
+    ctx.roundRect(
+      px - (full ? 12 : 5),
+      pz - (full ? 12 : 5),
+      full ? 24 : 10,
+      full ? 24 : 10,
+      full ? 5 : 2,
+    );
+    ctx.fill();
+    if (full) {
+      ctx.fillStyle = '#fff0ca';
+      ctx.font = 'bold 13px monospace';
+      ctx.fillText(offer.name[0], px, pz + 4);
+    }
+  }
   ctx.save();
   ctx.translate(x(position.x), z(position.z));
   ctx.rotate(-yaw);
@@ -193,7 +245,7 @@ export function navigationCue(position: Point, yaw: number, route: readonly Poin
   return {
     instruction:
       remaining < 8
-        ? 'Arrived · slow down, press E'
+        ? 'Arrived · slow down, press Enter'
         : Math.abs(delta) > 2.25
           ? 'Turn around when safe'
           : delta > 0.5

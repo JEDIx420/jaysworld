@@ -43,12 +43,12 @@
         ></a
       >
       <nav aria-label="Journey controls">
-        <button id="places-button" type="button">
+        <button id="places-button" type="button" aria-label="Village map">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Zm6-3v15m6-12v15" /></svg
           ><span>Places</span><kbd>M</kbd>
         </button>
-        <button id="radio-button" type="button">
+        <button id="radio-button" type="button" aria-label="Radio tuner">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="m4 7 15-4M3 8h18v12H3Zm3 8h6m-6-4h6" />
             <circle cx="17" cy="14" r="2" /></svg
@@ -88,10 +88,11 @@
         ><strong id="wallet">₹0</strong>
       </div>
       <strong id="fare-title">Leela is waiting by the tea shop</strong>
+      <div id="fare-offers" aria-label="Available passengers"></div>
       <p id="fare-description">Pick up passengers. Earn a little. Stay for a chaya.</p>
       <div class="fare-bottom">
         <span id="fare-distance"></span
-        ><button id="fare-action" type="button" hidden>Pick up <kbd>E</kbd></button
+        ><button id="fare-action" type="button" hidden>Pick up <kbd>Enter</kbd></button
         ><button id="fare-route" type="button">Show route</button>
       </div>
     </aside>
@@ -103,40 +104,7 @@
       </div>
       <button id="navigation-clear" type="button" aria-label="Clear directions">×</button>
     </aside>
-    <section class="hud view-panel" id="view-panel" hidden aria-label="Village visit">
-      <p class="eyebrow" id="view-kicker">PARKED UP</p>
-      <h2 id="view-title"></h2>
-      <p id="view-detail"></p>
-      <div class="view-actions">
-        <button id="read-paper" type="button">Read the newspaper</button
-        ><button id="view-experience" type="button">Try the exhibit</button
-        ><button id="view-back" type="button">Back to the auto</button>
-      </div>
-      <div class="tea-menu" id="tea-menu" hidden>
-        <span>CHAYA &amp; SNACKS</span><button data-buy="tea" type="button">Chaya · ₹10</button
-        ><button data-buy="pazhampori" type="button">Pazhampori · ₹15</button
-        ><button data-buy="samosa" type="button">Samosa · ₹12</button
-        ><small id="tea-receipt">Fictional game prices. Earn a fare to buy a treat.</small>
-      </div>
-      <div class="observer-controls" id="croc-controls" hidden>
-        <label for="croc-select">Resident</label
-        ><select id="croc-select">
-          <option value="0">Kari</option>
-          <option value="1">Muthu</option>
-          <option value="2">Kunju</option></select
-        ><button id="croc-hunt" type="button">Watch a hunt</button>
-      </div>
-      <div class="observer-controls" id="star-controls" hidden>
-        <button data-star="orion" type="button">Orion</button
-        ><button data-star="dipper" type="button">Big Dipper</button
-        ><button data-star="crux" type="button">Southern Cross</button
-        ><small>An illustrated sky, not a live astronomy chart.</small>
-      </div>
-      <div class="view-zoom" id="view-zoom">
-        <button id="zoom-out" type="button" aria-label="Zoom out">−</button><span>LOOK CLOSER</span
-        ><button id="zoom-in" type="button" aria-label="Zoom in">+</button>
-      </div>
-    </section>
+    <section class="hud view-panel" id="view-panel" hidden aria-label="Village visit"></section>
     <button
       class="hud minimap-button"
       id="minimap-button"
@@ -148,7 +116,7 @@
     </button>
     <div class="hud dashboard">
       <div>
-        <small id="place-name">The tea shop</small
+        <small id="place-name">Eagle Towers</small
         ><span><b id="speed">0</b><small>km/h</small></span>
       </div>
       <div class="explored">
@@ -160,7 +128,7 @@
       ><span><kbd>Space</kbd> brake</span><span><kbd>H</kbd> honk</span>
     </div>
     <button class="hud interaction" type="button" id="interaction-button" hidden>
-      <span class="interaction-icon">E</span
+      <span class="interaction-icon">↵</span
       ><span
         ><small id="interaction-place">THE TEA SHOP</small
         ><strong id="interaction-label">Meet Jay</strong></span
@@ -221,115 +189,42 @@
       <div id="places-list" class="places-list"></div>
       <p class="dialog-foot">The road is yours. Every place has something to explore.</p>
     </dialog>
-    <dialog class="newspaper" id="project-dialog" aria-labelledby="project-title">
-      <div class="dialog-top">
-        <p class="eyebrow" id="project-category"></p>
-        <button type="button" data-close aria-label="Close project">
-          Back to the road <span>×</span>
-        </button>
-      </div>
-      <div class="paper-masthead">
-        <small id="reader-edition">THE VILLAGE EDITION · KERALA, INDIA</small
-        ><strong id="reader-masthead">The Kerala Dispatch</strong
-        ><span id="reader-subtitle">Ideas, experiments &amp; a good cup of chaya.</span>
-      </div>
-      <nav class="paper-tabs" aria-label="Newspaper pages">
-        <button data-page="0" aria-pressed="true" type="button">01 · The story</button
-        ><button data-page="1" aria-pressed="false" type="button">02 · How it works</button
-        ><button data-page="2" aria-pressed="false" type="button">03 · Have a go</button>
-      </nav>
-      <div class="exhibit-heading">
-        <span class="exhibit-number" id="project-number"></span>
-        <div>
-          <p class="exhibit-location" id="project-location"></p>
-          <h1 id="project-title"></h1>
-        </div>
-      </div>
-      <section class="paper-page paper-story" data-paper-page="0">
-        <figure class="project-art" id="project-art"></figure>
-        <div class="story-lede">
-          <p class="project-summary" id="project-summary"></p>
-          <p id="project-body"></p>
-        </div>
-        <div id="project-links" class="project-links"></div>
-      </section>
-      <section class="paper-page" data-paper-page="1" hidden>
-        <div id="project-details"></div>
-      </section>
-      <section class="paper-page" data-paper-page="2" hidden>
-        <p class="paper-label">A LITTLE EXPERIMENT ON THE BACK PAGE</p>
-        <div id="project-demo"></div>
-      </section>
-      <footer class="paper-pagination">
-        <button id="paper-prev" type="button">← Previous page</button
-        ><span id="paper-page-number">PAGE 1 / 3</span
-        ><button id="paper-next" type="button">Next page →</button>
-      </footer>
+    <dialog class="retro-exhibit" id="project-dialog" aria-labelledby="project-title">
+      <button data-close aria-label="Close project">×</button>
+      <h1 id="project-title">Project</h1>
     </dialog>
-    <dialog id="radio-dialog" aria-labelledby="radio-title">
-      <div class="dialog-top">
-        <p class="eyebrow">THE AUTO'S RADIO</p>
-        <button type="button" data-close aria-label="Close radio">Close <span>×</span></button>
+    <dialog id="radio-dialog" class="radio-cabinet" aria-labelledby="radio-title">
+      <button type="button" class="radio-close" data-close aria-label="Close radio">×</button>
+      <h1 id="radio-title">MALABAR <small>PORTABLE RADIO</small></h1>
+      <div class="radio-dial">
+        <span>88 · 92 · 96 · 100 · 104 · 108</span><i id="radio-needle"></i>
       </div>
-      <h1 id="radio-title">A soundtrack for the road.</h1>
-      <p class="dialog-intro">Malayalam radio, live from independent stations and broadcasters.</p>
-      <p id="radio-status" class="radio-status" role="status">Choose a station to tune in.</p>
-      <div id="radio-stations" class="radio-stations"></div>
-      <label class="volume-label" for="radio-volume"
-        >Volume <input id="radio-volume" type="range" min="0" max="1" step=".05" value=".32"
-      /></label>
-      <section class="studio-effects" aria-label="Live audio effects">
-        <p class="eyebrow">THE SOUND STUDIO</p>
-        <h2>Turn a little. Hear a lot.</h2>
-        <p id="effects-status">
-          Ente Radio and Digital Malayali support studio effects. You can also bring your own audio.
-        </p>
-        <fieldset id="effects-controls" disabled>
-          <legend class="sr-only">Audio effects</legend>
-          <label class="preset-label" for="fx-preset"
-            >Mood<select id="fx-preset">
-              <option value="clean">Clean signal</option>
-              <option value="tea">Tea-shop radio</option>
-              <option value="dub">Backwater dub</option>
-              <option value="dream">Night on the ferry</option>
-            </select></label
-          >
-          <div class="studio-knobs">
-            <label
-              >Warmth / filter<input
-                id="fx-filter"
-                type="range"
-                min="250"
-                max="18000"
-                step="50"
-                value="18000" /></label
-            ><label
-              >Bass<input id="fx-bass" type="range" min="-8" max="10" step="1" value="0" /></label
-            ><label
-              >Echo<input id="fx-echo" type="range" min="0" max="1" step=".05" value="0" /></label
-            ><label
-              >Room<input id="fx-room" type="range" min="0" max="1" step=".05" value="0" /></label
-            ><label
-              >Wobble<input id="fx-wobble" type="range" min="0" max="1" step=".05" value="0"
-            /></label>
-          </div>
-        </fieldset>
-        <label class="audio-upload"
-          >Or play your own audio<input id="radio-file" type="file" accept="audio/*" /><small
-            >Stays on your device. Up to 100 MB.</small
-          ></label
-        >
-      </section>
-      <div class="radio-footer">
-        <button type="button" id="radio-refresh">Find more stations</button
-        ><a href="https://www.radio-browser.info/" target="_blank" rel="noopener noreferrer"
-          >Station directory: Radio Browser</a
-        >
+      <div class="radio-readout">
+        <strong id="radio-name">Ente Radio 91.2</strong
+        ><small id="radio-status" role="status">POWER OFF</small>
       </div>
-      <p class="dialog-foot">
-        Ente Radio tunes in when you start driving. Broadcasts belong to their stations.
-        Availability can vary.
-      </p>
+      <div class="speaker-grille" aria-hidden="true"></div>
+      <div class="tuner-controls">
+        <button id="radio-prev" type="button" aria-label="Previous station">◀</button>
+        <button id="radio-power" type="button" aria-label="Radio power" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path
+              d="M12 3v9m-5-6a8 8 0 1 0 10 0"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            />
+          </svg>
+        </button>
+        <button id="radio-next" type="button" aria-label="Next station">▶</button>
+        <label for="radio-volume"
+          >VOL<input id="radio-volume" type="range" min="0" max="1" step=".05" value=".32"
+        /></label>
+      </div>
+      <a id="radio-source" href="https://enteradio.com/" target="_blank" rel="noopener noreferrer"
+        >Station ↗</a
+      >
+      <small class="radio-keyhint">← SEEK → · ↑ VOLUME ↓ · ENTER POWER</small>
     </dialog>
     <dialog id="settings-dialog" aria-labelledby="settings-title">
       <div class="dialog-top">
@@ -348,11 +243,12 @@
           <strong>Engine &amp; ambience</strong
           ><small>Throttle, exhaust, road noise, braking, horn, and village ambience.</small>
         </div>
-        <button id="sound-button" type="button" aria-pressed="false">Sound off</button>
+        <button id="weather-button" type="button">Weather · auto</button
+        ><button id="sound-button" type="button" aria-pressed="false">Sound off</button>
       </div>
       <div class="setting-row">
         <div><strong>Time of day</strong><small>Stay for the evening.</small></div>
-        <button id="time-button" type="button" aria-pressed="false">Golden hour</button>
+        <button id="time-button" type="button" aria-pressed="false">Time · auto</button>
       </div>
       <div class="camera-presets">
         <span>Driving view</span><button id="camera-close" type="button">Close ride</button
@@ -362,18 +258,19 @@
         <div><kbd>W A S D</kbd><span>Drive / reverse</span></div>
         <div><kbd>Space</kbd><span>Brake</span></div>
         <div><kbd>Shift</kbd><span>Boost</span></div>
-        <div><kbd>E</kbd><span>Explore a place</span></div>
+        <div><kbd>Enter</kbd><span>Explore a place</span></div>
         <div><kbd>M</kbd><span>Places</span></div>
         <div><kbd>H</kbd><span>Honk</span></div>
-        <div><kbd>R</kbd><span>Return to the tea shop</span></div>
+        <div><kbd>R</kbd><span>Return to Eagle Towers</span></div>
         <div><span>Drag / scroll</span><span>Orbit / zoom the camera</span></div>
       </div>
+      <p class="release-version">JAY’S WORLD · v0.5 · THE LIVING TOWN</p>
       <p class="touch-guide">
         On a phone: use the left stick to drive and drag the world with another finger to look
         around.
       </p>
       <div class="settings-actions">
-        <button id="reset-button" type="button">Return to the tea shop</button
+        <button id="reset-button" type="button">Return to Eagle Towers</button
         ><button id="camera-button" type="button">Reset camera</button>
       </div>
     </dialog>

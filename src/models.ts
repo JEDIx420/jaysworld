@@ -485,7 +485,73 @@ export function makeBench(parent: THREE.Object3D, x: number, z: number, yaw = 0)
   return bench;
 }
 
+export const TOWER_ROOF = 27.8;
+export function makeEagleTowers() {
+  const group = new THREE.Group();
+  group.name = 'landmark:eagle-towers';
+  const steel = mat('#304b50', 0.3, 0.65);
+  const glazing = mat('#5b9297', 0.24, 0.38);
+  const darkGlass = mat('#365b67', 0.28, 0.28);
+  glazing.name = 'tower:windows';
+  glazing.emissive.set('#c4a86b');
+  glazing.emissiveIntensity = 0;
+  const width = 12.2,
+    depth = 9.4;
+  box(group, [14.5, 0.36, 12], [0, 0.18, 0.6], materials.laterite);
+  box(group, [width, 25.9, depth], [0, 13.25, 0], darkGlass);
+  for (let floor = 0; floor < 7; floor++) {
+    const y = 1.95 + floor * 3.65;
+    for (const z of [-depth / 2 - 0.02, depth / 2 + 0.02]) {
+      for (let x = -5.05; x <= 5.1; x += 2.05)
+        box(
+          group,
+          [1.92, 3.24, 0.055],
+          [x, y, z],
+          (floor + Math.round(x)) % 3 ? glazing : darkGlass,
+        );
+      box(group, [width + 0.22, 0.17, 0.17], [0, y + 1.68, z], steel);
+    }
+    for (const x of [-width / 2 - 0.03, width / 2 + 0.03]) {
+      for (let z = -3.6; z <= 3.7; z += 1.8) box(group, [0.055, 3.24, 1.67], [x, y, z], glazing);
+      box(group, [0.17, 0.17, depth], [x, y + 1.68, 0], steel);
+    }
+  }
+  for (const x of [-6.17, 6.17])
+    for (const z of [-4.77, 4.77]) box(group, [0.24, 26.8, 0.24], [x, 13.4, z], materials.chrome);
+  box(group, [6, 0.2, 3], [0, 3.55, 5.7], steel);
+  box(group, [2.4, 2.75, 0.12], [0, 1.75, 4.81], materials.glass);
+  box(group, [0.08, 2.85, 0.15], [0, 1.8, 4.92], materials.chrome);
+  textBoard(
+    group,
+    'EAGLE TOWERS',
+    9.3,
+    1.18,
+    [0, 5.6, 4.79],
+    '#203f47',
+    '#e7daba',
+    'EAGLE EYE · RESEARCH & DEPLOYMENT',
+  );
+  textBoard(group, 'EAGLE EYE', 8.2, 1.25, [0, 24.8, 4.82], '#203f47', '#f2e4bf');
+  box(group, [12.8, 0.28, 10], [0, TOWER_ROOF - 0.14, 0], materials.cream);
+  for (const z of [-4.85, 4.85]) {
+    box(group, [12.6, 0.14, 0.12], [0, TOWER_ROOF + 1.08, z], steel);
+    for (let x = -6; x <= 6; x += 1.5)
+      box(group, [0.07, 1.05, 0.07], [x, TOWER_ROOF + 0.53, z], steel);
+  }
+  for (const x of [-6.2, 6.2]) box(group, [0.12, 1, 9.6], [x, TOWER_ROOF + 0.5, 0], glazing);
+  box(group, [2.5, 2.2, 2.6], [-3.8, TOWER_ROOF + 1.1, -2.9], materials.plaster);
+  textBoard(group, 'ROOF', 1.2, 0.4, [-3.8, TOWER_ROOF + 1.6, -1.56], '#304b50', '#f2e4bf');
+  for (const x of [-4.8, 4.8])
+    for (const z of [-2.5, 2.5]) makePot(group, x, z, 1.0).position.y += TOWER_ROOF;
+  makeBench(group, 2.8, -3, Math.PI);
+  const bench = group.children[group.children.length - 1];
+  bench.position.y = TOWER_ROOF;
+  bakeStatic(group);
+  return { group, width, depth, height: TOWER_ROOF };
+}
+
 export function makeBuilding(kind: string, color?: string) {
+  if (kind === 'eagle-eye') return makeEagleTowers();
   const group = new THREE.Group();
   group.name = 'building:' + kind;
   const width = kind === 'eagle-eye' ? 11 : kind === 'opsflash' ? 9.6 : kind === 'rift' ? 10 : 8.5;
@@ -698,7 +764,7 @@ export function makeBuilding(kind: string, color?: string) {
       'THE ESTUARY',
     );
   bakeStatic(group);
-  return { group, width, depth };
+  return { group, width, depth, height: 3.3 };
 }
 
 export function makePalmGeometries() {
