@@ -47,7 +47,7 @@ The existing project content and demos remain in place. Original inline vector c
 
 ## Validation and release
 
-Run formatting, strict type checking, targeted unit/physics tests, production build, and browser journeys. Review the real rendered desktop and phone screenshots. Verify the exact pushed head and GitHub CI. Pages publishing remains a manual workflow under Jay's control.
+Run formatting, strict type checking, targeted unit/physics tests, production build, and browser journeys. Review the real rendered desktop and phone screenshots. Verify the exact pushed head and GitHub CI. Publish to Pages only after all three check workers succeed, then verify the live site.
 
 ## Further craft work
 

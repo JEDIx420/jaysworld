@@ -47,8 +47,7 @@ jobs:
         with:
           path: dist
   deploy:
-    # Jay enables Pages himself. A push checks the build; Run workflow publishes it.
-    if: github.event_name == 'workflow_dispatch'
+    # Publish only after all three build and browser-check workers succeed.
     needs: build
     runs-on: ubuntu-latest
     permissions:

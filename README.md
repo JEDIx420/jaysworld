@@ -2,7 +2,7 @@
 
 A driveable personal portfolio set in a Kerala-inspired backwater village. Take a black-and-yellow auto-rickshaw through Jay's work in AI, growth systems, music, and games.
 
-**GitHub Pages URL:** https://jedix420.github.io/jaysworld/ (run the manual publishing workflow to publish a new version).
+**GitHub Pages URL:** https://jedix420.github.io/jaysworld/ (successful main builds publish automatically).
 
 ## The ridge and village edition
 
@@ -57,17 +57,17 @@ npm run test:browser
 
 The browser checks serve the production build and exercise the visitor journey. Set JAYSWORLD_LIVE_RADIO=1 to include a real radio playback check; CI tests gesture-triggered default playback, effects, and failure paths without relying on broadcaster availability. Optional JAYSWORLD_CHROMIUM_PATH selects an existing browser, and JAYSWORLD_BASE_URL tests a deployed site.
 
-GitHub runs all ten browser journeys across three workers. JAYSWORLD_QA_SHARD=1/3 selects the first worker's portion locally; the default local command runs the complete suite. Each worker keeps separate diagnostics, and manual publication waits for all three to pass.
+GitHub runs all ten browser journeys across three workers. JAYSWORLD_QA_SHARD=1/3 selects the first worker's portion locally; the default local command runs the complete suite. Each worker keeps separate diagnostics, and publication waits for all three to pass.
 
 See [validation](docs/VALIDATION.md), [the design roadmap](docs/BUILD_PLAN.md), and [radio sources](docs/RADIO_SOURCES.md).
 
 ## GitHub Pages
 
-Every push to main tests and builds the site, runs production browser checks, and uploads the dist directory as a Pages artifact. Publication is manual so repository Pages setup stays under Jay's control.
+Every push to main tests and builds the site, runs production browser checks, and uploads the dist directory as a Pages artifact. When all three workers pass, the deploy job publishes that artifact to GitHub Pages.
 
 1. In repository **Settings → Pages**, select **GitHub Actions** as the source.
-2. Open **Actions → Check and publish Jay's World → Run workflow** on main.
-3. When the deploy job succeeds, open https://jedix420.github.io/jaysworld/.
+2. Push to main, or use **Actions → Check and publish Jay's World → Run workflow** to publish the current main again.
+3. Wait for all three checks and the deploy job to succeed, then open https://jedix420.github.io/jaysworld/.
 
 Relative assets and fragment links support the /jaysworld/ project path; opening a project does not need server-side routing. No secret or personal access token is needed by this workflow.
 
