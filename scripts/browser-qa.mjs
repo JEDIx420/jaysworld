@@ -333,6 +333,14 @@ try {
     'radio opt-in, station failure recovery, playback and stop',
     { viewport: { width: 1100, height: 800 } },
     async (page, context, errors) => {
+      await page.route('https://*.api.radio-browser.info/**', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: '{}',
+          headers: { 'Access-Control-Allow-Origin': '*' },
+        }),
+      );
       let initialRadioRequests = 0;
       page.on('request', (r) => {
         if (/digitalmalayali|octosignals|securenetsystems/.test(r.url())) initialRadioRequests++;
@@ -348,14 +356,6 @@ try {
         { timeout: 18000 },
       );
       await page.unroute('https://radio.digitalmalayali.in/**');
-      await page.route('https://*.api.radio-browser.info/**', (route) =>
-        route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: '{}',
-          headers: { 'Access-Control-Allow-Origin': '*' },
-        }),
-      );
       if (process.env.JAYSWORLD_LIVE_RADIO !== '1')
         await page.route('https://icecast.octosignals.com/radiomacfast', (route) =>
           route.fulfill({ status: 200, contentType: 'audio/wav', body: testAudio() }),
