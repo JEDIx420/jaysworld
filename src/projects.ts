@@ -45,8 +45,8 @@ export const PLACES: readonly Place[] = [
     location: 'Mission control',
     summary: 'A connected workspace for GTM intelligence and operations.',
     body: 'OpsFlash brings research, SEO and analytics, lead data, content workflows, and an agent interface into one operational workspace. This public exhibit introduces the product; client workspaces and data stay within their own deployments.',
-    position: { x: -22, z: -25 },
-    trigger: { x: -31, z: -36 },
+    position: { x: -134, z: -123 },
+    trigger: { x: -148, z: -121 },
     links: [{ label: 'Ask about OpsFlash', href: linkedIn }],
   },
   {
@@ -56,8 +56,8 @@ export const PLACES: readonly Place[] = [
     location: 'The engineering workshop',
     summary: 'An exact data reconciliation engine built in Rust.',
     body: 'RIFT compares datasets and explains where records diverge, with typed values, deterministic results, and strict exactness guarantees. It is being developed as a command-line tool. This exhibit describes the engine; it does not run the Rust CLI inside your browser.',
-    position: { x: 9, z: -33 },
-    trigger: { x: 9, z: -48 },
+    position: { x: -126, z: 130 },
+    trigger: { x: -139, z: 132 },
     links: [{ label: 'Ask about RIFT', href: linkedIn }],
   },
   {
@@ -67,8 +67,8 @@ export const PLACES: readonly Place[] = [
     location: 'The sound studio',
     summary: 'A browser workstation for turning an idea into a groove.',
     body: 'Play chord pads and piano keys, program beats, layer loops, or work with guitar and audio input. Music & Beats is a local-first music workstation, with its core synthesis and recording work happening in the browser.',
-    position: { x: 38, z: -17 },
-    trigger: { x: 53, z: -16 },
+    position: { x: -236, z: 155 },
+    trigger: { x: -235, z: 168 },
     links: [
       { label: 'Open Music & Beats', href: 'https://jedix420.github.io/musicandbeats/' },
       { label: 'View code', href: 'https://github.com/JEDIx420/musicandbeats' },
@@ -94,8 +94,8 @@ export const PLACES: readonly Place[] = [
     location: 'The hilltop observatory',
     summary: 'A peaceful trip into the strange and beautiful.',
     body: 'A space exploration project with a playful retro-futuristic character. The game explores flight, procedural space, ambient sound, and a companion-controller idea. Launch the project to explore its current build.',
-    position: { x: 29, z: 43 },
-    trigger: { x: 43, z: 41 },
+    position: { x: 34, z: -200 },
+    trigger: { x: 50, z: -212 },
     links: [
       { label: 'Launch the space game', href: 'https://jedix420.github.io/thequietbetweenstars/' },
       { label: 'View code', href: 'https://github.com/JEDIx420/thequietbetweenstars' },

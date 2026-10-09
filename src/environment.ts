@@ -9,12 +9,14 @@ import {
   makeBuilding,
   makePalmGeometries,
   makeBoat,
-  makeCrocodile,
   makeEgret,
   makeBench,
   materials,
 } from './models';
 import { PLACES } from './projects';
+import { ROADS } from './village';
+import { createVillageLife } from './village-life';
+import { createWildlife } from './wildlife';
 
 export interface Environment {
   update: (elapsed: number, dt: number) => void;
@@ -24,6 +26,8 @@ export interface Environment {
   setNight: (amount: number) => void;
   feedCroc: () => void;
   crocPosition: THREE.Vector3;
+  life: ReturnType<typeof createVillageLife>;
+  wildlife: ReturnType<typeof createWildlife>;
 }
 export const ROAD_POINTS = [
   [-51, 30],
@@ -98,11 +102,12 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
   const dynamics: Environment['dynamics'] = [],
     markers: Environment['markers'] = [];
   world.createCollider(
-    RAPIER.ColliderDesc.cuboid(150, 0.2, 150).setTranslation(0, -0.2, 0).setFriction(0.95),
+    RAPIER.ColliderDesc.cuboid(245, 0.2, 285).setTranslation(-80, -0.2, 0).setFriction(0.95),
   );
   const groundMaterial = new THREE.MeshStandardMaterial({ color: '#608456', roughness: 1 });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(320, 320), groundMaterial);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(520, 600), groundMaterial);
   ground.rotation.x = -Math.PI / 2;
+  ground.position.x = -80;
   ground.receiveShadow = true;
   statics.add(ground);
   statics.add(
@@ -111,6 +116,47 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
   statics.add(
     strip(ROAD, 7.0, new THREE.MeshStandardMaterial({ color: '#47534b', roughness: 0.96 })),
   );
+  const curves = ROADS.map(
+    (r) =>
+      new THREE.CatmullRomCurve3(
+        r.points.map(([x, z]) => new THREE.Vector3(x, 0.045, z)),
+        !!r.closed,
+        'centripetal',
+      ),
+  );
+  for (let i = 1; i < curves.length; i++) {
+    statics.add(
+      strip(
+        curves[i],
+        ROADS[i].width + 2.8,
+        new THREE.MeshStandardMaterial({ color: '#aa7b53', roughness: 1 }),
+        -0.015,
+      ),
+    );
+    statics.add(
+      strip(
+        curves[i],
+        ROADS[i].width,
+        new THREE.MeshStandardMaterial({ color: '#48544b', roughness: 1 }),
+      ),
+    );
+    const dashes = new THREE.InstancedMesh(
+      new THREE.BoxGeometry(0.1, 0.014, 1.5),
+      new THREE.MeshStandardMaterial({ color: '#bfc5a2', roughness: 1 }),
+      Math.floor(curves[i].getLength() / 7),
+    );
+    const d = new THREE.Object3D();
+    for (let n = 0; n < dashes.count; n++) {
+      const t = n / dashes.count,
+        p = curves[i].getPointAt(t),
+        v = curves[i].getTangentAt(t);
+      d.position.set(p.x, 0.065, p.z);
+      d.rotation.y = Math.atan2(v.x, v.z);
+      d.updateMatrix();
+      dashes.setMatrixAt(n, d.matrix);
+    }
+    statics.add(dashes);
+  }
   // Faded edge lines and short centre dashes, with a deliberately narrow village road.
   const lineMaterial = new THREE.MeshStandardMaterial({ color: '#d2c9a4', roughness: 1 });
   const dashGeometry = new THREE.BoxGeometry(0.1, 0.012, 1.35);
@@ -157,7 +203,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     fragmentShader:
       'varying vec3 vWorld; uniform float time; uniform float night; uniform vec2 croc; uniform float feed; void main(){ vec2 p=vWorld.xz; float a=sin(p.x*1.8+p.y*.31+time*.6);float b=sin(p.y*2.4-p.x*.32-time*.5);float glint=smoothstep(1.48,1.98,a+b);float distance=length(p-croc);float ripple=pow(max(0.0,sin(distance*9.0-time*5.0)),10.0)*exp(-distance*.65);vec3 base=mix(vec3(.075,.245,.214),vec3(.15,.39,.32),.5+.5*sin(p.x*.025+p.y*.014));vec3 color=base+glint*vec3(.20,.18,.10)+ripple*vec3(.18,.22,.18)*(1.0+feed);color=mix(color,color*vec3(.27,.40,.67),night*.8);gl_FragColor=vec4(color,1.0);\n#include <tonemapping_fragment>\n#include <colorspace_fragment> }',
   });
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(380, 380), waterMaterial);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(380, 600), waterMaterial);
   water.rotation.x = -Math.PI / 2;
   water.position.set(266, 0.026, 0);
   scene.add(water);
@@ -165,6 +211,22 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
   canal.rotation.x = -Math.PI / 2;
   canal.position.set(54.5, 0.034, 8);
   scene.add(canal);
+  const paddyCanal = new THREE.Mesh(new THREE.PlaneGeometry(7, 165), waterMaterial);
+  paddyCanal.rotation.x = -Math.PI / 2;
+  paddyCanal.position.set(-197.5, 0.034, 174.5);
+  scene.add(paddyCanal);
+  const ferryWater = new THREE.Mesh(new THREE.PlaneGeometry(70, 130), waterMaterial);
+  ferryWater.rotation.x = -Math.PI / 2;
+  ferryWater.position.set(-301, 0.034, -1);
+  scene.add(ferryWater);
+  box(statics, [13, 0.12, 11], [-197.5, 0.105, 168], materials.plaster);
+  fixedBox(world, 13, 0.12, 11, -197.5, 0.105, 168);
+  for (const z of [162.6, 173.4]) {
+    box(statics, [13, 0.15, 0.18], [-197.5, 1.1, z], materials.plaster);
+    for (let x = -204; x <= -191; x += 2)
+      box(statics, [0.15, 1.1, 0.15], [x, 0.55, z], materials.plaster);
+    fixedBox(world, 13, 1.1, 0.18, -197.5, 0.55, z);
+  }
   // Irregular bank details give the water a physical edge.
   for (const x of [18.7, 54.5]) {
     if (x === 54.5) continue;
@@ -174,7 +236,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     box(statics, [31, 0.18, 0.85], [34.5, 0.06, z], materials.laterite);
     box(statics, [13, 0.18, 0.85], [66.5, 0.06, z], materials.laterite);
   }
-  box(statics, [1.4, 0.3, 230], [75.5, 0.11, 0], materials.laterite);
+  box(statics, [1.4, 0.3, 550], [75.5, 0.11, 0], materials.laterite);
   // The bridge is level with a shallow raised deck; all railings have matching collision.
   box(statics, [8.6, 0.12, 15], [55, 0.105, 8], materials.plaster);
   fixedBox(world, 8.6, 0.12, 15, 55, 0.105, 8);
@@ -185,7 +247,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       box(statics, [0.16, 1.08, 0.16], [x, 0.6, z], materials.plaster);
     fixedBox(world, 0.16, 1.15, 15, x, 0.7, 8);
   }
-  // A compact loop of seven unique destinations.
+  // The original destinations now sit across connected village districts.
   let dome: THREE.Group | undefined;
   for (const place of PLACES) {
     if (place.id === 'saltwater') {
@@ -320,7 +382,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     );
   trunks.castShadow = fronds.castShadow = true;
   trunks.receiveShadow = fronds.receiveShadow = true;
-  const roadSamples = ROAD.getSpacedPoints(200);
+  const roadSamples = curves.flatMap((c) => c.getSpacedPoints(Math.ceil(c.getLength() / 2)));
   let count = 0,
     attempts = 0;
   while (count < palmCount && attempts++ < 3000) {
@@ -512,10 +574,8 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     scene.add(egret);
     egrets.push(egret);
   }
-  const croc = makeCrocodile();
-  croc.group.scale.setScalar(1.35);
-  scene.add(croc.group);
-  const crocPosition = new THREE.Vector3(87, 0.03, 13);
+  const wildlife = createWildlife(scene);
+  const crocPosition = wildlife.position(0);
   let feed = 0,
     night = 0;
   // Street lamps use emissive materials; only a few cast light, and none cast extra shadows.
@@ -591,16 +651,20 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
         flatShading: true,
       }),
     );
-    hill.position.set(-122 + Math.sin(n) * 15, -3, -140 + n * 25);
+    hill.position.set(-315 + Math.sin(n) * 15, -3, -275 + n * 48);
     hill.scale.set(22, 8 + (n % 3) * 2, 28);
     statics.add(hill);
   }
+  const life = createVillageLife(scene, world, statics);
   bakeStatic(statics);
   return {
     dynamics,
     markers,
     crocPosition,
+    life,
+    wildlife,
     setQuality(performance) {
+      life.quality(performance);
       fronds.castShadow = trunks.castShadow = !performance;
       bushes.castShadow = !performance;
       rice.visible = !performance;
@@ -614,30 +678,14 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     },
     feedCroc() {
       feed = 8;
+      wildlife.hunt(0);
     },
     update(elapsed, dt) {
       wind.value = elapsed;
       waterMaterial.uniforms.time.value = elapsed;
       feed = Math.max(0, feed - dt);
-      crocPosition.set(
-        87 + Math.sin(elapsed * 0.1) * 4.8,
-        0.016 + Math.sin(elapsed * 1.2) * 0.012,
-        14 + Math.cos(elapsed * 0.1) * 8.0,
-      );
-      croc.group.position.copy(crocPosition);
-      croc.group.rotation.y = Math.atan2(
-        -Math.cos(elapsed * 0.1) * 4.8,
-        Math.sin(elapsed * 0.1) * 8.0,
-      );
-      croc.tail.forEach(
-        (t, i) =>
-          (t.rotation.y = Math.sin(elapsed * (feed > 0 ? 3 : 1.7) - i * 0.65) * (0.08 + i * 0.023)),
-      );
-      croc.legs.forEach((l, i) => {
-        l.rotation.y = Math.sin(elapsed * 1.9 + i * Math.PI) * 0.28;
-        l.rotation.x = Math.sin(elapsed * 1.9 + i * Math.PI) * 0.12;
-      });
-      croc.head.rotation.x = feed > 0 ? Math.sin(elapsed * 3.2) * 0.1 : 0;
+      wildlife.update(elapsed);
+      life.update(elapsed);
       waterMaterial.uniforms.croc.value.set(crocPosition.x, crocPosition.z);
       waterMaterial.uniforms.feed.value = feed > 0 ? 1 : 0;
       boat.position.y = Math.sin(elapsed * 0.64) * 0.033;

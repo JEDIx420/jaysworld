@@ -1,41 +1,43 @@
-# Concept validation
+# Village edition validation
 
-Checked 9 October 2026 for v0.2. This is a playable concept, with the remaining production work described in BUILD_PLAN.md.
+Checked 9 October 2026 for v0.3.
 
-## Observed checks
+## Checks
 
-| Check                                                             | Result                                      |
-| ----------------------------------------------------------------- | ------------------------------------------- |
-| Strict TypeScript checking and Vite production build              | Passed                                      |
-| Targeted physics, input, reconciliation and radio-directory tests | 11 passed                                   |
-| Production browser scenarios                                      | 7 passed                                    |
-| Desktop and mobile visual review                                  | Reviewed at 1440×900, 390×844 and 320×640   |
-| Curated radio endpoint HTTP probes                                | All three returned HTTP 200 with audio data |
+| Check                                                                         | Result                                                                                                        |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Strict TypeScript and Vite production build                                   | Passed                                                                                                        |
+| Physics, input, reconciliation, directory, fares, routing, and wildlife tests | 18 passed                                                                                                     |
+| Production browser journeys                                                   | 9 scenarios, full run plus focused observation / fallback verification                                        |
+| Visual review                                                                 | Desktop 1440×900; phone 390×844 and 320×640; tea storefront, newspaper, crocodile hunt, telescope, radio desk |
+| Ente Radio endpoint                                                           | HTTP 200, audio/mpeg, audio bytes; CORS allows Pages and local origins                                        |
 
-The browser checks run Chromium against the actual HTTP-served production build. The local runtime used software rendering and automatically selected Performance graphics.
+The nine production browser scenarios cover:
 
-The seven browser scenarios cover:
+1. Rendering, real keyboard acceleration and braking, paused physics in dialogs, and recovery.
+2. All seven project papers, exact reconciliation, an editable playing beat, visited count, and evening lighting.
+3. Touch driving, independent camera / driving pointers, cancellation, and phone newspaper navigation.
+4. A 320px layout, direct project fragment links, and reload.
+5. No stream preloading before the starting gesture; default Ente playback through the real audio element, enabled effects, presets, failed-station recovery, direct playback, and stop.
+6. Storefront visits, three-page newspapers, funded tea/snack purchases, saved wallet accounting, crocodile selection / zoom / hunting, and telescope constellations / magnification.
+7. Passenger pickup, direct-visit cancellation, wallet protection, and refusal of unfunded tea purchases.
+8. Public content with JavaScript disabled.
+9. Project content and contact links with WebGL unavailable.
 
-1. Rendered world, forward driving, braking, paused physics in dialogs, and recovery to the tea shop.
-2. All seven project exhibits, exact reconciliation output, an editable and playing beat sequence, visit count, and the actual evening lighting transition.
-3. Touch driving at 390px, independent camera and driving pointers, pointer cancellation, and exhibit navigation.
-4. A 320px layout, a direct RIFT fragment link, and a reload that restores the exhibit.
-5. No radio autoplay or stream preloading, a failed station, switching to a playable audio fixture through the real HTML audio element, and stopping playback.
-6. Public introduction and project links when JavaScript is disabled.
-7. All project content and contact navigation when WebGL is unavailable.
+The fare tests include an actual Rapier drive from pickup to destination, slow drop-off, payment, tea/snack spending, and restored wallet data. Another test rejects untravelled rides and teleports. Wildlife tests sample three minutes of swim cycles to check separation, diving/surfacing, a requested hunt, jaw motion, all four legs, tail movement, and prey disappearance.
 
-The successful browser journeys produced no unexpected JavaScript or shader console errors. The intentionally failed station generates an expected network error; the no-WebGL scenario deliberately exercises the renderer's error and fallback path.
+Desktop and phone visual review led to a clearer opening screen, bounded newspaper width, usable close buttons, separate crocodile swim areas, and less rendering behind reading dialogs. Browser still captures temporarily hold only the world's animation loop and restore it immediately afterward; interaction assertions run against the normal simulation. Software-rendered hunt / lighting waits are bounded at 45 seconds.
 
-## Radio verification boundary
+The browser journeys use the production build over HTTP. Expected station-failure and no-WebGL errors exercise explicit recovery paths. Automated screenshots and touch emulation do not establish physical-device frame rates.
 
-Curated streams returned HTTP 200, the expected MPEG/AAC media types, and audio bytes in separate HTTPS probes. Sustained live broadcaster playback was not confirmed in this headless environment: the optional MACFAST playback check timed out. The passing browser playback check uses a generated PCM fixture, not a recording or a claim that a broadcaster was heard live. The optional JAYSWORLD_LIVE_RADIO=1 check is available for a normal connected browser environment.
+## Radio boundary
 
-## Build observations
+Ente's stream URL comes from its official homepage. HTTPS probes returned real MPEG audio bytes and cross-origin permission. Browser playback and effects tests use generated PCM audio fixtures to remain independent of broadcaster availability. Sustained live broadcaster playback has not been confirmed in this headless environment. Set JAYSWORLD_LIVE_RADIO=1 for the optional live check in a connected browser environment.
 
-The main interface JavaScript is approximately 30.8 kB before compression (11.7 kB gzip). The lazy 3D engine is approximately 4.95 MB before compression (1.83 MB gzip), largely because the Rapier compatibility package embeds WASM. Vite reports this large chunk; separating and optimising the physics download remains a roadmap item. Malayalam signage uses a locally hosted 24.1 kB WOFF2 subset.
+## Build and release
 
-Automated touch emulation and software rendering do not establish physical-phone performance. Quality targets of 60 FPS desktop and 30 FPS phone remain targets to measure on actual devices.
+The lightweight interface is about 50.4 kB raw / 18.9 kB gzip. The lazy 3D / physics bundle is about 4.97 MB raw / 1.84 MB gzip, chiefly the compatibility package's embedded WASM. Malayalam signage uses a locally hosted 24.1 kB WOFF2 subset. Separating physics WASM and measuring real-device performance remain optimisation work.
 
-## GitHub checks and publishing
+GitHub repeats formatting, tests, production build, and all nine browser journeys on pushes to main. It uploads the Pages build artifact and browser diagnostics. Publishing remains a manual Run workflow action under Jay's control; pushing code does not change Pages settings or publish automatically.
 
-The repository workflow repeats installation, targeted tests, the production build and browser checks on pushes to main. It uploads the built Pages artifact and browser diagnostics. Deployment runs only on a manual workflow dispatch, after Jay has enabled Pages with GitHub Actions as its source. This validation does not claim that a public deployment has been enabled or visited.
+The road floor and water recovery zones remain simplified. The telescope is an illustrated sky, and the wetland is a portfolio exhibit. See BUILD_PLAN.md for further asset and terrain work.

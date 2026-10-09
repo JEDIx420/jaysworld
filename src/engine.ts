@@ -3,8 +3,13 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { AutoVehicle, FIXED_STEP, WHEEL_POINTS } from './vehicle';
 import { Input } from './input';
 import { makeAuto } from './models';
-import { createEnvironment, ROAD } from './environment';
-import { nearestPlace, isWater, type Place } from './projects';
+import { createEnvironment } from './environment';
+import { makePerson } from './village-life';
+import { inWorld, waterAt, type Point } from './village';
+import { drawVillageMap } from './map';
+import { createSky, CONSTELLATIONS } from './sky';
+import { CROC_NAMES } from './wildlife';
+import { PLACES, nearestPlace, type Place } from './projects';
 
 export interface JourneyOptions {
   canvas: HTMLCanvasElement;
@@ -16,12 +21,14 @@ export interface JourneyOptions {
   onDrive: () => void;
   onRecover: (message: string) => void;
   onError: (message: string) => void;
-  onAudio: (speed: number, paused: boolean) => void;
+  onAudio: (speed: number, paused: boolean, throttle: number, brake: boolean) => void;
+  onView: (mode: ViewMode, title: string, detail: string) => void;
   onQuality: (performance: boolean) => void;
   interact: () => void;
   places: () => void;
   honk: () => void;
 }
+export type ViewMode = 'drive' | 'storefront' | 'croc' | 'stars';
 export interface Journey {
   reset: (place?: Place) => void;
   pause: () => void;
@@ -30,6 +37,15 @@ export interface Journey {
   camera: () => void;
   feedCroc: () => void;
   tourObservatory: () => void;
+  visit: (place: Place) => void;
+  leaveView: () => void;
+  zoom: (delta: number) => void;
+  selectCroc: (index: number) => void;
+  hunt: () => void;
+  constellation: (id: string) => void;
+  setPassenger: (index: number, onboard: boolean) => void;
+  serve: (item: string) => void;
+  route: (points: readonly Point[]) => void;
   dispose: () => void;
 }
 
@@ -69,55 +85,33 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
   sun.shadow.camera.far = 170;
   sun.shadow.normalBias = 0.075;
   sun.shadow.bias = -0.00015;
-  scene.add(sun);
-  const camera = new THREE.PerspectiveCamera(44, innerWidth / innerHeight, 0.1, 460);
+  scene.add(sun, sun.target);
+  const camera = new THREE.PerspectiveCamera(46, innerWidth / innerHeight, 0.1, 480);
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = FIXED_STEP;
   const environment = createEnvironment(scene, world),
     vehicle = new AutoVehicle(world),
     auto = makeAuto();
   scene.add(auto.group);
-  // Stars are a lightweight part of the evening scene, not a separate game.
-  const stars: number[] = [];
-  let seed = 734;
-  const rng = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-  for (let i = 0; i < 380; i++) {
-    const angle = rng() * Math.PI * 2,
-      elevation = 0.25 + rng() * 1.2,
-      radius = 180 + rng() * 45;
-    stars.push(
-      Math.cos(angle) * Math.cos(elevation) * radius,
-      Math.sin(elevation) * radius,
-      Math.sin(angle) * Math.cos(elevation) * radius,
-    );
-  }
-  const starGeometry = new THREE.BufferGeometry();
-  starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(stars, 3));
-  const starMat = new THREE.PointsMaterial({
-    color: '#f5e7c8',
-    size: 0.7,
-    transparent: true,
-    opacity: 0,
-    depthWrite: false,
-    fog: false,
-  });
-  scene.add(new THREE.Points(starGeometry, starMat));
+  const sky = createSky(scene);
+  const passenger = makePerson('#b97673', true);
+  passenger.group.position.set(0.28, -0.3, 0.66);
+  passenger.group.rotation.y = Math.PI;
+  passenger.group.visible = false;
+  auto.group.add(passenger.group);
   const previous = new THREE.Vector3().copy(vehicle.body.translation()),
     current = previous.clone(),
     previousQ = new THREE.Quaternion().copy(vehicle.body.rotation()),
     currentQ = previousQ.clone();
   const target = previous.clone(),
-    desiredCamera = new THREE.Vector3(),
-    roadPoints = ROAD.getSpacedPoints(120);
-  const map = document.getElementById('minimap') as HTMLCanvasElement,
-    ctx = map.getContext('2d')!;
-  let orbitYaw = -0.9,
-    elevation = 0.74,
-    distance = 40,
+    desiredCamera = new THREE.Vector3();
+  const map = document.getElementById('minimap') as HTMLCanvasElement;
+  const atlas = document.getElementById('village-atlas') as HTMLCanvasElement;
+  let orbitYaw = -0.6,
+    elevation = 0.61,
+    distance = 25,
     frame = 0,
+    lastRendered = 0,
     lastFrame = performance.now(),
     accumulator = 0,
     elapsed = 0,
@@ -135,16 +129,30 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     : false;
   let performanceMode = options.performance || software,
     nightTarget = 0,
-    nightAmount = 0,
-    lookTimer = 0;
+    nightAmount = 0;
+  let mode: ViewMode = 'drive',
+    viewPlace: Place | undefined,
+    crocIndex = 0,
+    routePoints: readonly Point[] = [],
+    manualCameraAt = 0,
+    lastActivity = '';
+  let throttle = 0,
+    braking = false;
+  const view = (next: ViewMode, title = '', detail = '') => {
+    mode = next;
+    input.clear();
+    vehicle.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    vehicle.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    options.onView(next, title, detail);
+  };
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const resetCamera = () => {
-    orbitYaw = -0.9;
-    elevation = 0.74;
-    distance = 40;
-    lookTimer = 0;
+    orbitYaw = -0.6;
+    elevation = 0.61;
+    distance = 25;
   };
   const reset = (place?: Place) => {
+    if (mode !== 'drive') view('drive');
     vehicle.reset(place?.trigger.x, place?.trigger.z);
     input.clear();
     current.copy(vehicle.body.translation());
@@ -154,7 +162,6 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     target.copy(current);
     accumulator = 0;
     recoveryTimer = 0;
-    lookTimer = 0;
   };
   const input = new Input(canvas, {
     interact: options.interact,
@@ -166,13 +173,26 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     },
     orbit: (x, y) => {
       orbitYaw -= x * 0.005;
-      elevation = THREE.MathUtils.clamp(elevation + y * 0.0035, 0.37, 1.15);
-      lookTimer = 0;
+      elevation = THREE.MathUtils.clamp(
+        elevation + y * 0.0035,
+        mode === 'stars' ? 0.12 : 0.16,
+        mode === 'stars' ? 1.5 : 1.15,
+      );
+      manualCameraAt = elapsed;
     },
-    zoom: (delta) => {
-      distance = THREE.MathUtils.clamp(distance + delta * 0.02, 22, 63);
-    },
+    zoom: (delta) => zoom(delta),
   });
+  const zoom = (delta: number) => {
+    if (mode === 'stars') {
+      camera.fov = THREE.MathUtils.clamp(camera.fov + delta * 0.025, 9, 60);
+      camera.updateProjectionMatrix();
+    } else
+      distance = THREE.MathUtils.clamp(
+        distance + delta * 0.02,
+        mode === 'croc' ? 5 : mode === 'storefront' ? 9 : 14,
+        mode === 'croc' ? 28 : 55,
+      );
+  };
   const resize = () => {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
@@ -195,59 +215,6 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     options.onError('The scene paused. You can browse Places, or reload to resume the drive.');
   };
   canvas.addEventListener('webglcontextlost', loseContext);
-  const drawMap = (x: number, z: number, yaw: number) => {
-    const size = map.width,
-      s = size / 210,
-      px = (v: number) => size / 2 + (v + 6) * s,
-      pz = (v: number) => size / 2 + (v - 4) * s;
-    ctx.fillStyle = '#173a32';
-    ctx.fillRect(0, 0, size, size);
-    ctx.fillStyle = '#28524a';
-    ctx.fillRect(px(76), 0, size, size);
-    ctx.fillRect(px(19), pz(3), 71 * s, 10 * s);
-    ctx.strokeStyle = '#8da17a';
-    ctx.lineWidth = 3.7;
-    ctx.beginPath();
-    roadPoints.forEach((p, i) => {
-      if (i) ctx.lineTo(px(p.x), pz(p.z));
-      else ctx.moveTo(px(p.x), pz(p.z));
-    });
-    ctx.closePath();
-    ctx.stroke();
-    for (const place of PLACES_FOR_MAP) {
-      ctx.fillStyle = place.id === 'saltwater' ? '#b2c5aa' : '#e4bd76';
-      ctx.beginPath();
-      ctx.arc(px(place.x), pz(place.z), 3.5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.save();
-    ctx.translate(px(x), pz(z));
-    ctx.rotate(-yaw);
-    ctx.fillStyle = '#fff5db';
-    ctx.beginPath();
-    ctx.moveTo(0, -7);
-    ctx.lineTo(5, 5);
-    ctx.lineTo(0, 3);
-    ctx.lineTo(-5, 5);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-    ctx.fillStyle = '#a8bba5';
-    ctx.font = '10px sans-serif';
-    ctx.fillText('N', 11, 17);
-    ctx.strokeStyle = '#a8bba5';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(14, 34);
-    ctx.lineTo(14, 23);
-    ctx.stroke();
-  };
-  const PLACES_FOR_MAP = environment.markers.map((m, i) => ({
-    id: i === 5 ? 'saltwater' : 'place',
-    x: m.x,
-    z: m.z,
-  }));
-  drawMap(current.x, current.z, 0);
   options.onProgress(0.92, 'Just a moment. The road is yours.');
   function render(now: number) {
     if (disposed) return;
@@ -256,14 +223,17 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     const dt = Math.min(visualDt, 0.1);
     lastFrame = now;
     elapsed += visualDt;
-    const paused = options.isPaused() || document.hidden || contextLost;
-    input.paused = paused;
+    const inputPaused = options.isPaused() || document.hidden || contextLost;
+    const paused = inputPaused || mode !== 'drive';
+    input.paused = inputPaused;
     if (!paused) {
       accumulator += dt;
       while (accumulator >= FIXED_STEP) {
         previous.copy(current);
         previousQ.copy(currentQ);
         const command = input.read();
+        throttle = command.throttle;
+        braking = command.brake;
         vehicle.beforeStep(command);
         world.step();
         current.copy(vehicle.body.translation());
@@ -273,10 +243,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
           options.onDrive();
         }
         const invalid =
-          current.y < -3 ||
-          Math.abs(current.x) > 133 ||
-          Math.abs(current.z) > 133 ||
-          isWater(current.x, current.z);
+          current.y < -3 || !inWorld(current.x, current.z) || waterAt(current.x, current.z);
         recoveryTimer = vehicle.isOverturned() ? recoveryTimer + FIXED_STEP : 0;
         if (invalid || recoveryTimer > 2.3) {
           reset();
@@ -315,33 +282,66 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     hemi.intensity = 2.2 - nightAmount * 1.9;
     sun.intensity = 3.2 - nightAmount * 2.98;
     sun.color.set('#ffe0a0').lerp(new THREE.Color('#82a2de'), nightAmount);
-    starMat.opacity = nightAmount;
+
     environment.setNight(nightAmount);
-    lookTimer = Math.max(0, lookTimer - dt);
+    const vehicleYaw = new THREE.Euler().setFromQuaternion(currentQ, 'YXZ').y;
+    if (mode === 'drive' && vehicle.speed > 1.3 && elapsed - manualCameraAt > 4) {
+      const wanted = vehicleYaw - 0.28;
+      orbitYaw +=
+        Math.atan2(Math.sin(wanted - orbitYaw), Math.cos(wanted - orbitYaw)) *
+        (1 - Math.exp(-dt * 1.6));
+    }
     const focus =
-      lookTimer > 0
-        ? new THREE.Vector3(environment.crocPosition.x, 0.3, environment.crocPosition.z)
-        : auto.group.position;
-    target.lerp(focus, 1 - Math.exp(-5 * dt));
-    desiredCamera.set(
-      target.x + Math.sin(orbitYaw) * Math.cos(elevation) * distance,
-      target.y + Math.sin(elevation) * distance,
-      target.z + Math.cos(orbitYaw) * Math.cos(elevation) * distance,
-    );
-    if (camera.position.lengthSq() === 0) camera.position.copy(desiredCamera);
-    else camera.position.lerp(desiredCamera, 1 - Math.exp(-4 * dt));
-    camera.lookAt(target.x, target.y + 0.5, target.z);
+      mode === 'croc'
+        ? environment.wildlife.position(crocIndex)
+        : mode === 'storefront' && viewPlace
+          ? new THREE.Vector3(viewPlace.position.x, 1.4, viewPlace.position.z)
+          : auto.group.position;
+    target.lerp(focus, 1 - Math.exp(-dt * 5));
+    if (mode === 'stars') {
+      const p = PLACES.find((p) => p.id === 'space')!.position;
+      desiredCamera.set(p.x, 8, p.z);
+      camera.position.lerp(desiredCamera, 1 - Math.exp(-dt * 6));
+      const direction = sky.direction(orbitYaw, elevation, 1);
+      camera.lookAt(camera.position.clone().add(direction));
+    } else {
+      camera.fov += (46 - camera.fov) * (1 - Math.exp(-dt * 5));
+      camera.updateProjectionMatrix();
+      desiredCamera.set(
+        target.x + Math.sin(orbitYaw) * Math.cos(elevation) * distance,
+        target.y + Math.sin(elevation) * distance,
+        target.z + Math.cos(orbitYaw) * Math.cos(elevation) * distance,
+      );
+      if (camera.position.lengthSq() === 0) camera.position.copy(desiredCamera);
+      else camera.position.lerp(desiredCamera, 1 - Math.exp(-dt * 4));
+      camera.lookAt(target.x, target.y + 0.5, target.z);
+    }
+    sky.update(camera, nightAmount, mode === 'stars');
+    sun.position.set(current.x - 42, 62, current.z + 33);
+    sun.target.position.set(current.x, 0, current.z);
+    sun.target.updateMatrixWorld();
+    if (mode === 'croc') {
+      const activity = environment.wildlife.activity(crocIndex);
+      if (activity !== lastActivity) {
+        lastActivity = activity;
+        options.onView(mode, CROC_NAMES[crocIndex], activity + ' · drag to look, scroll to zoom');
+      }
+    }
     const near = nearestPlace(current.x, current.z);
-    options.onNear(near && vehicle.speed < 4 ? near : undefined);
+    options.onNear(mode === 'drive' && near && vehicle.speed < 4 ? near : undefined);
     uiTimer += dt;
     if (uiTimer > 0.1) {
       uiTimer = 0;
       const yaw = new THREE.Euler().setFromQuaternion(currentQ, 'YXZ').y;
       options.onTelemetry(vehicle.speed, current.x, current.z, yaw);
-      drawMap(current.x, current.z, yaw);
-      options.onAudio(vehicle.speed, paused);
+      drawVillageMap(map, current, yaw, routePoints);
+      if ((atlas.closest('dialog') as HTMLDialogElement).open)
+        drawVillageMap(atlas, current, yaw, routePoints, true);
+      options.onAudio(vehicle.speed, paused, throttle, braking);
     }
-    if (!contextLost) {
+    const reading = !!document.querySelector('dialog[open]');
+    if (!contextLost && !document.hidden && (!reading || now - lastRendered > 350)) {
+      lastRendered = now;
       renderer.render(scene, camera);
       canvas.dataset.rendered = 'true';
     }
@@ -349,7 +349,11 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     canvas.dataset.x = current.x.toFixed(3);
     canvas.dataset.z = current.z.toFixed(3);
     canvas.dataset.speed = vehicle.speed.toFixed(3);
+    canvas.dataset.yaw = vehicleYaw.toFixed(4);
     canvas.dataset.night = nightAmount.toFixed(3);
+    canvas.dataset.view = mode;
+    canvas.dataset.zoom = (mode === 'stars' ? camera.fov : distance).toFixed(2);
+    canvas.dataset.croc = String(crocIndex);
   }
   frame = requestAnimationFrame(render);
   canvas.dataset.ready = 'true';
@@ -366,17 +370,68 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       nightTarget = enabled ? 1 : 0;
     },
     camera: resetCamera,
+    visit(place) {
+      viewPlace = place;
+      view(
+        'storefront',
+        place.location,
+        place.id === 'about'
+          ? 'Park up. Earn a fare, buy a chaya, read a paper.'
+          : 'A little place for a big idea. Read the paper or try the exhibit.',
+      );
+      orbitYaw = Math.atan2(place.trigger.x - place.position.x, place.trigger.z - place.position.z);
+      elevation = 0.35;
+      distance = 20;
+    },
+    leaveView() {
+      view('drive');
+      resetCamera();
+    },
+    zoom,
+    selectCroc(index) {
+      crocIndex = Math.max(0, Math.min(2, index));
+      lastActivity = '';
+    },
+    hunt() {
+      environment.wildlife.hunt(crocIndex);
+    },
     feedCroc() {
-      environment.feedCroc();
-      lookTimer = 7;
-      options.onRecover('A visitor at the jetty.');
+      crocIndex = 0;
+      view('croc', CROC_NAMES[0], 'Swimming · drag to look, scroll to zoom');
+      orbitYaw = -1.1;
+      elevation = 0.33;
+      distance = 14;
     },
     tourObservatory() {
       nightTarget = 1;
-      resetCamera();
-      elevation = 0.46;
-      distance = 28;
-      options.onRecover('Look up. The village has a different rhythm at night.');
+      view(
+        'stars',
+        'A little closer to the stars',
+        'Illustrated constellations · drag to explore, scroll to magnify',
+      );
+      orbitYaw = CONSTELLATIONS[0].yaw;
+      elevation = CONSTELLATIONS[0].elevation;
+      camera.fov = 52;
+      camera.updateProjectionMatrix();
+    },
+    constellation(id) {
+      const c = CONSTELLATIONS.find((c) => c.id === id);
+      if (!c) return;
+      orbitYaw = c.yaw;
+      elevation = c.elevation;
+      camera.fov = 34;
+      camera.updateProjectionMatrix();
+      options.onView('stars', c.name, c.detail);
+    },
+    setPassenger(index, onboard) {
+      environment.life.setPassenger(index, onboard);
+      passenger.group.visible = onboard;
+    },
+    serve(item) {
+      environment.life.serve(item);
+    },
+    route(points) {
+      routePoints = points;
     },
     dispose() {
       disposed = true;

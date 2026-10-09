@@ -672,7 +672,7 @@ export function makeBuilding(kind: string, color?: string) {
       '#e8dcad',
       'LOOK A LITTLE FURTHER',
     );
-  } else
+  } else if (kind === 'saltwater')
     textBoard(
       group,
       'SALTWATER',
@@ -851,7 +851,10 @@ export function makeCrocodile() {
   group.add(head);
   sphere(head, [0.32, 0.15, 0.43], [0, 0.0, -0.27], skin);
   box(head, [0.46, 0.11, 0.61], [0, -0.08, -0.72], skin);
-  box(head, [0.4, 0.065, 0.57], [0, -0.16, -0.74], belly);
+  const jaw = new THREE.Group();
+  jaw.position.set(0, -0.13, -0.35);
+  head.add(jaw);
+  box(jaw, [0.4, 0.065, 0.57], [0, -0.03, -0.39], belly);
   for (const x of [-0.22, 0.22]) {
     sphere(head, [0.1, 0.09, 0.13], [x, 0.13, -0.3], skin, 8);
     sphere(head, [0.046, 0.04, 0.043], [x, 0.19, -0.33], materials.yellow, 8);
@@ -914,8 +917,9 @@ export function makeCrocodile() {
         sphere(leg, [0.017, 0.014, 0.025], [x, -0.13, z + 0.125], materials.cream, 8);
       }
     }
-  bakeStatic(group, [...tail, ...legs]);
-  return { group, tail, legs, head };
+  bakeStatic(head, [jaw]);
+  bakeStatic(group, [...tail, ...legs, head]);
+  return { group, tail, legs, head, jaw };
 }
 
 export function makeEgret() {

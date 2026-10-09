@@ -14,6 +14,8 @@ export class AutoVehicle {
   readonly body: RAPIER.RigidBody;
   readonly controller: RAPIER.DynamicRayCastVehicleController;
   private steering = 0;
+  private throttle = 0;
+  private braking = 0;
   private forward = new Vector3();
   private quaternion = new Quaternion();
 
@@ -70,15 +72,20 @@ export class AutoVehicle {
   beforeStep(input: DriveInput, dt = FIXED_STEP) {
     const signed = this.signedSpeed;
     const limit = input.boost ? 16 : 12;
-    const steeringRange = 0.48 / (1 + this.speed * 0.045);
+    const steeringRange = 0.56 / (1 + this.speed * 0.065);
     this.steering += (-input.steer * steeringRange - this.steering) * (1 - Math.exp(-9 * dt));
     this.controller.setWheelSteering(0, this.steering);
     const reversing = input.throttle * signed < -0.6;
+    this.throttle += (input.throttle - this.throttle) * (1 - Math.exp(-5.5 * dt));
+    const softLimit = Math.max(0, Math.min(1, (limit + 1 - Math.abs(signed)) / 2));
     const force =
       input.brake || reversing || input.throttle * signed > limit
         ? 0
-        : input.throttle * (input.boost ? 340 : 240);
-    const brake = input.brake ? 9 : reversing ? 5 : input.throttle === 0 ? 0.035 : 0;
+        : this.throttle * (input.boost ? 360 : 265) * softLimit;
+    this.braking +=
+      ((input.brake ? 9 : reversing ? 5 : input.throttle === 0 ? 0.065 : 0) - this.braking) *
+      (1 - Math.exp(-14 * dt));
+    const brake = this.braking;
     for (let i = 0; i < 3; i++) {
       this.controller.setWheelBrake(i, brake);
       this.controller.setWheelEngineForce(i, i === 0 ? 0 : force);
@@ -94,6 +101,7 @@ export class AutoVehicle {
     this.body.resetForces(true);
     this.body.resetTorques(true);
     this.steering = 0;
+    this.throttle = this.braking = 0;
     for (let i = 0; i < 3; i++) {
       this.controller.setWheelEngineForce(i, 0);
       this.controller.setWheelBrake(i, 9);

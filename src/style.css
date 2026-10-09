@@ -1459,3 +1459,609 @@ h1 {
     scroll-behavior: auto !important;
   }
 }
+
+/* Village edition: warm paper, deliberate controls, and room for the scene. */
+.start-driving {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  margin: 1.5rem 0 0.7rem;
+  padding: 1rem 1.5rem;
+  background: #e8c483;
+  color: #203e32;
+  border: 1px solid #f0d6a2;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 700;
+  box-shadow: 0 8px 30px #173a3233;
+  cursor: pointer;
+}
+.start-driving span {
+  font-size: 1.5rem;
+}
+.journey-caption .start-note {
+  font-size: 0.76rem;
+  line-height: 1.5;
+  max-width: 320px;
+  opacity: 0.8;
+}
+.fare-card {
+  position: fixed;
+  right: 2rem;
+  top: 7rem;
+  width: 275px;
+  padding: 1rem 1.15rem;
+  border: 1px solid #cdd1aa44;
+  border-radius: 12px;
+  background: #183b33ed;
+  color: #e7e5cd;
+  box-shadow: 0 6px 25px #183b3320;
+}
+.fare-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.7rem;
+}
+.fare-top span {
+  font-size: 0.6rem;
+  letter-spacing: 0.16em;
+  color: #c5b47a;
+}
+.fare-top strong {
+  font-size: 1.3rem;
+  font-variant-numeric: tabular-nums;
+  color: #f0cf90;
+}
+.fare-card > strong {
+  font-size: 0.88rem;
+  line-height: 1.45;
+  display: block;
+}
+.fare-card p {
+  font-size: 0.73rem;
+  line-height: 1.6;
+  margin: 0.4rem 0 0.7rem;
+  color: #b4c5ae;
+}
+.fare-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: space-between;
+}
+.fare-bottom span {
+  font-size: 0.68rem;
+}
+.fare-bottom button {
+  background: #42634b;
+  border: 0;
+  color: #f0e7c7;
+  padding: 0.45rem 0.65rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+.fare-bottom kbd {
+  color: #e5cb91;
+  border: 0;
+  font-size: 0.6rem;
+}
+#village-atlas {
+  display: block;
+  width: 100%;
+  max-height: 440px;
+  object-fit: contain;
+  background: #d9d3b5;
+  border: 1px solid #aba78a;
+  border-radius: 8px;
+  margin: 1.2rem 0 0.6rem;
+}
+.map-legend {
+  font-size: 0.68rem;
+  color: #65705a;
+  margin-bottom: 1.4rem;
+}
+.directory-entry {
+  border-bottom: 1px solid #b6b59d60;
+  padding: 0.4rem 0;
+}
+.directory-entry .place-row {
+  border: 0;
+}
+.directory-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin: 0 0 0.5rem 3.2rem;
+}
+.directory-actions button {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid #969d83;
+  font-size: 0.72rem;
+  padding: 0.3rem 0;
+  cursor: pointer;
+  color: #41624c;
+}
+.view-panel {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(660px, calc(100% - 2rem));
+  background: #eee7cbf5;
+  border: 1px solid #fff4d5;
+  color: #274c3a;
+  padding: 1.15rem 1.5rem;
+  border-radius: 10px;
+  box-shadow: 0 15px 60px #112f3144;
+}
+.view-panel h2 {
+  font-family: Georgia, serif;
+  font-size: 1.8rem;
+  font-weight: 400;
+  margin: 0.2rem 0 0.35rem;
+}
+.view-panel p {
+  margin: 0.3rem 0 0.7rem;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+.view-panel .eyebrow {
+  font-size: 0.58rem;
+  margin: 0;
+}
+.view-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.view-actions button,
+.observer-controls button,
+.tea-menu button,
+.observer-controls select {
+  border: 1px solid #80947866;
+  border-radius: 5px;
+  background: #d7ddbd;
+  color: #31543c;
+  padding: 0.65rem 0.8rem;
+  cursor: pointer;
+  font-size: 0.76rem;
+}
+.view-actions button:first-child {
+  background: #294e3e;
+  color: #f0e6c9;
+}
+.tea-menu {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.8rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid #91a08255;
+  align-items: center;
+}
+.tea-menu > span {
+  font-size: 0.57rem;
+  letter-spacing: 0.1em;
+  flex-basis: 100%;
+}
+.tea-menu small {
+  flex-basis: 100%;
+  font-size: 0.65rem;
+  color: #6b785d;
+}
+.observer-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.8rem;
+}
+.observer-controls label {
+  font-size: 0.75rem;
+}
+.observer-controls small {
+  flex-basis: 100%;
+  color: #778064;
+  font-size: 0.65rem;
+}
+.view-zoom {
+  position: absolute;
+  right: 1rem;
+  top: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.view-zoom span {
+  font-size: 0.5rem;
+  letter-spacing: 0.07em;
+  color: #728463;
+}
+.view-zoom button {
+  border: 1px solid #82957377;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  background: #e1e1c6;
+  color: #35583d;
+}
+body.visiting .touch-controls,
+body.visiting .driving-hint,
+body.visiting .dashboard,
+body.visiting .minimap-button,
+body.visiting .fare-card,
+body.visiting .interaction {
+  display: none;
+}
+.newspaper {
+  max-width: 940px;
+  background: #ece6cd;
+  background-image: repeating-linear-gradient(90deg, #ad9e7220 0px, #ad9e7200 1px, #ad9e7200 4px);
+  border-radius: 3px;
+  box-shadow: 0 16px 70px #0a211970;
+}
+.paper-masthead {
+  border-top: 2px solid #354535;
+  border-bottom: 3px double #354535;
+  padding: 0.6rem 0 0.75rem;
+  text-align: center;
+  margin-bottom: 1rem;
+}
+.paper-masthead small {
+  display: block;
+  font-size: 0.56rem;
+  letter-spacing: 0.16em;
+  color: #67715b;
+}
+.paper-masthead strong {
+  display: block;
+  font:
+    700 clamp(1.9rem, 5.8vw, 3.8rem) / 1.2 Georgia,
+    serif;
+  letter-spacing: -0.06em;
+  color: #293f2e;
+}
+.paper-masthead > span {
+  font:
+    italic 0.8rem Georgia,
+    serif;
+  color: #66715b;
+}
+.paper-tabs {
+  display: flex;
+  gap: 0.2rem;
+  justify-content: center;
+  border-bottom: 1px solid #a4aa8f;
+  padding-bottom: 0.7rem;
+  margin-bottom: 1.5rem;
+}
+.paper-tabs button {
+  border: 0;
+  border-radius: 3px;
+  padding: 0.6rem 0.8rem;
+  background: transparent;
+  color: #55694e;
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+.paper-tabs button[aria-pressed='true'] {
+  background: #354e3c;
+  color: #f0e6ca;
+}
+.newspaper .exhibit-heading {
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+.newspaper .exhibit-number {
+  font:
+    italic 2.2rem Georgia,
+    serif;
+  color: #968461;
+}
+.newspaper h1 {
+  font-family: Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.035em;
+}
+.paper-story {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 2rem;
+  align-items: start;
+}
+.paper-story #project-body {
+  font:
+    1.04rem/1.85 Georgia,
+    serif;
+  border-left: 1px solid #a5aa8c77;
+  padding-left: 2rem;
+  margin-top: 0;
+}
+.paper-story .project-summary {
+  font:
+    1.4rem/1.55 Georgia,
+    serif;
+  margin-top: 0;
+}
+.paper-story .project-links {
+  grid-column: 1/-1;
+  margin-top: 1.25rem;
+}
+.paper-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.15em;
+  margin-bottom: 1rem;
+  color: #68705c;
+}
+.paper-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  border-top: 2px solid #6d7857;
+  margin-top: 2rem;
+  padding-top: 1rem;
+}
+.paper-pagination button {
+  border: 0;
+  background: transparent;
+  color: #3d5943;
+  padding: 0.5rem 0;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
+.paper-pagination button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.paper-pagination span {
+  font-size: 0.58rem;
+  letter-spacing: 0.12em;
+  color: #7d8068;
+}
+.studio-effects {
+  margin-top: 1.6rem;
+  padding: 1.1rem;
+  border: 1px solid #9fa98b77;
+  background: #d7dbc4;
+  border-radius: 8px;
+}
+.studio-effects h2 {
+  font:
+    1.5rem Georgia,
+    serif;
+  margin: 0.3rem 0;
+}
+.studio-effects p:not(.eyebrow) {
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+.studio-effects fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.studio-effects fieldset:disabled {
+  opacity: 0.4;
+}
+.preset-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.78rem;
+  align-items: center;
+}
+.preset-label select {
+  background: #e7e5ca;
+  border: 1px solid #a4ad91;
+  border-radius: 4px;
+  color: #315440;
+  padding: 0.5rem;
+}
+.studio-knobs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.studio-knobs label {
+  font-size: 0.69rem;
+  color: #52664d;
+}
+.studio-knobs input {
+  width: 100%;
+  margin-top: 0.65rem;
+  accent-color: #446b4e;
+}
+.audio-upload {
+  display: block;
+  font-size: 0.74rem;
+  border-top: 1px solid #b0b59b;
+  padding-top: 0.8rem;
+}
+.audio-upload input {
+  display: block;
+  width: 100%;
+  margin: 0.6rem 0;
+  font-size: 0.7rem;
+}
+.audio-upload small {
+  display: block;
+  font-size: 0.65rem;
+  color: #768266;
+}
+[hidden] {
+  display: none !important;
+}
+@media (max-width: 700px) {
+  .fare-card {
+    top: 5.7rem;
+    right: 1rem;
+    width: 210px;
+    padding: 0.75rem 0.85rem;
+  }
+  .fare-card > strong {
+    font-size: 0.76rem;
+  }
+  .fare-card p {
+    font-size: 0.67rem;
+  }
+  .fare-top {
+    margin-bottom: 0.4rem;
+  }
+  .fare-top strong {
+    font-size: 1.08rem;
+  }
+  .journey-caption {
+    top: 35%;
+  }
+  .view-panel {
+    bottom: 1rem;
+    padding: 1rem;
+  }
+  .view-panel h2 {
+    font-size: 1.45rem;
+    padding-right: 4.6rem;
+  }
+  .view-panel p {
+    font-size: 0.73rem;
+  }
+  .view-zoom span {
+    display: none;
+  }
+  .view-actions button,
+  .tea-menu button {
+    font-size: 0.68rem;
+    padding: 0.6rem 0.65rem;
+  }
+  .newspaper {
+    padding: 1.25rem;
+  }
+  .paper-story {
+    grid-template-columns: 1fr;
+    gap: 0.7rem;
+  }
+  .paper-story #project-body {
+    border: 0;
+    padding: 0;
+    font-size: 0.96rem;
+  }
+  .paper-story .project-summary {
+    font-size: 1.18rem;
+  }
+  .paper-tabs button {
+    font-size: 0.62rem;
+    padding: 0.6rem 0.45rem;
+  }
+  .paper-pagination button {
+    font-size: 0.68rem;
+  }
+  .studio-knobs {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .directory-actions {
+    margin-left: 0;
+  }
+  #village-atlas {
+    max-height: 360px;
+  }
+}
+@media (max-height: 540px) {
+  .fare-card {
+    top: 5rem;
+    right: 1rem;
+    width: 205px;
+  }
+  .fare-card p {
+    display: none;
+  }
+  .view-panel {
+    bottom: 0.7rem;
+    padding: 0.8rem 1rem;
+    max-width: 600px;
+  }
+  .view-panel h2 {
+    font-size: 1.3rem;
+  }
+  .view-panel p {
+    font-size: 0.7rem;
+    margin: 0.25rem 0 0.4rem;
+  }
+  .view-panel .observer-controls,
+  .tea-menu {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+  }
+  .journey-caption .start-note {
+    display: none;
+  }
+}
+body:not(.started) .fare-card,
+body:not(.started) .interaction,
+body:not(.started) .dashboard,
+body:not(.started) .minimap-button,
+body:not(.started) .touch-controls,
+body:not(.started) .driving-hint {
+  display: none;
+}
+.newspaper {
+  width: 940px;
+  max-width: min(940px, calc(100vw - 26px));
+}
+.newspaper .dialog-top .eyebrow {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .journey-caption {
+    top: 24%;
+    bottom: auto;
+  }
+  .fare-card {
+    top: 8rem;
+  }
+  .newspaper .dialog-top {
+    gap: 0.5rem;
+  }
+  .newspaper .dialog-top button {
+    font-size: 0.65rem;
+    padding-left: 0.25rem;
+  }
+  .paper-masthead strong {
+    font-size: clamp(1.7rem, 7.7vw, 3rem);
+  }
+}
+@media (max-height: 500px) and (pointer: coarse) {
+  body:not(.started) .journey-caption {
+    display: block;
+    top: 85px;
+    bottom: auto;
+    max-width: 340px;
+    padding: 1rem;
+  }
+  .journey-caption h1 {
+    font-size: 1.8rem;
+  }
+  .journey-caption > p,
+  .welcome-controls {
+    display: none;
+  }
+  .start-driving {
+    margin: 0.8rem 0 0;
+    padding: 0.7rem 1rem;
+  }
+  .fare-card {
+    top: 5rem;
+  }
+}
+.start-driving {
+  pointer-events: auto;
+}
+body.started .start-driving {
+  pointer-events: none;
+  visibility: hidden;
+}

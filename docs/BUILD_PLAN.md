@@ -1,78 +1,42 @@
-# Jay's World: design and development roadmap
+# Jay's World — village edition, v0.3
 
 Updated 9 October 2026.
 
-## Direction
+## Experience and implementation
 
-A small, cohesive Kerala-inspired village, explored in an auto-rickshaw. The visitor can enjoy driving while discovering Jay's professional work and creative projects. A quick route reaches Eagle Eye; a Places list makes the content accessible without driving.
+Extend the existing Three.js / Rapier world. Keep the original auto, tiled-roof architecture, old-town loop, seven exhibits, touch input, and static Pages build. Connect them to a larger fictional Kerala village, with everyday life rather than a series of isolated project markers.
 
-The setting is a fictional contemporary backwater village. Coconut palms, laterite, pitched tile roofs, verandahs, tea-shop objects, paddy plots, a canal, bridge, jetty, and woven houseboat establish its character. Keep the geography coherent and avoid assembling unrelated tourist landmarks.
+The implemented village spans a 460 × 540 metre recovery boundary. Nine connected road paths join six districts: the old village, market quarter, paddy country, ferry and records, observatory ridge, and backwater. Shops, houses, two canal bridges, palms, stalls, a bus shelter, a ferry landing, crops, and hailing residents give the journey context. The map provides directions to project stops and the current fare.
 
-## Current concept, v0.2
+## Visitor journey
 
-- Independently implemented Rapier raycast vehicle with three wheels.
-- Fixed 60 Hz simulation and interpolated rendering.
-- Keyboard and independent touch driving/camera pointers.
-- Detailed procedural auto, driver, seats, glazing, mirrors, lights, mudguards, plate, and wheel pivots.
-- Seven distinct exhibit buildings and destinations around a compact road loop.
-- Instanced vegetation, paddy crops, rocks and lilies, with batched static model geometry.
-- A moving houseboat, egrets, and a segmented crocodile with tail and limb movement.
-- Golden-hour and evening lighting, moving water highlights and ripples, stars and warm lamps.
-- A miniature beat sequencer, exact-money reconciliation example, workflow examples, star chart, and a wetland viewing action.
-- Public content, outbound project links, map, visit state, dialogs, loading and fallback.
-- Optional Malayalam internet radio through secure live endpoints and Radio Browser.
+1. **Start driving.** The opening gesture starts Ente Radio and original procedural auto sounds. Visitors can mute either independently. Keyboard acceleration also starts the experience; touch visitors use the Start button.
+2. **Earn a fare.** Eleven passenger journeys rotate through the village. Stop near the pickup, press E or Pick up, drive to the destination, slow down, and drop off. A visible passenger joins the auto. The wallet receives the fare only after a travelled ride; jumps and recovery cancel the active ride.
+3. **Park at a storefront.** Each project has a front-facing visit camera and actions. Visitors can also visit directly from the directory; this cancels an active fare. Reading remains free.
+4. **Read the newspaper.** The Kerala Dispatch has three pages: the story, how it works, and a hands-on exhibit. Previous/next buttons, page tabs, and touch swipes support reading.
+5. **Stay for chaya.** A paid fare buys tea or snacks at the tea shop. Tea, steam, and a snack appear on the outdoor table. Prices are fictional game prices. Wallet, completed fares, and purchases persist locally; an active passenger does not survive a reload.
+6. **Look closer.** Three wetland residents swim, submerge, surface, stalk fish, and snap their articulated jaws. Binocular-style observation offers resident selection, zoom, orbit, and a hunt cue. The observatory offers a movable, magnifiable illustrated sky with Orion, the Big Dipper, and the Southern Cross.
+7. **Make a different soundtrack.** The studio processes permitted streams or local audio with low-pass filtering, bass, echo, room reverb, and wobble. Mood presets and an existing beat sequencer give visitors something to play with.
 
-This is a concept release. Detailed procedural meshes do not replace the eventual custom asset production and visual iteration needed to reach the craft of the reference.
+## Engineering choices
 
-## Visitor route
+- Fixed 60 Hz Rapier vehicle steps with visual interpolation; progressive throttle and braking, speed-sensitive steering, suspension, physical collisions, and a closer follow camera after manual orbit times out.
+- Shared geography and a connected road graph for maps, fares, directions, water recovery, and NPC positions. UI modules do not import the 3D renderer.
+- Geometry batching and instancing reuse the established procedural style. New palm groves are independently culled. Performance mode reduces shadow and crop detail. Rendering behind reading dialogs is throttled.
+- Persistent wallet validation, stopped-vehicle interaction requirements, travelled-distance checks, and cancellation on direct visits / resets protect the economy.
+- Explicit drive, storefront, crocodile, and telescope modes. Observation parks the auto while leaving camera input usable.
+- Original procedural sound: rounded exhaust harmonics, firing pulse, gear pitch changes, mechanical rattle, speed-dependent road noise, braking, horn, birds, and small fare / paper / tea cues.
+- Web Audio processing only for endpoints verified to permit cross-origin processing. Other broadcasters use direct HTML audio, with clear effect availability. Local audio is not uploaded.
+- Public professional content and illustrative demos; no private project code, client records, fabricated outcomes, or live AI service.
 
-| Place                    | Content                                 | Interaction                                                        |
-| ------------------------ | --------------------------------------- | ------------------------------------------------------------------ |
-| Tea shop                 | Jay's introduction, background, contact | Explore the introduction; take the road                            |
-| Eagle Eye studio         | AI consulting and GTM engineering       | Inspect workflow examples and capabilities                         |
-| OpsFlash operations room | Connected intelligence and workflows    | Switch between research, content and growth examples               |
-| RIFT workshop            | Exact data reconciliation in Rust       | Compare illustrative records and preserve a one-paisa difference   |
-| Music room               | Music & Beats                           | Change and play an eight-step drum sequence                        |
-| Observatory              | The Quiet Between Stars                 | Move across a small chart, switch to evening, launch the full game |
-| Wetland jetty            | SALTWATER                               | Watch the crocodile and open the standalone game's source          |
+## Validation and release
 
-RIDELINE and Dinner Date with Death can be added to a small arcade location after this core route has been reviewed.
+Run formatting, strict type checking, targeted unit/physics tests, production build, and browser journeys. Review the real rendered desktop and phone screenshots. Verify the exact pushed head and GitHub CI. Pages publishing remains a manual workflow under Jay's control.
 
-## Architecture
+## Further craft work
 
-TypeScript and Three.js own rendering and original procedural assets. Rapier owns the chassis, raycast suspension, props and collisions. Vite produces static HTML, CSS and JavaScript for GitHub Pages.
+The upgrade is functional and stays within the existing setup. Reaching the reference portfolio's authored asset quality still needs bespoke Blender assets, richer terrain and shoreline collision, material/texture production, approved project screenshots, and actual-device performance measurements. The current roads sit on a simplified flat collision floor and water uses recovery zones. The illustrated sky is not a date/location astronomy calculation. Wetland animals are a portfolio exhibit, separate from the standalone survival game.
 
-The project interface and fallbacks load before the dynamic engine module. No backend, user authentication, provider API key, live AI endpoint, client database, or multiplayer server is needed.
+The physics compatibility bundle still embeds WASM; serving it separately is the main remaining loading optimisation. Target 60 FPS desktop and 30 FPS phone, then measure on representative real devices before claiming those rates.
 
-Keep models, collisions, vehicle mount points, world coordinates, exhibits, and public content separate. Future GLBs must use metres and preserve the auto's independent wheel steering and spin pivots. Retain editable Blender sources and verify exports in the actual renderer.
-
-## Follow-up milestones
-
-1. **Review this live concept.** Gather feedback on the driving feel, camera, scale, atmosphere and professional presentation. Measure real phone performance.
-2. **Hero asset production.** Model the final auto, tea shop and Eagle Eye frontage in Blender. Establish one coherent material and texture library; compare a driving clip before expanding.
-3. **Terrain and shoreline.** Replace the recovery-floor terrain with authored banks, slopes, collision meshes, bridge transitions, and a clearer boundary.
-4. **Content and project depth.** Add approved screenshots and focused case studies: problem, Jay's role, resulting behavior, evidence. Extend the creative interactions where they add value.
-5. **Loading and rendering.** Evaluate separately served physics WASM, compressed textures and GLBs, LODs, adaptive quality and culling. Add weather only after device measurements support it.
-6. **Release refinement.** Recheck public URLs, direct links, browser compatibility, audio availability, accessibility, font enlargement, and contact paths.
-
-Every milestone has a review gate. This document does not imply that work continues unattended between conversations.
-
-## Quality targets and limits
-
-Aim for 60 FPS on a representative recent desktop and 30 FPS on a representative mid-range phone. These are targets; automated software-rendered checks do not measure actual-device performance.
-
-The current terrain collision is simplified and water uses recovery boundaries. Small decorative props can intentionally lack collision, while buildings, bridge rails, palms and dynamic objects have collision. The crocodile is an ambient exhibit, not the full survival game.
-
-The RIFT example is a local illustrative comparison using exact integer amounts. It does not execute or benchmark the Rust engine. Workflow examples contain illustrative steps, not production client data or live runs.
-
-Radio is optional. Secure streams can fail, move, restrict regions or change programme; the player keeps those failures separate from the rest of the world.
-
-## References
-
-- https://bruno-simon.com/
-- https://github.com/brunosimon/folio-2025
-- https://rapier.rs/docs/user_guides/javascript/vehicle_controller/
-- https://www.keralatourism.org/faq/what-makes-keralas-traditional-architecture-unique
-- https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages
-- https://vite.dev/guide/static-deploy.html#github-pages
-- https://api.radio-browser.info/
+References: https://bruno-simon.com/ · https://github.com/brunosimon/folio-2025 · https://rapier.rs/docs/user_guides/javascript/vehicle_controller/ · https://developer.chrome.com/blog/autoplay · https://enteradio.com/ · https://api.radio-browser.info/

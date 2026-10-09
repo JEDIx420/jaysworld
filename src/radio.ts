@@ -1,3 +1,4 @@
+import { RadioEffects } from './radio-effects';
 export interface Station {
   id: string;
   name: string;
@@ -6,10 +7,21 @@ export interface Station {
   homepage: string;
   uuid?: string;
   alternates?: string[];
+  effects?: boolean;
 }
 export const CURATED_STATIONS: readonly Station[] = [
   {
+    id: 'ente',
+    name: 'Ente Radio 91.2',
+    description: 'Karunagappally · Community radio · Default station',
+    url: 'https://cast1.my-control-panel.com/proxy/enteradio/stream',
+    homepage: 'https://enteradio.com/',
+    uuid: 'cddf5ab5-ff56-4a0c-8634-91a31e895fe5',
+    effects: true,
+  },
+  {
     id: 'digital-malayali',
+    effects: true,
     name: 'Radio Digital Malayali',
     description: 'Malayalam · Independent internet radio',
     url: 'https://radio.digitalmalayali.in/listen/stream/radio.mp3',
@@ -97,6 +109,8 @@ export class VillageRadio {
   private timeout = 0;
   private current?: Station;
   private playing = false;
+  private effects?: RadioEffects;
+  private fileUrl?: string;
   private abort?: AbortController;
   private mirrors = [
     'https://de1.api.radio-browser.info',
@@ -105,11 +119,52 @@ export class VillageRadio {
   ];
   constructor() {
     this.render();
+    for (const id of ['fx-filter', 'fx-bass', 'fx-echo', 'fx-room', 'fx-wobble'])
+      $(id).addEventListener('input', () => this.updateEffects());
+    $('fx-preset').addEventListener('change', () => {
+      const presets: Record<string, number[]> = {
+        clean: [18000, 0, 0, 0, 0],
+        tea: [3200, 2, 0.08, 0.15, 0.1],
+        dub: [6800, 7, 0.65, 0.22, 0.2],
+        dream: [2400, 1, 0.3, 0.65, 0.7],
+      };
+      const v = presets[($('fx-preset') as HTMLSelectElement).value];
+      ['fx-filter', 'fx-bass', 'fx-echo', 'fx-room', 'fx-wobble'].forEach(
+        (id, i) => (($(id) as HTMLInputElement).value = String(v[i])),
+      );
+      this.updateEffects();
+    });
+    $('radio-file').addEventListener('change', () => {
+      const file = ($('radio-file') as HTMLInputElement).files?.[0];
+      if (!file) return;
+      if (file.size > 100 * 1024 * 1024) {
+        this.status('Choose an audio file under 100 MB.');
+        return;
+      }
+      this.stop(false);
+      this.fileUrl = URL.createObjectURL(file);
+      this.play({
+        id: 'local-file',
+        name: file.name.slice(0, 80),
+        description: 'Your audio · stays in this browser',
+        url: this.fileUrl,
+        homepage: 'https://www.radio-browser.info/',
+        effects: true,
+      });
+    });
     ($('radio-volume') as HTMLInputElement).addEventListener('input', () => {
       if (this.audio) this.audio.volume = Number(($('radio-volume') as HTMLInputElement).value);
     });
     $('radio-stop').addEventListener('click', () => this.stop());
     $('radio-refresh').addEventListener('click', () => void this.discover());
+  }
+  playDefault() {
+    this.play(CURATED_STATIONS[0]);
+  }
+  private updateEffects() {
+    if (!this.effects) return;
+    const v = (id: string) => Number(($(id) as HTMLInputElement).value);
+    this.effects.set(v('fx-filter'), v('fx-bass'), v('fx-echo'), v('fx-room'), v('fx-wobble'));
   }
   private status(text: string) {
     $('radio-status').textContent = text;
@@ -151,12 +206,14 @@ export class VillageRadio {
     }
   }
   play(station: Station) {
-    this.stop(false);
+    const fileUrl = station.id === 'local-file' ? station.url : undefined;
+    this.stop(false, !!fileUrl);
+    this.fileUrl = fileUrl;
     const generation = ++this.generation;
     this.current = station;
     this.render();
     this.status('Tuning in to ' + station.name + '…');
-    if (!publicHttps(station.url)) {
+    if (!publicHttps(station.url) && station.id !== 'local-file') {
       this.status('This station does not have a supported secure stream. Choose another station.');
       return;
     }
@@ -167,6 +224,19 @@ export class VillageRadio {
       this.audio?.pause();
       const audio = new Audio();
       audio.preload = 'none';
+      if (station.effects) {
+        audio.crossOrigin = 'anonymous';
+        try {
+          this.effects = new RadioEffects(audio);
+          this.updateEffects();
+        } catch {
+          this.status('Audio effects are unavailable in this browser.');
+        }
+      }
+      ($('effects-controls') as HTMLFieldSetElement).disabled = !this.effects;
+      $('effects-status').textContent = this.effects
+        ? 'Studio effects are connected. Try a preset or turn the knobs.'
+        : 'This station plays directly. Choose Ente Radio, Digital Malayali, or your own file to use effects.';
       audio.volume = Number(($('radio-volume') as HTMLInputElement).value);
       this.audio = audio;
       audio.src = urls[attempt];
@@ -181,6 +251,9 @@ export class VillageRadio {
           open();
           return;
         }
+        this.effects?.dispose();
+        this.effects = undefined;
+        ($('effects-controls') as HTMLFieldSetElement).disabled = true;
         this.playing = false;
         $('radio-now').hidden = true;
         $('radio-indicator').classList.remove('on');
@@ -196,8 +269,17 @@ export class VillageRadio {
         $('radio-now').hidden = false;
         $('radio-now-name').textContent = station.name;
         $('radio-indicator').classList.add('on');
-        this.status('Live: ' + station.name);
+        this.status((station.id === 'local-file' ? 'Playing: ' : 'Live: ') + station.name);
         this.render();
+      });
+      audio.addEventListener('ended', () => {
+        if (generation !== this.generation) return;
+        this.stop(false);
+        this.status(
+          station.id === 'local-file'
+            ? 'Your audio finished. Choose a file or station to play again.'
+            : 'The station stopped sending audio. Tap it to reconnect.',
+        );
       });
       audio.addEventListener('waiting', () => {
         if (generation === this.generation) this.status('Buffering ' + station.name + '…');
@@ -218,7 +300,14 @@ export class VillageRadio {
         signal: AbortSignal.timeout(4000),
       }).catch(() => undefined);
   }
-  stop(announce = true) {
+  stop(announce = true, keepFile = false) {
+    this.effects?.dispose();
+    this.effects = undefined;
+    if (this.fileUrl && !keepFile) {
+      URL.revokeObjectURL(this.fileUrl);
+      this.fileUrl = undefined;
+    }
+    ($('effects-controls') as HTMLFieldSetElement).disabled = true;
     this.generation++;
     clearTimeout(this.timeout);
     this.audio?.pause();
