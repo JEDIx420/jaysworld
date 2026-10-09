@@ -57,6 +57,8 @@ npm run test:browser
 
 The browser checks serve the production build and exercise the visitor journey. Set JAYSWORLD_LIVE_RADIO=1 to include a real radio playback check; CI tests gesture-triggered default playback, effects, and failure paths without relying on broadcaster availability. Optional JAYSWORLD_CHROMIUM_PATH selects an existing browser, and JAYSWORLD_BASE_URL tests a deployed site.
 
+GitHub runs all ten browser journeys across three workers. JAYSWORLD_QA_SHARD=1/3 selects the first worker's portion locally; the default local command runs the complete suite. Each worker keeps separate diagnostics, and manual publication waits for all three to pass.
+
 See [validation](docs/VALIDATION.md), [the design roadmap](docs/BUILD_PLAN.md), and [radio sources](docs/RADIO_SOURCES.md).
 
 ## GitHub Pages

@@ -10,8 +10,15 @@ concurrency:
   cancel-in-progress: true
 jobs:
   build:
+    name: Build and visitor checks (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    env:
+      JAYSWORLD_QA_SHARD: ${{ matrix.shard }}/3
     steps:
       - uses: actions/checkout@v7
         with:
@@ -32,10 +39,11 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: visitor-checks
+          name: visitor-checks-${{ matrix.shard }}
           path: qa/
           retention-days: 7
       - uses: actions/upload-pages-artifact@v3
+        if: matrix.shard == 1
         with:
           path: dist
   deploy:

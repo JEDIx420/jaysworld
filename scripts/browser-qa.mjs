@@ -7,6 +7,20 @@ import { spawn } from 'node:child_process';
 
 const root = resolve(import.meta.dirname, '..'),
   output = resolve(root, 'qa');
+const shard = process.env.JAYSWORLD_QA_SHARD ?? '1/1',
+  shardMatch = /^(\d+)\/(\d+)$/.exec(shard),
+  shardNumber = Number(shardMatch?.[1]),
+  shardCount = Number(shardMatch?.[2]);
+if (
+  !shardMatch ||
+  !Number.isSafeInteger(shardNumber) ||
+  !Number.isSafeInteger(shardCount) ||
+  shardNumber < 1 ||
+  shardCount < 1 ||
+  shardNumber > shardCount
+)
+  throw new Error('JAYSWORLD_QA_SHARD must be a positive shard/count, such as 1/3.');
+let scenarioNumber = 0;
 await mkdir(output, { recursive: true });
 const fileMode = process.env.JAYSWORLD_TEST_FILE === '1',
   external = process.env.JAYSWORLD_BASE_URL;
@@ -104,6 +118,7 @@ if (proxyValue) {
   };
 }
 async function run(name, contextOptions, check) {
+  if (scenarioNumber++ % shardCount !== shardNumber - 1) return;
   if (process.env.JAYSWORLD_QA_FILTER && !new RegExp(process.env.JAYSWORLD_QA_FILTER).test(name))
     return;
   let browser;
@@ -703,9 +718,21 @@ try {
   await writeFile(
     resolve(
       output,
-      process.env.JAYSWORLD_QA_FILTER ? 'browser-focused-results.json' : 'browser-results.json',
+      shardCount > 1
+        ? `browser-shard-${shardNumber}-results.json`
+        : process.env.JAYSWORLD_QA_FILTER
+          ? 'browser-focused-results.json'
+          : 'browser-results.json',
     ),
-    JSON.stringify({ base, liveRadio: process.env.JAYSWORLD_LIVE_RADIO === '1', results }, null, 2),
+    JSON.stringify(
+      { base, shard, liveRadio: process.env.JAYSWORLD_LIVE_RADIO === '1', results },
+      null,
+      2,
+    ),
   );
+}
+if (!results.length) {
+  console.error('No browser journeys selected; check the shard and optional filter.');
+  process.exitCode = 1;
 }
 if (results.some((r) => r.status === 'fail')) process.exitCode = 1;
