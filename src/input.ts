@@ -54,6 +54,11 @@ export class Input {
       'keydown',
       (e) => {
         if (this.paused) return;
+        if (
+          (e.target as HTMLElement)?.closest?.('input,select,textarea') ||
+          (['Space', 'Enter'].includes(e.code) && (e.target as HTMLElement)?.closest?.('button,a'))
+        )
+          return;
         if (drivingKeys.has(e.code)) {
           e.preventDefault();
           this.keys.add(e.code);

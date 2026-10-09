@@ -39,6 +39,20 @@ export const materials = {
   cloth: mat('#577e9c'),
 };
 
+/** Close driving cameras can pass under palms; nearby leaf fragments yield the view. */
+export function clearCameraFoliage(material: THREE.MeshStandardMaterial) {
+  const previous = material.onBeforeCompile;
+  material.onBeforeCompile = (shader, renderer) => {
+    previous.call(material, shader, renderer);
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <clipping_planes_fragment>',
+      '#include <clipping_planes_fragment>\nif (length(vViewPosition) < 4.5) discard;',
+    );
+  };
+  const key = material.customProgramCacheKey.bind(material);
+  material.customProgramCacheKey = () => key() + '-clear-close-foliage';
+}
+
 export function box(
   parent: THREE.Object3D,
   dimensions: [number, number, number],

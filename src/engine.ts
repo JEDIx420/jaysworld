@@ -9,6 +9,8 @@ import { inWorld, waterAt, type Point } from './village';
 import { drawVillageMap } from './map';
 import { createSky, CONSTELLATIONS } from './sky';
 import { CROC_NAMES } from './wildlife';
+import { groundHeight } from './terrain';
+import { shouldYield, safeTravel } from './safety';
 import { PLACES, nearestPlace, type Place } from './projects';
 
 export interface JourneyOptions {
@@ -34,7 +36,7 @@ export interface Journey {
   pause: () => void;
   quality: (performance: boolean) => void;
   night: (enabled: boolean) => void;
-  camera: () => void;
+  camera: (style?: 'close' | 'wide') => void;
   feedCroc: () => void;
   tourObservatory: () => void;
   visit: (place: Place) => void;
@@ -44,6 +46,7 @@ export interface Journey {
   hunt: () => void;
   constellation: (id: string) => void;
   setPassenger: (index: number, onboard: boolean) => void;
+  setDuty: (enabled: boolean) => void;
   serve: (item: string) => void;
   route: (points: readonly Point[]) => void;
   dispose: () => void;
@@ -94,6 +97,24 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     auto = makeAuto();
   scene.add(auto.group);
   const sky = createSky(scene);
+  const trail = new THREE.InstancedMesh(
+    new THREE.BufferGeometry().setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute([0, 0, -0.6, -0.3, 0, 0.3, 0.3, 0, 0.3], 3),
+    ),
+    new THREE.MeshBasicMaterial({
+      color: '#f2cf83',
+      transparent: true,
+      opacity: 0.82,
+      depthWrite: false,
+    }),
+    100,
+  );
+  trail.name = 'navigation:road-arrows';
+  trail.count = 0;
+  trail.frustumCulled = false;
+  scene.add(trail);
+  const routeDummy = new THREE.Object3D();
   const passenger = makePerson('#b97673', true);
   passenger.group.position.set(0.28, -0.3, 0.66);
   passenger.group.rotation.y = Math.PI;
@@ -107,9 +128,10 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     desiredCamera = new THREE.Vector3();
   const map = document.getElementById('minimap') as HTMLCanvasElement;
   const atlas = document.getElementById('village-atlas') as HTMLCanvasElement;
-  let orbitYaw = -0.6,
-    elevation = 0.61,
-    distance = 25,
+  let cameraStyle: 'close' | 'wide' = 'close';
+  let orbitYaw = -0.35,
+    elevation = 0.36,
+    distance = 13,
     frame = 0,
     lastRendered = 0,
     lastFrame = performance.now(),
@@ -146,10 +168,11 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     options.onView(next, title, detail);
   };
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const resetCamera = () => {
-    orbitYaw = -0.6;
-    elevation = 0.61;
-    distance = 25;
+  const resetCamera = (style = cameraStyle) => {
+    cameraStyle = style;
+    orbitYaw = new THREE.Euler().setFromQuaternion(currentQ, 'YXZ').y - 0.35;
+    elevation = style === 'close' ? 0.36 : 0.61;
+    distance = style === 'close' ? 13 : 25;
   };
   const reset = (place?: Place) => {
     if (mode !== 'drive') view('drive');
@@ -189,7 +212,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     } else
       distance = THREE.MathUtils.clamp(
         distance + delta * 0.02,
-        mode === 'croc' ? 5 : mode === 'storefront' ? 9 : 14,
+        mode === 'croc' ? 5 : mode === 'storefront' ? 7 : 8,
         mode === 'croc' ? 28 : 55,
       );
   };
@@ -226,18 +249,34 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     const inputPaused = options.isPaused() || document.hidden || contextLost;
     const paused = inputPaused || mode !== 'drive';
     input.paused = inputPaused;
+    let yielding = false;
+    const residents = [...environment.life.residents(), ...environment.roadside.residents()];
     if (!paused) {
       accumulator += dt;
       while (accumulator >= FIXED_STEP) {
         previous.copy(current);
         previousQ.copy(currentQ);
         const command = input.read();
+        const velocity = vehicle.body.linvel();
+        if (shouldYield(current, { x: velocity.x, z: velocity.z }, current.y, residents)) {
+          command.brake = true;
+          command.throttle = 0;
+          yielding = true;
+        }
         throttle = command.throttle;
         braking = command.brake;
         vehicle.beforeStep(command);
         world.step();
         current.copy(vehicle.body.translation());
         currentQ.copy(vehicle.body.rotation());
+        const safe = safeTravel(previous, current, current.y, residents);
+        if (safe < 1) {
+          current.x = previous.x + (current.x - previous.x) * safe;
+          current.z = previous.z + (current.z - previous.z) * safe;
+          vehicle.body.setTranslation(current, true);
+          vehicle.body.setLinvel({ x: 0, y: vehicle.body.linvel().y, z: 0 }, true);
+          yielding = true;
+        }
         if (!started && Math.abs(command.throttle) > 0.05) {
           started = true;
           options.onDrive();
@@ -275,7 +314,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       item.mesh.position.copy(item.body.translation());
       item.mesh.quaternion.copy(item.body.rotation());
     }
-    environment.update(reducedMotion ? 0 : elapsed, dt);
+    environment.update(reducedMotion && mode !== 'croc' ? 0 : elapsed, dt, current);
     nightAmount += (nightTarget - nightAmount) * (1 - Math.exp(-visualDt * 1.1));
     (scene.background as THREE.Color).copy(dayColor).lerp(nightColor, nightAmount);
     (scene.fog as THREE.Fog).color.copy(scene.background as THREE.Color);
@@ -295,12 +334,16 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       mode === 'croc'
         ? environment.wildlife.position(crocIndex)
         : mode === 'storefront' && viewPlace
-          ? new THREE.Vector3(viewPlace.position.x, 1.4, viewPlace.position.z)
+          ? new THREE.Vector3(
+              viewPlace.position.x,
+              groundHeight(viewPlace.position.x, viewPlace.position.z) + 1.8,
+              viewPlace.position.z,
+            )
           : auto.group.position;
     target.lerp(focus, 1 - Math.exp(-dt * 5));
     if (mode === 'stars') {
       const p = PLACES.find((p) => p.id === 'space')!.position;
-      desiredCamera.set(p.x, 8, p.z);
+      desiredCamera.set(p.x, groundHeight(p.x, p.z) + 8, p.z);
       camera.position.lerp(desiredCamera, 1 - Math.exp(-dt * 6));
       const direction = sky.direction(orbitYaw, elevation, 1);
       camera.lookAt(camera.position.clone().add(direction));
@@ -312,13 +355,21 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
         target.y + Math.sin(elevation) * distance,
         target.z + Math.cos(orbitYaw) * Math.cos(elevation) * distance,
       );
+      desiredCamera.y = Math.max(
+        desiredCamera.y,
+        groundHeight(desiredCamera.x, desiredCamera.z) + 1.3,
+      );
       if (camera.position.lengthSq() === 0) camera.position.copy(desiredCamera);
       else camera.position.lerp(desiredCamera, 1 - Math.exp(-dt * 4));
-      camera.lookAt(target.x, target.y + 0.5, target.z);
+      camera.position.y = Math.max(
+        camera.position.y,
+        groundHeight(camera.position.x, camera.position.z) + 1.0,
+      );
+      camera.lookAt(target.x, target.y + 0.65, target.z);
     }
     sky.update(camera, nightAmount, mode === 'stars');
-    sun.position.set(current.x - 42, 62, current.z + 33);
-    sun.target.position.set(current.x, 0, current.z);
+    sun.position.set(current.x - 42, current.y + 62, current.z + 33);
+    sun.target.position.set(current.x, current.y, current.z);
     sun.target.updateMatrixWorld();
     if (mode === 'croc') {
       const activity = environment.wildlife.activity(crocIndex);
@@ -346,6 +397,10 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       canvas.dataset.rendered = 'true';
     }
     // Read-only diagnostics make meaningful end-to-end driving assertions possible.
+    canvas.dataset.safety = yielding ? 'yielding' : 'clear';
+    canvas.dataset.y = current.y.toFixed(3);
+    canvas.dataset.elevation = groundHeight(current.x, current.z).toFixed(2);
+    canvas.dataset.route = String(routePoints.length);
     canvas.dataset.x = current.x.toFixed(3);
     canvas.dataset.z = current.z.toFixed(3);
     canvas.dataset.speed = vehicle.speed.toFixed(3);
@@ -369,7 +424,9 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     night(enabled) {
       nightTarget = enabled ? 1 : 0;
     },
-    camera: resetCamera,
+    camera(style) {
+      resetCamera(style);
+    },
     visit(place) {
       viewPlace = place;
       view(
@@ -381,7 +438,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       );
       orbitYaw = Math.atan2(place.trigger.x - place.position.x, place.trigger.z - place.position.z);
       elevation = 0.35;
-      distance = 20;
+      distance = 15;
     },
     leaveView() {
       view('drive');
@@ -427,11 +484,30 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       environment.life.setPassenger(index, onboard);
       passenger.group.visible = onboard;
     },
+    setDuty(enabled) {
+      environment.life.setDuty(enabled);
+    },
     serve(item) {
       environment.life.serve(item);
     },
     route(points) {
       routePoints = points;
+      let count = 0,
+        travelled = 0;
+      for (let i = 1; i < points.length && count < 100; i++) {
+        const a = points[i - 1],
+          b = points[i];
+        travelled += Math.hypot(b.x - a.x, b.z - a.z);
+        if (travelled < 9) continue;
+        travelled = 0;
+        routeDummy.position.set(b.x, groundHeight(b.x, b.z) + 0.14, b.z);
+        routeDummy.rotation.set(0, Math.atan2(a.x - b.x, a.z - b.z), 0);
+        routeDummy.scale.setScalar(1);
+        routeDummy.updateMatrix();
+        trail.setMatrixAt(count++, routeDummy.matrix);
+      }
+      trail.count = count;
+      trail.instanceMatrix.needsUpdate = true;
     },
     dispose() {
       disposed = true;

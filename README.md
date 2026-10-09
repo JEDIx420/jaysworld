@@ -4,18 +4,20 @@ A driveable personal portfolio set in a Kerala-inspired backwater village. Take 
 
 **GitHub Pages URL:** https://jedix420.github.io/jaysworld/ (run the manual publishing workflow to publish a new version).
 
-## The village edition
+## The ridge and village edition
 
-- A larger 460 × 540 metre village boundary, nine connected road paths, six districts, eleven passenger stops, a market, ferry landing, paddy lanes, houses, and two canal crossings.
-- A three-wheel auto with progressive acceleration and braking, speed-sensitive steering, suspension, collisions, a closer follow camera, and original procedural exhaust, rattle, road, brake, horn, and village sounds.
-- Passenger pickup/drop-off journeys that earn game rupees. Buy chaya, pazhampori, or samosas; wallet and purchase totals persist on your device.
-- Seven storefronts for Jay, Eagle Eye, OpsFlash, RIFT, Music & Beats, SALTWATER, and The Quiet Between Stars. Free three-page newspapers introduce each project and its interactive exhibit.
+- A larger 460 × 540 metre village boundary, fourteen connected road paths, six districts, eleven passenger stops, a market, ferry landing, paddy lanes, houses, and two canal crossings.
+- A three-wheel auto with progressive acceleration and braking, speed-sensitive steering, suspension, matching terrain/road collisions, a close driving camera with a scenic preset, and original procedural exhaust, rattle, road, brake, horn, and village sounds.
+- Free roam by default. Toggle taxi duty on for passenger pickup/drop-off journeys and game rupees, then off whenever you want to explore. Buy chaya, pazhampori, or samosas; wallet, purchase totals and duty preference persist on your device.
+- Seven storefronts for Jay, Eagle Eye, OpsFlash, RIFT, Music & Beats, SALTWATER, and The Quiet Between Stars. Free three-page reading surfaces introduce each project and its interactive exhibit: a tea-shop newspaper, studio notes, operations brief, workshop log, record sleeve, wetland field journal and observatory journal.
+- An elevated, winding observatory climb with continuous guardrails, a level summit landing, wooded slopes and terrace planting. Crop beds and bunds leave asphalt and shoulders clear.
+- Cows and goats graze and wander; banana gardens, wells, laundry and social groups bring life to the verges. Plain red/orange processions, a white-clothed village gathering and two animated excavators close the outward roads with physical barriers. People and animals have early-yield and swept protection.
 - Three crocodiles to observe swimming, surfacing, submerging, and hunting fish, with resident selection, orbit, and zoom.
 - A telescope view with illustrated constellations and magnification, plus golden-hour and evening lighting.
-- Ente Radio starts when you start the experience. The mixing desk adds filter, bass, echo, room, and wobble effects to supported streams or your local audio. The beat sequencer remains available on the newspaper's back page.
-- Keyboard and touch controls, a local minimap and full village atlas, directions, project links, and no-WebGL/no-JavaScript fallbacks.
+- Ente Radio starts on the first click after loading, including a menu click, or the first driving input. The mixing desk adds filter, bass, echo, room, and wobble effects to supported streams or your local audio. The beat sequencer remains available on the record sleeve’s interactive page.
+- Keyboard and touch controls, a local minimap and clickable village atlas with zoom/pan and keyboard selection. Directions follow the curved roads with gold arrows, a heading cue and remaining distance. Project links and no-WebGL/no-JavaScript fallbacks remain available.
 
-This is **v0.3**, extending the existing Three.js / Rapier setup. The setting and detailed procedural assets are original. It is a fictional Kerala village; authored hero assets and terrain remain future craft work.
+This is **v0.4**, extending the existing Three.js / Rapier setup. The setting and detailed procedural assets are original. It is a fictional Kerala village; bespoke hero assets and physical-device performance measurements remain further craft work.
 
 ## Run locally
 
@@ -42,7 +44,7 @@ No account, secret, paid API, or backend is required. Radio needs internet acces
 | Drag / scroll | Orbit / zoom camera                                       |
 | Touch         | Left stick to drive, another finger on the world to orbit |
 
-Start driving enables Ente Radio and auto sounds; either can be muted. Project, radio, and settings dialogs pause driving. Storefront, crocodile, and telescope modes park the auto while allowing camera input. Places provides free papers, directions, and direct storefront visits. Direct visits and resets cancel an active fare. Radio continues while reading until stopped.
+The first click after loading enables Ente Radio and auto sounds; either can be muted. Project, radio, and settings dialogs pause driving. Storefront, crocodile, and telescope modes park the auto while allowing camera input. Places provides free project notes, pointer/keyboard directions, zoom/pan and direct storefront visits. In the atlas, arrows select a stop and Enter sets directions; Home/End select the first/last stop. Switching taxi duty off, direct visits and resets cancel an active fare without payment. Radio continues while reading until stopped.
 
 ## Build and verification
 
@@ -71,25 +73,30 @@ The lightweight project interface loads separately from the 3D engine. The physi
 
 ## Source
 
-| File                 | Responsibility                                            |
-| -------------------- | --------------------------------------------------------- |
-| src/main.ts          | Interface, navigation, exhibits, state, loading, fallback |
-| src/engine.ts        | Simulation, rendering, camera, lighting, map, quality     |
-| src/vehicle.ts       | Rapier chassis and three-wheel handling                   |
-| src/input.ts         | Keyboard and independent touch pointer ownership          |
-| src/environment.ts   | Village layout, road, scenery, colliders, wildlife        |
-| src/models.ts        | Original procedural models and material batching          |
-| src/demos.ts         | Beat sequencer, reconciliation and project interactions   |
-| src/radio.ts         | Default station, safe directory data, playback lifecycle  |
-| src/radio-effects.ts | Live filter, EQ, echo, reverb and wobble                  |
-| src/village.ts       | Shared roads, districts, stops, passengers and routing    |
-| src/fares.ts         | Validated local economy and pickup / drop-off rules       |
-| src/village-life.ts  | Market, ferry, NPCs, scenery and tea table                |
-| src/wildlife.ts      | Crocodile swim / dive / hunt animation                    |
-| src/sky.ts           | Illustrated stars and constellation patterns              |
-| src/map.ts           | Local minimap and full village atlas                      |
-| src/audio.ts         | Original procedural engine, horn and ambience             |
-| src/projects.ts      | Public project content, links and world locations         |
+| File                 | Responsibility                                                    |
+| -------------------- | ----------------------------------------------------------------- |
+| src/main.ts          | Interface, navigation, exhibits, state, loading, fallback         |
+| src/engine.ts        | Simulation, rendering, camera, lighting, map, quality             |
+| src/vehicle.ts       | Rapier chassis and three-wheel handling                           |
+| src/input.ts         | Keyboard and independent touch pointer ownership                  |
+| src/environment.ts   | Village layout, road, scenery, colliders, wildlife                |
+| src/models.ts        | Original procedural models and material batching                  |
+| src/demos.ts         | Beat sequencer, reconciliation and project interactions           |
+| src/radio.ts         | Default station, safe directory data, playback lifecycle          |
+| src/radio-effects.ts | Live filter, EQ, echo, reverb and wobble                          |
+| src/village.ts       | Shared roads, districts, stops, passengers and routing            |
+| src/fares.ts         | Validated local economy and pickup / drop-off rules               |
+| src/village-life.ts  | Market, ferry, NPCs, scenery and tea table                        |
+| src/wildlife.ts      | Crocodile swim / dive / hunt animation                            |
+| src/sky.ts           | Illustrated stars and constellation patterns                      |
+| src/map.ts           | Curved map, atlas hit testing, zoom/pan projection and directions |
+| src/terrain.ts       | Shared indexed mountain surface and exact triangle heights        |
+| src/surfaces.ts      | Visible/physical ground and road-safe field beds                  |
+| src/roadside.ts      | Livestock, gardens, ridge forest, crowds and roadwork models      |
+| src/safety.ts        | Early yielding and swept resident/animal protection               |
+| src/exhibit-art.ts   | Original vector covers and venue-specific reader identities       |
+| src/audio.ts         | Original procedural engine, horn and ambience                     |
+| src/projects.ts      | Public project content, links and world locations                 |
 
 ## Credits and scope
 

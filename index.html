@@ -82,7 +82,11 @@
       </div>
     </main>
     <aside class="hud fare-card" id="fare-card" aria-label="Passenger fare">
-      <div class="fare-top"><span>AUTO DUTY</span><strong id="wallet">₹0</strong></div>
+      <div class="fare-top">
+        <button id="taxi-toggle" type="button" aria-pressed="false" aria-label="Toggle taxi duty">
+          OFF DUTY <i></i></button
+        ><strong id="wallet">₹0</strong>
+      </div>
       <strong id="fare-title">Leela is waiting by the tea shop</strong>
       <p id="fare-description">Pick up passengers. Earn a little. Stay for a chaya.</p>
       <div class="fare-bottom">
@@ -90,6 +94,14 @@
         ><button id="fare-action" type="button" hidden>Pick up <kbd>E</kbd></button
         ><button id="fare-route" type="button">Show route</button>
       </div>
+    </aside>
+    <aside class="hud navigation-card" id="navigation-card" hidden aria-label="Driving directions">
+      <span id="navigation-arrow" aria-hidden="true">↑</span>
+      <div>
+        <small id="navigation-destination"></small><strong id="navigation-instruction"></strong
+        ><span id="navigation-distance"></span>
+      </div>
+      <button id="navigation-clear" type="button" aria-label="Clear directions">×</button>
     </aside>
     <section class="hud view-panel" id="view-panel" hidden aria-label="Village visit">
       <p class="eyebrow" id="view-kicker">PARKED UP</p>
@@ -187,18 +199,24 @@
       </div>
       <h1 id="places-title">Follow your curiosity.</h1>
       <p class="dialog-intro">
-        Six districts. Eleven passenger stops. Pick a route, visit a storefront, or read a paper
-        here.
+        Tap a numbered place on the map for directions. Explore at your own pace, or switch on taxi
+        duty to earn a chaya.
       </p>
       <canvas
         id="village-atlas"
         width="840"
         height="840"
-        role="img"
-        aria-label="The expanded village road map. Seven numbered projects, with your auto and current route."
+        role="group"
+        tabindex="0"
+        aria-label="Interactive village map. Tap numbered projects. Drag to pan. Arrow keys choose a project; Enter sets directions."
       ></canvas>
+      <div class="atlas-controls">
+        <span id="map-selection">Tap a numbered place · drag to pan</span
+        ><button id="atlas-zoom-out" type="button" aria-label="Zoom out on village map">−</button
+        ><button id="atlas-zoom-in" type="button" aria-label="Zoom in on village map">+</button>
+      </div>
       <p class="map-legend">
-        ● Projects &nbsp; ▲ Your auto &nbsp; - - Current route &nbsp; · Fictional Kerala village
+        ● Tap a project &nbsp; ▲ Your auto &nbsp; - - Your route &nbsp; ▰ Road closed
       </p>
       <div id="places-list" class="places-list"></div>
       <p class="dialog-foot">The road is yours. Every place has something to explore.</p>
@@ -211,8 +229,9 @@
         </button>
       </div>
       <div class="paper-masthead">
-        <small>THE VILLAGE EDITION · KERALA, INDIA</small><strong>The Kerala Dispatch</strong
-        ><span>Ideas, experiments &amp; a good cup of chaya.</span>
+        <small id="reader-edition">THE VILLAGE EDITION · KERALA, INDIA</small
+        ><strong id="reader-masthead">The Kerala Dispatch</strong
+        ><span id="reader-subtitle">Ideas, experiments &amp; a good cup of chaya.</span>
       </div>
       <nav class="paper-tabs" aria-label="Newspaper pages">
         <button data-page="0" aria-pressed="true" type="button">01 · The story</button
@@ -227,8 +246,11 @@
         </div>
       </div>
       <section class="paper-page paper-story" data-paper-page="0">
-        <p class="project-summary" id="project-summary"></p>
-        <p id="project-body"></p>
+        <figure class="project-art" id="project-art"></figure>
+        <div class="story-lede">
+          <p class="project-summary" id="project-summary"></p>
+          <p id="project-body"></p>
+        </div>
         <div id="project-links" class="project-links"></div>
       </section>
       <section class="paper-page" data-paper-page="1" hidden>
@@ -331,6 +353,10 @@
       <div class="setting-row">
         <div><strong>Time of day</strong><small>Stay for the evening.</small></div>
         <button id="time-button" type="button" aria-pressed="false">Golden hour</button>
+      </div>
+      <div class="camera-presets">
+        <span>Driving view</span><button id="camera-close" type="button">Close ride</button
+        ><button id="camera-wide" type="button">Scenic view</button>
       </div>
       <div class="controls-guide">
         <div><kbd>W A S D</kbd><span>Drive / reverse</span></div>

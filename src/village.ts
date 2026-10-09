@@ -85,10 +85,16 @@ export const ROADS: readonly VillageRoad[] = [
     width: 7,
     points: [
       [9, -48],
-      [25, -95],
-      [43, -150],
+      [13, -82],
+      [32, -102],
+      [54, -120],
+      [55, -145],
+      [31, -161],
+      [17, -182],
+      [30, -202],
       [50, -212],
-      [42, -245],
+      [58, -235],
+      [42, -248],
     ],
   },
   {
@@ -129,7 +135,115 @@ export const ROADS: readonly VillageRoad[] = [
       [-68, 113],
     ],
   },
+  {
+    id: 'north-exit',
+    name: 'North road · procession',
+    width: 7,
+    points: [
+      [-153, -182],
+      [-157, -216],
+      [-158, -245],
+    ],
+  },
+  {
+    id: 'south-exit',
+    name: 'South road · procession',
+    width: 7,
+    points: [
+      [-185, 205],
+      [-192, 230],
+      [-195, 254],
+    ],
+  },
+  {
+    id: 'west-exit',
+    name: 'Village square · gathering',
+    width: 7,
+    points: [
+      [-272, 176],
+      [-289, 177],
+      [-302, 180],
+    ],
+  },
+  {
+    id: 'work-road',
+    name: 'Canal road · repairs',
+    width: 6,
+    points: [
+      [-143, 83],
+      [-182, 77],
+      [-227, 76],
+      [-252, 77],
+    ],
+  },
+  {
+    id: 'ridge-exit',
+    name: 'Ridge road · repairs',
+    width: 6,
+    points: [
+      [42, -248],
+      [23, -255],
+      [8, -256],
+    ],
+  },
 ];
+export const ROAD_CLOSURES = [
+  {
+    id: 'red',
+    x: -158,
+    z: -239,
+    yaw: 0,
+    kind: 'procession',
+    color: '#c54d43',
+    title: 'NORTH ROAD',
+    detail: 'Procession ahead · take it easy',
+    people: 24,
+  },
+  {
+    id: 'orange',
+    x: -194,
+    z: 248,
+    yaw: Math.PI,
+    kind: 'procession',
+    color: '#e1933d',
+    title: 'SOUTH ROAD',
+    detail: 'Procession ahead · village diversion',
+    people: 24,
+  },
+  {
+    id: 'white',
+    x: -296,
+    z: 179,
+    yaw: Math.PI / 2,
+    kind: 'gathering',
+    color: '#eee8d6',
+    title: 'VILLAGE MEETING',
+    detail: 'Road closed · people at the square',
+    people: 28,
+  },
+  {
+    id: 'canal-work',
+    x: -246,
+    z: 77,
+    yaw: Math.PI / 2,
+    kind: 'works',
+    color: '#e6aa3d',
+    title: 'ROAD WORK',
+    detail: 'Repairs in progress · turn around',
+    people: 3,
+  },
+  {
+    id: 'ridge-work',
+    x: 13,
+    z: -256,
+    yaw: Math.PI / 2,
+    kind: 'works',
+    color: '#e6aa3d',
+    title: 'RIDGE REPAIRS',
+    detail: 'The road ends here · enjoy the view',
+    people: 3,
+  },
+] as const;
 export const DISTRICTS = [
   { name: 'Old village', x: -36, z: 19 },
   { name: 'Market quarter', x: -162, z: 26 },
@@ -239,6 +353,56 @@ export const PASSENGERS = [
 }[];
 export const stopById = (id: TaxiStopId) => TAXI_STOPS.find((s) => s.id === id)!;
 export const distance2 = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.z - b.z);
+/** One Catmull–Rom path for the road mesh, crop clearance, atlas and directions. */
+export function sampleRoad(road: VillageRoad, spacing = 2): Point[] {
+  const points: Point[] = [],
+    count = road.points.length;
+  const at = (i: number): Point => {
+    if (road.closed) {
+      const p = road.points[(i + count) % count];
+      return { x: p[0], z: p[1] };
+    }
+    if (i < 0) {
+      const [a, b] = road.points;
+      return { x: 2 * a[0] - b[0], z: 2 * a[1] - b[1] };
+    }
+    if (i >= count) {
+      const a = road.points[count - 1],
+        b = road.points[count - 2];
+      return { x: 2 * a[0] - b[0], z: 2 * a[1] - b[1] };
+    }
+    return { x: road.points[i][0], z: road.points[i][1] };
+  };
+  for (let i = 0; i < count - (road.closed ? 0 : 1); i++) {
+    const a = at(i - 1),
+      b = at(i),
+      c = at(i + 1),
+      d = at(i + 2);
+    const steps = Math.max(8, Math.ceil(distance2(b, c) / spacing));
+    for (let j = 0; j < steps; j++) {
+      const t = j / steps,
+        t2 = t * t,
+        t3 = t2 * t;
+      const value = (axis: 'x' | 'z') =>
+        0.5 *
+        (2 * b[axis] +
+          (-a[axis] + c[axis]) * t +
+          (2 * a[axis] - 5 * b[axis] + 4 * c[axis] - d[axis]) * t2 +
+          (-a[axis] + 3 * b[axis] - 3 * c[axis] + d[axis]) * t3);
+      points.push({ x: value('x'), z: value('z') });
+    }
+  }
+  points.push(at(road.closed ? 0 : count - 1));
+  return points;
+}
+export const ROAD_PATHS = ROADS.map((road) => ({ ...road, samples: sampleRoad(road) }));
+export function roadClearance(x: number, z: number) {
+  let closest = Infinity;
+  for (const road of ROAD_PATHS)
+    for (const p of road.samples)
+      closest = Math.min(closest, Math.hypot(p.x - x, p.z - z) - road.width / 2);
+  return closest;
+}
 export function waterAt(x: number, z: number) {
   const backwater = x > 76;
   const oldCanal = x > 19 && x < 90 && Math.abs(z - 8) < 5 && Math.abs(x - 55) > 4.8;
@@ -251,21 +415,19 @@ export function inWorld(x: number, z: number) {
     x > WORLD_BOUNDS.minX && x < WORLD_BOUNDS.maxX && z > WORLD_BOUNDS.minZ && z < WORLD_BOUNDS.maxZ
   );
 }
-const key = (p: Point) => `${p.x},${p.z}`;
+const key = (p: Point) => `${p.x.toFixed(5)},${p.z.toFixed(5)}`;
 const nodes = new Map<string, Point>();
 const edges = new Map<string, Map<string, number>>();
-for (const road of ROADS) {
-  for (let i = 0; i < road.points.length; i++) {
-    const [x, z] = road.points[i],
-      p = { x, z },
+for (const road of ROAD_PATHS) {
+  for (let i = 0; i < road.samples.length; i++) {
+    const p = road.samples[i],
       id = key(p);
     nodes.set(id, p);
     if (!edges.has(id)) edges.set(id, new Map());
   }
-  for (let i = 0; i < road.points.length - (road.closed ? 0 : 1); i++) {
-    const a = { x: road.points[i][0], z: road.points[i][1] },
-      q = road.points[(i + 1) % road.points.length],
-      b = { x: q[0], z: q[1] };
+  for (let i = 0; i < road.samples.length - 1; i++) {
+    const a = road.samples[i],
+      b = road.samples[i + 1];
     edges.get(key(a))!.set(key(b), distance2(a, b));
     edges.get(key(b))!.set(key(a), distance2(a, b));
   }
@@ -280,20 +442,45 @@ export function routeBetween(start: Point, end: Point): { points: Point[]; dista
     target = key(b),
     cost = new Map([[source, 0]]),
     previous = new Map<string, string>(),
-    queue = new Set(nodes.keys());
-  while (queue.size) {
-    let best: string | undefined;
-    for (const id of queue)
-      if (best === undefined || (cost.get(id) ?? Infinity) < (cost.get(best) ?? Infinity))
-        best = id;
-    if (best === undefined || !Number.isFinite(cost.get(best))) break;
-    queue.delete(best);
+    queue: { id: string; cost: number }[] = [];
+  const push = (id: string, value: number) => {
+    let i = queue.length;
+    queue.push({ id, cost: value });
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (queue[p].cost <= value) break;
+      queue[i] = queue[p];
+      i = p;
+    }
+    queue[i] = { id, cost: value };
+  };
+  const pop = () => {
+    const first = queue[0],
+      last = queue.pop()!;
+    if (queue.length) {
+      let i = 0;
+      while (i * 2 + 1 < queue.length) {
+        let child = i * 2 + 1;
+        if (child + 1 < queue.length && queue[child + 1].cost < queue[child].cost) child++;
+        if (last.cost <= queue[child].cost) break;
+        queue[i] = queue[child];
+        i = child;
+      }
+      queue[i] = last;
+    }
+    return first;
+  };
+  push(source, 0);
+  while (queue.length) {
+    const { id: best, cost: value } = pop();
+    if (value !== cost.get(best)) continue;
     if (best === target) break;
     for (const [next, length] of edges.get(best)!) {
       const candidate = cost.get(best)! + length;
       if (candidate < (cost.get(next) ?? Infinity)) {
         cost.set(next, candidate);
         previous.set(next, best);
+        push(next, candidate);
       }
     }
   }

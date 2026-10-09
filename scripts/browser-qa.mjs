@@ -178,7 +178,7 @@ async function capture(page, name) {
 }
 async function ready(page, hash = '') {
   await page.goto(base + hash, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('#world[data-rendered=true]', { timeout: 30000 });
+  await page.waitForSelector('#world[data-rendered=true]', { timeout: 45000 });
   await page.waitForTimeout(300);
 }
 async function places(page) {
@@ -348,6 +348,39 @@ try {
         await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
         false,
       );
+      await places(page);
+      const atlasBox = await page.locator('#village-atlas').boundingBox();
+      assert.ok(atlasBox);
+      await page.touchscreen.tap(
+        atlasBox.x + atlasBox.width * (0.5 + 27 / 580),
+        atlasBox.y + atlasBox.height * (0.5 - 4 / 580),
+      );
+      await page.waitForSelector('#navigation-card:not([hidden])');
+      assert.match(await page.locator('#navigation-destination').textContent(), /riverside studio/);
+      const cards = await Promise.all(
+        ['#fare-card', '#navigation-card', '#interaction-button', '#toast'].map((id) =>
+          page.locator(id).boundingBox(),
+        ),
+      );
+      const overlaps = (a, b) =>
+        a &&
+        b &&
+        a.x < b.x + b.width &&
+        a.x + a.width > b.x &&
+        a.y < b.y + b.height &&
+        a.y + a.height > b.y;
+      assert.ok(
+        !overlaps(cards[0], cards[1]) && !overlaps(cards[1], cards[2]),
+        'phone directions leave other controls clear',
+      );
+      assert.ok(
+        !overlaps(cards[3], cards[0]) &&
+          !overlaps(cards[3], cards[1]) &&
+          !overlaps(cards[3], cards[2]),
+        'phone route confirmation leaves directions and parking clear',
+      );
+      await capture(page, 'mobile-riding.png');
+      await page.locator('#navigation-clear').click();
       await visit(page, 'music');
       await capture(page, 'mobile-exhibit.png');
       assert.equal(await page.locator('#project-title').textContent(), 'Music & Beats');
@@ -528,6 +561,7 @@ try {
     async (page, context, errors) => {
       await ready(page);
       await page.locator('#start-driving').click();
+      await page.locator('#taxi-toggle').click();
       await page.locator('#fare-action').click();
       await page.waitForSelector('#fare-card[data-onboard="true"]');
       assert.match(await page.locator('#fare-description').textContent(), /passenger on board/);
@@ -538,6 +572,99 @@ try {
       await page.locator('[data-buy="tea"]').click();
       assert.equal(await page.locator('#wallet').textContent(), '₹0');
       assert.match(await page.locator('#toast').textContent(), /Take a passenger fare/);
+      assert.deepEqual(errors, []);
+    },
+  );
+  await run(
+    'first click audio, free roam, clickable atlas, taxi toggle and elevated observatory',
+    { viewport: { width: 1440, height: 900 } },
+    async (page, context, errors) => {
+      await ready(page);
+      assert.equal(await page.locator('#taxi-toggle').getAttribute('aria-pressed'), 'false');
+      await places(page); // First pointer gesture is a menu, not Start driving.
+      await page.waitForFunction(
+        () => document.getElementById('radio-now-name').textContent === 'Ente Radio 91.2',
+      );
+      assert.equal(await page.locator('#world').getAttribute('data-sound'), 'on');
+      await capture(page, 'village-atlas.png');
+      const rect = await page.locator('#village-atlas').boundingBox();
+      assert.ok(rect);
+      await page.mouse.click(
+        rect.x + rect.width * (0.5 + 130 / 580),
+        rect.y + rect.height * (0.5 - 212 / 580),
+      );
+      await page.locator('#places-dialog').waitFor({ state: 'hidden' });
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.route) > 100,
+      );
+      assert.match(
+        await page.locator('#navigation-destination').textContent(),
+        /hilltop observatory/,
+      );
+      assert.ok(
+        Math.abs(Number(await page.locator('#world').getAttribute('data-x')) + 51) < 0.2,
+        'directions do not teleport the auto',
+      );
+      assert.equal(await page.locator('#fare-action').isVisible(), false);
+      await capture(page, 'close-ride.png');
+      await page.locator('#radio-stop').click();
+      await page.locator('#taxi-toggle').click();
+      assert.equal(await page.locator('#taxi-toggle').getAttribute('aria-pressed'), 'true');
+      await page.locator('#fare-action').click();
+      await page.waitForSelector('#fare-card[data-onboard=true]');
+      await page.locator('#taxi-toggle').click();
+      assert.equal(await page.locator('#fare-card').getAttribute('data-onboard'), 'false');
+      assert.equal(await page.locator('#wallet').textContent(), '₹0');
+      assert.equal(
+        await page.locator('#radio-now').isVisible(),
+        false,
+        'radio stays stopped after later clicks',
+      );
+      await places(page);
+      await page.locator('#atlas-zoom-in').click();
+      assert.ok(Number(await page.locator('#village-atlas').getAttribute('data-zoom')) > 1);
+      const mapBox = await page.locator('#village-atlas').boundingBox();
+      assert.ok(mapBox);
+      const beforePan = await page.locator('#village-atlas').getAttribute('data-center-x');
+      await page.mouse.move(mapBox.x + mapBox.width * 0.5, mapBox.y + mapBox.height * 0.5);
+      await page.mouse.down();
+      await page.mouse.move(mapBox.x + mapBox.width * 0.7, mapBox.y + mapBox.height * 0.5, {
+        steps: 6,
+      });
+      await page.mouse.up();
+      assert.notEqual(
+        await page.locator('#village-atlas').getAttribute('data-center-x'),
+        beforePan,
+      );
+      assert.equal(
+        await page.locator('#places-dialog').isVisible(),
+        true,
+        'panning does not select a destination',
+      );
+      await page.locator('#village-atlas').focus();
+      await page.keyboard.press('Home');
+      await page.keyboard.press('ArrowRight');
+      assert.equal(await page.locator('#village-atlas').getAttribute('data-selected'), 'eagle-eye');
+      await page.keyboard.press('Enter');
+      await page.locator('#places-dialog').waitFor({ state: 'hidden' });
+      assert.match(await page.locator('#navigation-destination').textContent(), /riverside studio/);
+      await places(page);
+      await page.locator('[data-visit="space"]').click();
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.elevation) > 22,
+      );
+      await page.locator('#view-back').click();
+      await page.waitForFunction(() => Number(document.getElementById('world').dataset.zoom) < 14);
+      await page.getByRole('button', { name: 'Settings and controls' }).click();
+      await page.locator('#camera-wide').click();
+      await page.waitForFunction(() => Number(document.getElementById('world').dataset.zoom) > 24);
+      await capture(page, 'ridge-arrival.png');
+      await visit(page, 'space');
+      await capture(page, 'observatory-journal.png');
+      await closeProject(page);
+      await visit(page, 'rift');
+      await capture(page, 'workshop-log.png');
+      await closeProject(page);
       assert.deepEqual(errors, []);
     },
   );

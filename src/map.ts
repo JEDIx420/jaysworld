@@ -1,5 +1,6 @@
-import { ROADS, WORLD_BOUNDS, DISTRICTS, type Point } from './village';
+import { ROAD_PATHS, ROAD_CLOSURES, WORLD_BOUNDS, DISTRICTS, type Point } from './village';
 import { PLACES } from './projects';
+import { groundHeight } from './terrain';
 
 export function drawVillageMap(
   canvas: HTMLCanvasElement,
@@ -12,12 +13,17 @@ export function drawVillageMap(
   if (!ctx) return;
   const w = canvas.width,
     h = canvas.height;
+  const zoom = full ? Number(canvas.dataset.zoom ?? 1) : 1;
   const span = full
-    ? Math.max(WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX, WORLD_BOUNDS.maxZ - WORLD_BOUNDS.minZ) + 40
+    ? (Math.max(WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX, WORLD_BOUNDS.maxZ - WORLD_BOUNDS.minZ) +
+        40) /
+      zoom
     : 126;
   const scale = Math.min(w, h) / span;
-  const cx = full ? (WORLD_BOUNDS.maxX + WORLD_BOUNDS.minX) / 2 : position.x;
-  const cz = full ? 0 : position.z;
+  const cx = full
+    ? Number(canvas.dataset.centerX ?? (WORLD_BOUNDS.maxX + WORLD_BOUNDS.minX) / 2)
+    : position.x;
+  const cz = full ? Number(canvas.dataset.centerZ ?? 0) : position.z;
   const x = (v: number) => w / 2 + (v - cx) * scale,
     z = (v: number) => h / 2 + (v - cz) * scale;
   ctx.fillStyle = full ? '#d9d3b5' : '#1e4238';
@@ -35,14 +41,25 @@ export function drawVillageMap(
     ctx.stroke();
   }
   ctx.fillStyle = full ? '#77988c' : '#2e6257';
-  ctx.fillRect(x(76), 0, w, h);
+  ctx.fillRect(x(76), 0, w - x(76), h);
   ctx.fillRect(x(19), z(3), 71 * scale, 10 * scale);
   ctx.fillRect(x(-201), z(92), 7 * scale, 165 * scale);
   ctx.fillRect(0, z(-66), x(-266), 130 * scale);
-  ctx.lineCap = ctx.lineJoin = 'round';
-  for (const road of ROADS) {
+  // Real elevation contours make the winding ridge legible before driving it.
+  ctx.strokeStyle = full ? '#7b8b6470' : '#68875f60';
+  ctx.lineWidth = 1;
+  for (const level of [5, 10, 15, 20]) {
     ctx.beginPath();
-    road.points.forEach(([px, pz], i) => (i ? ctx.lineTo(x(px), z(pz)) : ctx.moveTo(x(px), z(pz))));
+    for (const line of contours[level]) {
+      ctx.moveTo(x(line[0].x), z(line[0].z));
+      ctx.lineTo(x(line[1].x), z(line[1].z));
+    }
+    ctx.stroke();
+  }
+  ctx.lineCap = ctx.lineJoin = 'round';
+  for (const road of ROAD_PATHS) {
+    ctx.beginPath();
+    road.samples.forEach((p, i) => (i ? ctx.lineTo(x(p.x), z(p.z)) : ctx.moveTo(x(p.x), z(p.z))));
     if (road.closed) ctx.closePath();
     ctx.strokeStyle = full ? '#ede6ca' : '#8d9b7c';
     ctx.lineWidth = Math.max(2, road.width * scale);
@@ -61,23 +78,41 @@ export function drawVillageMap(
     ctx.arc(x(end.x), z(end.z), full ? 10 : 6, 0, Math.PI * 2);
     ctx.stroke();
   }
-  ctx.font = `600 ${full ? 16 : 11}px sans-serif`;
+  for (const closure of ROAD_CLOSURES) {
+    ctx.save();
+    ctx.translate(x(closure.x), z(closure.z));
+    ctx.rotate(-closure.yaw);
+    ctx.fillStyle = closure.color;
+    ctx.fillRect(-7 * scale, -2 * scale, 14 * scale, 4 * scale);
+    ctx.restore();
+  }
+  ctx.textAlign = 'center';
+  if (full && (canvas.clientWidth >= 420 || zoom > 1.4)) {
+    ctx.font = '600 15px sans-serif';
+    ctx.fillStyle = '#53644d';
+    DISTRICTS.forEach((d) => {
+      const p = labelPositions[d.name] ?? d;
+      ctx.fillText(d.name.toUpperCase(), x(p.x), z(p.z));
+    });
+  }
+  ctx.font = `600 ${full ? 20 : 11}px sans-serif`;
   ctx.textAlign = 'center';
   PLACES.forEach((p, i) => {
+    if (full && canvas.dataset.selected === p.id) {
+      ctx.beginPath();
+      ctx.arc(x(p.trigger.x), z(p.trigger.z), 21, 0, Math.PI * 2);
+      ctx.fillStyle = '#bd814b';
+      ctx.fill();
+    }
     ctx.fillStyle = full ? '#244b40' : '#e6c485';
     ctx.beginPath();
-    ctx.arc(x(p.trigger.x), z(p.trigger.z), full ? 11 : 4, 0, Math.PI * 2);
+    ctx.arc(x(p.trigger.x), z(p.trigger.z), full ? 15 : 4, 0, Math.PI * 2);
     ctx.fill();
     if (full) {
       ctx.fillStyle = '#f3ead0';
-      ctx.fillText(String(i + 1), x(p.trigger.x), z(p.trigger.z) + 5);
+      ctx.fillText(String(i + 1), x(p.trigger.x), z(p.trigger.z) + 7);
     }
   });
-  if (full) {
-    ctx.font = '600 15px sans-serif';
-    ctx.fillStyle = '#53644d';
-    DISTRICTS.forEach((d) => ctx.fillText(d.name.toUpperCase(), x(d.x), z(d.z) - 25));
-  }
   ctx.save();
   ctx.translate(x(position.x), z(position.z));
   ctx.rotate(-yaw);
@@ -102,3 +137,105 @@ export function drawVillageMap(
     ctx.fillRect(w - 100, h - 38, 50 * scale, 3);
   }
 }
+
+/** Intrinsic atlas coordinates; pointer conversion also handles object-fit letterboxing. */
+export function atlasPosition(
+  p: Point,
+  width = 840,
+  height = 840,
+  zoom = 1,
+  center: Point = { x: -80, z: 0 },
+) {
+  const span =
+    Math.max(WORLD_BOUNDS.maxX - WORLD_BOUNDS.minX, WORLD_BOUNDS.maxZ - WORLD_BOUNDS.minZ) + 40;
+  const scale = (Math.min(width, height) / span) * zoom;
+  return {
+    x: width / 2 + (p.x - center.x) * scale,
+    y: height / 2 + (p.z - center.z) * scale,
+  };
+}
+export function atlasHit(
+  x: number,
+  y: number,
+  width = 840,
+  height = 840,
+  radius = 32,
+  zoom = 1,
+  center: Point = { x: -80, z: 0 },
+) {
+  let nearest: (typeof PLACES)[number] | undefined,
+    distance = radius;
+  for (const place of PLACES) {
+    const p = atlasPosition(place.trigger, width, height, zoom, center),
+      d = Math.hypot(x - p.x, y - p.y);
+    if (d <= distance) {
+      distance = d;
+      nearest = place;
+    }
+  }
+  return nearest;
+}
+export function navigationCue(position: Point, yaw: number, route: readonly Point[]) {
+  if (route.length < 2) return { instruction: 'Choose somewhere to explore', turn: 0, distance: 0 };
+  let ahead = route[route.length - 1],
+    length = 0,
+    remaining = 0;
+  for (let i = 1; i < route.length; i++) {
+    const d = Math.hypot(route[i].x - route[i - 1].x, route[i].z - route[i - 1].z);
+    remaining += d;
+    if (length < 13) {
+      ahead = route[i];
+      length += d;
+    }
+  }
+  const wanted = Math.atan2(position.x - ahead.x, position.z - ahead.z);
+  const delta = Math.atan2(Math.sin(wanted - yaw), Math.cos(wanted - yaw));
+  return {
+    instruction:
+      remaining < 8
+        ? 'Arrived · slow down, press E'
+        : Math.abs(delta) > 2.25
+          ? 'Turn around when safe'
+          : delta > 0.5
+            ? 'Bear left'
+            : delta < -0.5
+              ? 'Bear right'
+              : 'Follow the lane',
+    turn: -delta,
+    distance: remaining,
+  };
+}
+const contours: Record<number, Point[][]> = {};
+for (const level of [5, 10, 15, 20]) {
+  const lines: Point[][] = [];
+  for (let x = -100; x < 76; x += 8)
+    for (let z = -272; z < -72; z += 8) {
+      const corners = [
+          { x, z },
+          { x: x + 8, z },
+          { x: x + 8, z: z + 8 },
+          { x, z: z + 8 },
+        ],
+        crossings: Point[] = [];
+      for (let i = 0; i < 4; i++) {
+        const a = corners[i],
+          b = corners[(i + 1) % 4],
+          ha = groundHeight(a.x, a.z),
+          hb = groundHeight(b.x, b.z);
+        if (ha < level === hb < level) continue;
+        const t = (level - ha) / (hb - ha);
+        crossings.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t });
+      }
+      if (crossings.length >= 2) lines.push(crossings.slice(0, 2));
+    }
+  contours[level] = lines;
+}
+
+const labelPositions: Record<string, Point> = {
+  'Old village': { x: -8, z: 73 },
+  'Market quarter': { x: -158, z: 2 },
+  'Paddy country': { x: -102, z: 161 },
+  'Ferry & records': { x: -234, z: 103 },
+  'Observatory ridge': { x: 4, z: -191 },
+  'The backwater': { x: 112, z: 45 },
+};

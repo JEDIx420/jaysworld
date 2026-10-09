@@ -1,6 +1,6 @@
 # Malayalam radio and studio effects
 
-Verified 9 October 2026. The first Start driving gesture starts **Ente Radio 91.2**, alongside the auto sounds. Modern browser audio policy requires that gesture; this site does not try to bypass it. Radio can be stopped, switched, or adjusted independently of the engine.
+Verified 9 October 2026. The first click after the scene loads (including a menu click), or the first driving input, starts **Ente Radio 91.2**, alongside the auto sounds. Modern browser audio policy requires a user gesture; this site does not try to bypass it. Radio can be stopped, switched, or adjusted independently of the engine.
 
 | Station                | Homepage                          | HTTPS stream                                              | Verification / effect support                                                                                                                                          |
 | ---------------------- | --------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

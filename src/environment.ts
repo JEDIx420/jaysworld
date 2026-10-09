@@ -12,14 +12,18 @@ import {
   makeEgret,
   makeBench,
   materials,
+  clearCameraFoliage,
 } from './models';
 import { PLACES } from './projects';
 import { ROADS } from './village';
+import { groundHeight } from './terrain';
+import { createGround, addField } from './surfaces';
+import { createRoadside } from './roadside';
 import { createVillageLife } from './village-life';
 import { createWildlife } from './wildlife';
 
 export interface Environment {
-  update: (elapsed: number, dt: number) => void;
+  update: (elapsed: number, dt: number, driver?: THREE.Vector3) => void;
   dynamics: { mesh: THREE.Mesh; body: RAPIER.RigidBody }[];
   markers: { mesh: THREE.Mesh; x: number; z: number }[];
   setQuality: (performance: boolean) => void;
@@ -28,6 +32,7 @@ export interface Environment {
   crocPosition: THREE.Vector3;
   life: ReturnType<typeof createVillageLife>;
   wildlife: ReturnType<typeof createWildlife>;
+  roadside: ReturnType<typeof createRoadside>;
 }
 export const ROAD_POINTS = [
   [-51, 30],
@@ -43,7 +48,8 @@ export const ROAD_POINTS = [
 export const ROAD = new THREE.CatmullRomCurve3(
   ROAD_POINTS.map(([x, z]) => new THREE.Vector3(x, 0.045, z)),
   true,
-  'centripetal',
+  'catmullrom',
+  0.5,
 );
 const random = (seed: number) => () => {
   seed = (seed * 1664525 + 1013904223) >>> 0;
@@ -54,22 +60,30 @@ function strip(
   curve: THREE.CatmullRomCurve3,
   width: number,
   material: THREE.Material,
-  elevation = 0,
+  elevation = 0.06,
 ) {
   const verts: number[] = [],
-    indices: number[] = [];
-  for (let i = 0; i <= 300; i++) {
-    const p = curve.getPointAt(i / 300),
-      t = curve.getTangentAt(i / 300),
-      n = new THREE.Vector3(-t.z, 0, t.x).multiplyScalar(width / 2);
-    verts.push(p.x + n.x, p.y + elevation, p.z + n.z, p.x - n.x, p.y + elevation, p.z - n.z);
-    if (i < 300) {
+    indices: number[] = [],
+    uv: number[] = [];
+  const steps = Math.max(32, Math.ceil(curve.getLength() / 1.4));
+  for (let i = 0; i <= steps; i++) {
+    const p = curve.getPointAt(i / steps),
+      t = curve.getTangentAt(i / steps);
+    const n = new THREE.Vector3(-t.z, 0, t.x).normalize().multiplyScalar(width / 2);
+    for (const side of [1, -1]) {
+      const x = p.x + side * n.x,
+        z = p.z + side * n.z;
+      verts.push(x, groundHeight(x, z) + elevation, z);
+      uv.push(side === 1 ? 0 : 1, i / 6);
+    }
+    if (i < steps) {
       const j = i * 2;
       indices.push(j, j + 2, j + 1, j + 1, j + 2, j + 3);
     }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   g.setIndex(indices);
   g.computeVertexNormals();
   const mesh = new THREE.Mesh(g, material);
@@ -101,45 +115,31 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
   scene.add(statics);
   const dynamics: Environment['dynamics'] = [],
     markers: Environment['markers'] = [];
-  world.createCollider(
-    RAPIER.ColliderDesc.cuboid(245, 0.2, 285).setTranslation(-80, -0.2, 0).setFriction(0.95),
-  );
-  const groundMaterial = new THREE.MeshStandardMaterial({ color: '#608456', roughness: 1 });
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(520, 600), groundMaterial);
-  ground.rotation.x = -Math.PI / 2;
-  ground.position.x = -80;
-  ground.receiveShadow = true;
-  statics.add(ground);
-  statics.add(
-    strip(ROAD, 10.2, new THREE.MeshStandardMaterial({ color: '#ac7950', roughness: 1 }), -0.016),
-  );
-  statics.add(
-    strip(ROAD, 7.0, new THREE.MeshStandardMaterial({ color: '#47534b', roughness: 0.96 })),
-  );
+  createGround(scene, world);
   const curves = ROADS.map(
     (r) =>
       new THREE.CatmullRomCurve3(
-        r.points.map(([x, z]) => new THREE.Vector3(x, 0.045, z)),
+        r.points.map(([x, z]) => new THREE.Vector3(x, 0, z)),
         !!r.closed,
-        'centripetal',
+        'catmullrom',
+        0.5,
       ),
   );
+  const shoulderMaterial = new THREE.MeshStandardMaterial({ color: '#9a7250', roughness: 1 });
+  const asphaltMaterial = new THREE.MeshStandardMaterial({ color: '#48514b', roughness: 1 });
+  for (const [i, curve] of curves.entries()) {
+    const shoulder = strip(curve, ROADS[i].width + 2.6, shoulderMaterial, 0.025);
+    const road = strip(curve, ROADS[i].width, asphaltMaterial);
+    // The wheels raycast the same raised road triangles the visitor sees.
+    world.createCollider(
+      RAPIER.ColliderDesc.trimesh(
+        new Float32Array(road.geometry.attributes.position.array),
+        new Uint32Array(road.geometry.index!.array),
+      ).setFriction(0.95),
+    );
+    statics.add(shoulder, road);
+  }
   for (let i = 1; i < curves.length; i++) {
-    statics.add(
-      strip(
-        curves[i],
-        ROADS[i].width + 2.8,
-        new THREE.MeshStandardMaterial({ color: '#aa7b53', roughness: 1 }),
-        -0.015,
-      ),
-    );
-    statics.add(
-      strip(
-        curves[i],
-        ROADS[i].width,
-        new THREE.MeshStandardMaterial({ color: '#48544b', roughness: 1 }),
-      ),
-    );
     const dashes = new THREE.InstancedMesh(
       new THREE.BoxGeometry(0.1, 0.014, 1.5),
       new THREE.MeshStandardMaterial({ color: '#bfc5a2', roughness: 1 }),
@@ -150,7 +150,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       const t = n / dashes.count,
         p = curves[i].getPointAt(t),
         v = curves[i].getTangentAt(t);
-      d.position.set(p.x, 0.065, p.z);
+      d.position.set(p.x, groundHeight(p.x, p.z) + 0.074, p.z);
       d.rotation.y = Math.atan2(v.x, v.z);
       d.updateMatrix();
       dashes.setMatrixAt(n, d.matrix);
@@ -170,7 +170,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     const t = i / dashes.count,
       p = ROAD.getPointAt(t),
       direction = ROAD.getTangentAt(t);
-    dummy.position.set(p.x, 0.065, p.z);
+    dummy.position.set(p.x, groundHeight(p.x, p.z) + 0.074, p.z);
     dummy.rotation.set(0, Math.atan2(direction.x, direction.z), 0);
     dummy.scale.setScalar(1);
     dummy.updateMatrix();
@@ -187,7 +187,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       g,
       new THREE.LineBasicMaterial({ color: '#c9c29d', transparent: true, opacity: 0.6 }),
     );
-    l.position.y = 0.013;
+    l.position.y = 0.036;
     statics.add(l);
   }
   // A shallow canal enters the broad backwater. Ground under the water is a safe recovery floor.
@@ -290,24 +290,25 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
         place.trigger.x - place.position.x,
         place.trigger.z - place.position.z,
       );
-      group.position.set(place.position.x, 0, place.position.z);
+      const baseY = groundHeight(place.position.x, place.position.z);
+      group.position.set(place.position.x, baseY, place.position.z);
       group.rotation.y = yaw;
       statics.add(group);
-      fixedBox(world, width, 3.3, depth, place.position.x, 1.65, place.position.z, yaw);
+      fixedBox(world, width, 3.3, depth, place.position.x, baseY + 1.65, place.position.z, yaw);
       fixedBox(
         world,
         width + 1.5,
         0.38,
         depth + 2.6,
         place.position.x,
-        0.19,
+        baseY + 0.19,
         place.position.z,
         yaw,
       );
       if (place.id === 'space') {
         dome = new THREE.Group();
         dome.name = 'landmark:observatory-dome';
-        dome.position.set(place.position.x, 4.75, place.position.z);
+        dome.position.set(place.position.x, baseY + 4.75, place.position.z);
         cylinder(dome, 2.55, 2.55, 0.36, [0, 0, 0], materials.cream, 24);
         const shell = new THREE.Mesh(
           new THREE.SphereGeometry(2.5, 28, 15, 0.2, Math.PI * 2 - 0.4, 0, Math.PI / 2),
@@ -337,12 +338,20 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       }),
     );
     marker.rotation.x = -Math.PI / 2;
-    marker.position.set(place.trigger.x, 0.19, place.trigger.z);
+    marker.position.set(
+      place.trigger.x,
+      groundHeight(place.trigger.x, place.trigger.z) + 0.19,
+      place.trigger.z,
+    );
     scene.add(marker);
     markers.push({ mesh: marker, x: place.trigger.x, z: place.trigger.z });
     // Marker columns stay small; buildings and their signs do the visual storytelling.
     const post = new THREE.Group();
-    post.position.set(place.trigger.x + 2.7, 0, place.trigger.z + 1.8);
+    post.position.set(
+      place.trigger.x + 2.7,
+      groundHeight(place.trigger.x + 2.7, place.trigger.z + 1.8),
+      place.trigger.z + 1.8,
+    );
     cylinder(post, 0.1, 0.12, 1.45, [0, 0.72, 0], materials.darkWood);
     textBoard(
       post,
@@ -374,6 +383,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     );
   };
   leafMat.customProgramCacheKey = () => 'kerala-palm-wind-v1';
+  clearCameraFoliage(leafMat);
   const fronds = new THREE.InstancedMesh(palm.fronds, leafMat, palmCount),
     coconuts = new THREE.InstancedMesh(
       new THREE.SphereGeometry(0.17, 7, 6),
@@ -397,7 +407,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     )
       continue;
     const scale = 0.69 + rng() * 0.48;
-    dummy.position.set(x, 0, z);
+    dummy.position.set(x, groundHeight(x, z), z);
     dummy.rotation.set(0, rng() * Math.PI * 2, 0);
     dummy.scale.setScalar(scale);
     dummy.updateMatrix();
@@ -411,7 +421,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       );
       coconuts.setMatrixAt(count * 3 + n, dummy.matrix.clone().multiply(local));
     }
-    fixedBox(world, 0.44, 4, 0.44, x, 2, z);
+    fixedBox(world, 0.44, 4, 0.44, x, groundHeight(x, z) + 2, z);
     count++;
   }
   trunks.count = fronds.count = count;
@@ -426,18 +436,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
   let riceIndex = 0;
   for (let plot = 0; plot < 3; plot++) {
     const z = -5 + plot * 13.2;
-    box(
-      statics,
-      [23, 0.035, 12],
-      [-6, 0.03, z],
-      new THREE.MeshStandardMaterial({
-        color: ['#8faa4e', '#9ca950', '#6e9651'][plot],
-        roughness: 1,
-      }),
-    ).castShadow = false;
-    for (const side of [-1, 1])
-      box(statics, [0.6, 0.15, 12], [-6 + side * 11.6, 0.08, z], materials.wood).castShadow = false;
-    box(statics, [23, 0.15, 0.6], [-6, 0.08, z + 6], materials.wood).castShadow = false;
+    addField(statics, -6, z, 23, 12, ['#8faa4e', '#9ca950', '#6e9651'][plot]);
     for (let n = 0; n < 300; n++) {
       dummy.position.set(-16.5 + (n % 25) * 0.88, 0.22, z - 5.3 + Math.floor(n / 25) * 0.93);
       dummy.rotation.set(0, rng() * Math.PI, 0);
@@ -463,7 +462,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       (x > -19 && x < 9 && z > -12 && z < 32)
     )
       continue;
-    dummy.position.set(x, 0.35, z);
+    dummy.position.set(x, groundHeight(x, z) + 0.35, z);
     dummy.rotation.set(0, rng() * 6.28, 0);
     dummy.scale.set(0.4 + rng() * 0.9, 0.4 + rng() * 0.5, 0.5 + rng() * 0.8);
     dummy.updateMatrix();
@@ -656,6 +655,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     statics.add(hill);
   }
   const life = createVillageLife(scene, world, statics);
+  const roadside = createRoadside(scene, world, statics);
   bakeStatic(statics);
   return {
     dynamics,
@@ -663,8 +663,10 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     crocPosition,
     life,
     wildlife,
+    roadside,
     setQuality(performance) {
       life.quality(performance);
+      roadside.quality(performance);
       fronds.castShadow = trunks.castShadow = !performance;
       bushes.castShadow = !performance;
       rice.visible = !performance;
@@ -680,12 +682,13 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       feed = 8;
       wildlife.hunt(0);
     },
-    update(elapsed, dt) {
+    update(elapsed, dt, driver) {
       wind.value = elapsed;
       waterMaterial.uniforms.time.value = elapsed;
       feed = Math.max(0, feed - dt);
       wildlife.update(elapsed);
       life.update(elapsed);
+      roadside.update(elapsed, dt, driver);
       waterMaterial.uniforms.croc.value.set(crocPosition.x, crocPosition.z);
       waterMaterial.uniforms.feed.value = feed > 0 ? 1 : 0;
       boat.position.y = Math.sin(elapsed * 0.64) * 0.033;

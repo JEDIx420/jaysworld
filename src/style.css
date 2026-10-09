@@ -1214,7 +1214,11 @@ h1 {
     max-width: 220px;
   }
   .toast {
-    top: 112px;
+    top: 18.5rem;
+    width: max-content;
+    max-width: calc(100% - 2rem);
+    padding: 10px 14px;
+    font-size: 0.75rem;
   }
   dialog {
     padding: 25px 22px;
@@ -2064,4 +2068,414 @@ body:not(.started) .driving-hint {
 body.started .start-driving {
   pointer-events: none;
   visibility: hidden;
+}
+/* Village craft: a compact duty switch, useful directions, and venue-specific journals. */
+#taxi-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  border: 0;
+  background: transparent;
+  padding: 0.45rem 0;
+  font-size: 0.61rem;
+  letter-spacing: 0.12em;
+  color: #e7d29b;
+}
+#taxi-toggle i {
+  display: inline-block;
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border: 1px solid #c4cea177;
+  border-radius: 20px;
+  background: #294c42;
+}
+#taxi-toggle i::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #a3b49a;
+  transition: transform 150ms;
+}
+#taxi-toggle[aria-pressed='true'] i::after {
+  transform: translateX(12px);
+  background: #f4cd7c;
+}
+.fare-card.free-roam {
+  width: 230px;
+}
+.fare-card.free-roam .fare-top {
+  margin-bottom: 0.2rem;
+}
+.fare-card.free-roam > strong {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  font-size: 1rem;
+}
+.fare-card.free-roam .fare-bottom {
+  margin-top: 0.5rem;
+}
+.navigation-card {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  left: 2rem;
+  top: 7rem;
+  bottom: auto;
+  transform: none;
+  width: min(310px, calc(100% - 2rem));
+  padding: 0.8rem 1rem;
+  background: #173c33ee;
+  border: 1px solid #e4c68a66;
+  border-radius: 9px;
+  color: #f2dfb4;
+  box-shadow: 0 8px 30px #15342c33;
+}
+#navigation-arrow {
+  font-size: 2rem;
+  line-height: 1;
+  width: 32px;
+  text-align: center;
+  transition: transform 250ms;
+}
+.navigation-card div {
+  flex: 1;
+  min-width: 0;
+}
+.navigation-card small {
+  font-size: 0.6rem;
+  display: block;
+  margin-bottom: 0.2rem;
+  color: #bfc6a6;
+}
+.navigation-card strong {
+  font-size: 0.8rem;
+  display: block;
+}
+.navigation-card div > span {
+  display: block;
+  font-size: 0.62rem;
+  color: #bfc6a6;
+  margin-top: 0.2rem;
+}
+.navigation-card button {
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font-size: 1.3rem;
+  padding: 0.3rem;
+}
+body.visiting .navigation-card,
+body:not(.started) .navigation-card {
+  display: none;
+}
+#village-atlas {
+  width: min(100%, 520px);
+  max-height: none;
+  height: auto;
+  aspect-ratio: 1;
+  margin-left: auto;
+  margin-right: auto;
+  cursor: pointer;
+}
+#village-atlas:focus-visible {
+  outline: 3px solid #bb7a39;
+  outline-offset: 3px;
+}
+.camera-presets {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 1.5rem 0;
+}
+.camera-presets span {
+  flex-basis: 100%;
+  font-size: 0.7rem;
+  color: #64745a;
+}
+.camera-presets button {
+  border: 1px solid #9faa8c;
+  background: #e5e9d2;
+  padding: 0.7rem 1rem;
+  border-radius: 5px;
+  font-size: 0.78rem;
+}
+.project-art {
+  margin: 0;
+  padding: 0.6rem;
+  color: #425541;
+  border: 1px solid #87907588;
+  background: #dfdac188;
+  position: relative;
+}
+.project-art svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  stroke-width: 0;
+}
+.project-art text {
+  fill: currentColor;
+  stroke: none;
+}
+.project-art figcaption {
+  font-size: 0.48rem;
+  text-align: center;
+  letter-spacing: 0.13em;
+  margin: 0.2rem 0 0.5rem;
+}
+.story-lede {
+  border-left: 1px solid #7e8c6a55;
+  padding-left: 1.5rem;
+}
+.paper-story #project-body {
+  border: 0;
+  padding-left: 0;
+  font-size: 0.95rem;
+  line-height: 1.8;
+}
+.paper-story .project-summary {
+  font-size: 1.25rem;
+  line-height: 1.55;
+  margin-bottom: 0.8rem;
+}
+.newspaper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 24px;
+  height: 24px;
+  background: linear-gradient(225deg, #8e9276 49%, #fff3d7 51%);
+  pointer-events: none;
+}
+.newspaper[data-venue='about'] .project-art::after {
+  content: '';
+  width: 77px;
+  height: 77px;
+  position: absolute;
+  bottom: 22px;
+  right: 13px;
+  border: 4px solid #9b75422b;
+  border-radius: 48%;
+  transform: rotate(-17deg);
+  box-shadow: 0 0 0 2px #af885312;
+  pointer-events: none;
+}
+.newspaper[data-venue='eagle-eye'],
+.newspaper[data-venue='opsflash'] {
+  background: #f3f0e1;
+  border-radius: 8px;
+}
+.newspaper[data-venue='eagle-eye'] .paper-masthead strong,
+.newspaper[data-venue='opsflash'] .paper-masthead strong {
+  font-family: 'Avenir Next', system-ui, sans-serif;
+  font-size: clamp(1.7rem, 4.8vw, 3rem);
+  letter-spacing: -0.06em;
+}
+.newspaper[data-venue='opsflash'] .project-art {
+  color: #395c69;
+  background: #dae1dd;
+}
+.newspaper[data-venue='rift'] {
+  background-color: #e8e4cb;
+  background-image:
+    linear-gradient(#85967118 1px, transparent 1px),
+    linear-gradient(90deg, #85967118 1px, transparent 1px);
+  background-size: 22px 22px;
+  border-left: 15px solid #384c40;
+}
+.newspaper[data-venue='rift'] .paper-masthead {
+  text-align: left;
+  padding-left: 1rem;
+  border-bottom-style: solid;
+}
+.newspaper[data-venue='rift'] .paper-masthead strong {
+  font:
+    italic 700 clamp(1.8rem, 4.8vw, 3rem) / 1.3 Georgia,
+    serif;
+  letter-spacing: -0.04em;
+}
+.newspaper[data-venue='music'] {
+  background: #e6c39c;
+  border: 8px solid #b47954;
+}
+.newspaper[data-venue='music'] .paper-masthead {
+  border-color: #7f4d38;
+}
+.newspaper[data-venue='music'] .paper-masthead strong {
+  color: #6d4634;
+  font:
+    700 clamp(2.2rem, 6vw, 4rem) / 1.2 Georgia,
+    serif;
+  font-style: italic;
+}
+.newspaper[data-venue='music'] .project-art {
+  color: #32453d;
+  background: #d3a16d;
+  border-color: #a36f50;
+}
+.newspaper[data-venue='saltwater'] {
+  background: #e6e6cf;
+  border-left: 15px solid #52684b;
+}
+.newspaper[data-venue='saltwater'] .paper-masthead {
+  text-align: left;
+  border-bottom: 1px solid #688062;
+}
+.newspaper[data-venue='saltwater'] .paper-masthead strong {
+  font-size: clamp(1.7rem, 4.8vw, 3.2rem);
+  letter-spacing: -0.04em;
+}
+.newspaper[data-venue='saltwater'] .project-art {
+  color: #4a6550;
+  background: #d2dac0;
+}
+.newspaper[data-venue='space'] {
+  background: #20343c;
+  color: #e5ddbf;
+  border: 1px solid #a1b1a088;
+}
+.newspaper[data-venue='space'] .paper-masthead {
+  border-color: #a6b6a0;
+}
+.newspaper[data-venue='space'] .paper-masthead strong,
+.newspaper[data-venue='space'] h1,
+.newspaper[data-venue='space'] #project-body,
+.newspaper[data-venue='space'] .project-summary {
+  color: #e5ddbf;
+}
+.newspaper[data-venue='space'] .paper-masthead small,
+.newspaper[data-venue='space'] .paper-masthead span,
+.newspaper[data-venue='space'] .eyebrow,
+.newspaper[data-venue='space'] .exhibit-location,
+.newspaper[data-venue='space'] .paper-label {
+  color: #b9c5b0;
+}
+.newspaper[data-venue='space'] .paper-tabs button,
+.newspaper[data-venue='space'] .paper-pagination button {
+  color: #e5ddbf;
+}
+.newspaper[data-venue='space'] .project-art {
+  color: #d6d2ac;
+  background: #162b36;
+  border-color: #729083;
+}
+.newspaper[data-venue='space'] .project-links a {
+  color: #20343c;
+  background: #d6d5b9;
+}
+.newspaper[data-venue='space'] #project-details,
+.newspaper[data-venue='space'] .detail-lead {
+  color: #e5ddbf;
+}
+@media (max-width: 700px) {
+  .fare-card,
+  .fare-card.free-roam {
+    width: calc((100% - 3rem) / 2);
+  }
+  .fare-card.free-roam p {
+    display: none;
+  }
+  .fare-card.free-roam > strong {
+    font-size: 0.8rem;
+  }
+  .navigation-card {
+    top: 8rem;
+    left: 1rem;
+    bottom: auto;
+    width: calc((100% - 3rem) / 2);
+    padding: 0.7rem 0.6rem;
+    gap: 0.4rem;
+    align-items: flex-start;
+  }
+  .navigation-card small {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .navigation-card button {
+    position: absolute;
+    top: 0.1rem;
+    right: 0.15rem;
+    font-size: 0.95rem;
+  }
+  #navigation-arrow {
+    font-size: 1.4rem;
+    width: 19px;
+    margin-top: 1.1rem;
+  }
+  .navigation-card strong {
+    font-size: 0.72rem;
+    line-height: 1.45;
+  }
+  .navigation-card div > span {
+    font-size: 0.56rem;
+    line-height: 1.5;
+  }
+  .navigation-card small {
+    max-width: 240px;
+  }
+  .story-lede {
+    border: 0;
+    padding: 0;
+  }
+  .project-art {
+    max-width: 380px;
+    width: 100%;
+    margin: 0 auto;
+  }
+  .newspaper[data-venue='rift'],
+  .newspaper[data-venue='saltwater'] {
+    border-left-width: 8px;
+  }
+  .newspaper[data-venue='music'] {
+    border-width: 4px;
+  }
+  .newspaper .paper-masthead strong {
+    overflow-wrap: anywhere;
+  }
+}
+@media (max-height: 500px) and (min-width: 701px) {
+  .navigation-card {
+    top: 5rem;
+    left: 1rem;
+    width: 240px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #taxi-toggle i::after,
+  #navigation-arrow {
+    transition: none;
+  }
+}
+.atlas-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: min(100%, 520px);
+  margin: 0 auto;
+}
+.atlas-controls span {
+  flex: 1;
+  font-size: 0.7rem;
+  line-height: 1.5;
+  color: #5e735b;
+}
+.atlas-controls button {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #9baf8d;
+  border-radius: 50%;
+  background: #e1e6ce;
+  color: #395d43;
+  font-size: 1.1rem;
+}
+#village-atlas {
+  touch-action: none;
 }

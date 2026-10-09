@@ -1,6 +1,7 @@
 import RAPIER from '@dimforge/rapier3d-compat';
 import { Quaternion, Vector3 } from 'three';
 import type { DriveInput } from './input';
+import { groundHeight } from './terrain';
 
 export const FIXED_STEP = 1 / 60;
 export const SPAWN = { x: -51, y: 0.95, z: 29 };
@@ -94,7 +95,7 @@ export class AutoVehicle {
   }
 
   reset(x = SPAWN.x, z = SPAWN.z, yaw = 0) {
-    this.body.setTranslation({ x, y: SPAWN.y, z }, true);
+    this.body.setTranslation({ x, y: groundHeight(x, z) + SPAWN.y + 0.06, z }, true);
     this.body.setRotation(new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), yaw), true);
     this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
     this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);

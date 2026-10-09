@@ -6,7 +6,8 @@ import { renderDemo, renderDetails } from './demos';
 import { JourneyAudio } from './audio';
 import { FareGame, type Snack } from './fares';
 import { districtAt, routeBetween, distance2, type Point } from './village';
-import { drawVillageMap } from './map';
+import { drawVillageMap, atlasHit, navigationCue } from './map';
+import { READERS, exhibitArt } from './exhibit-art';
 import type { Journey, ViewMode } from './engine';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -27,6 +28,12 @@ try {
   /* Storage is optional. */
 }
 const fares = new FareGame(saved);
+let taxiEnabled = false;
+try {
+  taxiEnabled = localStorage.getItem('jaysworld-taxi-mode') === 'on';
+} catch {
+  /* Optional preference. */
+}
 let journey: Journey | undefined,
   activePlace: Place | undefined,
   visitingPlace: Place | undefined,
@@ -41,6 +48,7 @@ let journey: Journey | undefined,
   paperPage = 0,
   viewMode: ViewMode = 'drive',
   routePlace: Place | undefined,
+  atlasRoute: readonly Point[] = [],
   position: Point = { x: -51, z: 29 },
   speed = 0,
   yaw = 0,
@@ -83,9 +91,11 @@ function cancelRide() {
 function updateDuty() {
   const state = fares.snapshot,
     p = fares.passenger,
-    target = routePlace?.trigger ?? fares.target;
+    target = routePlace?.trigger ?? (taxiEnabled ? fares.target : undefined);
   const signature = [
     booted,
+    taxiEnabled,
+    Math.round(yaw * 10),
     state.wallet,
     state.completed,
     state.onboard,
@@ -94,31 +104,50 @@ function updateDuty() {
     speed < 1.2,
     routePlace?.id,
     viewMode,
-    fares.actionAt(position, speed),
+    taxiEnabled && fares.actionAt(position, speed),
   ].join('|');
   if (signature === lastDutySignature) return;
   lastDutySignature = signature;
-  const key = state.passengerIndex + ':' + state.onboard;
+  const key = state.passengerIndex + ':' + state.onboard + ':' + taxiEnabled;
   if (key !== lastPassenger) {
     lastPassenger = key;
     journey?.setPassenger(state.passengerIndex, state.onboard);
+    journey?.setDuty(taxiEnabled);
   }
   $('wallet').textContent = '₹' + state.wallet;
-  $('fare-title').textContent = state.onboard
-    ? p.name + ' → ' + fares.destination.label
-    : p.name + ' is waiting · ' + fares.pickup.label;
-  $('fare-description').textContent = state.onboard
-    ? 'A passenger on board. Drop off safely for ₹' + state.fare + '.'
-    : p.line + ' · Fare ₹' + state.fare;
+  $('taxi-toggle').setAttribute('aria-pressed', String(taxiEnabled));
+  $('taxi-toggle').innerHTML = (taxiEnabled ? 'ON DUTY' : 'OFF DUTY') + '<i></i>';
+  $('fare-card').classList.toggle('free-roam', !taxiEnabled);
+  $('fare-card').dataset.duty = String(taxiEnabled);
+  $('fare-title').textContent = !taxiEnabled
+    ? 'The road is yours.'
+    : state.onboard
+      ? p.name + ' → ' + fares.destination.label
+      : p.name + ' is waiting · ' + fares.pickup.label;
+  $('fare-description').textContent = !taxiEnabled
+    ? 'Explore freely. Switch on duty for passenger fares.'
+    : state.onboard
+      ? 'A passenger on board. Drop off safely for ₹' + state.fare + '.'
+      : p.line + ' · Fare ₹' + state.fare;
   $('fare-distance').textContent = routePlace
     ? 'Route: ' + routePlace.location
-    : Math.round(distance2(position, target)) +
+    : Math.round(distance2(position, target ?? position)) +
       ' m ' +
       (state.onboard ? 'to drop-off' : 'to pickup');
-  const action = fares.actionAt(position, speed);
+  $('fare-distance').hidden = !target;
+  $('fare-route').textContent = taxiEnabled ? 'Show fare route' : 'Choose a place';
+  const action = taxiEnabled ? fares.actionAt(position, speed) : undefined;
   $('fare-action').hidden = !action || viewMode !== 'drive';
   $('fare-action').textContent = action === 'dropoff' ? 'Drop off · E' : 'Pick up · E';
-  const route = routeBetween(position, target).points;
+  const route = target ? routeBetween(position, target).points : [];
+  atlasRoute = route;
+  const cue = navigationCue(position, yaw, route);
+  $('navigation-card').hidden = !target || viewMode !== 'drive';
+  $('navigation-destination').textContent =
+    routePlace?.location ?? (state.onboard ? fares.destination.label : fares.pickup.label);
+  $('navigation-instruction').textContent = cue.instruction;
+  $('navigation-distance').textContent = Math.round(cue.distance) + ' m along the road';
+  $('navigation-arrow').style.transform = 'rotate(' + cue.turn + 'rad)';
   journey?.route(route);
   if (places.open || !booted)
     drawVillageMap($<HTMLCanvasElement>('village-atlas'), position, yaw, route, true);
@@ -128,7 +157,7 @@ function updateDuty() {
 function act() {
   startExperience();
   if (viewMode !== 'drive') return;
-  const action = fares.actionAt(position, speed);
+  const action = taxiEnabled ? fares.actionAt(position, speed) : undefined;
   if (action) {
     const result = fares.interact(position, speed);
     if (result) {
@@ -167,7 +196,11 @@ function updatePlaces() {
     copy.append(title, location);
     const status = document.createElement('span');
     status.className = 'place-status' + (visited.has(place.id) ? ' visited' : '');
-    status.textContent = visited.has(place.id) ? 'Read again' : 'Read paper';
+    status.textContent = visited.has(place.id)
+      ? 'Read again'
+      : place.id === 'about'
+        ? 'Read paper'
+        : 'Project notes';
     button.append(num, copy, status);
     button.addEventListener('click', () => showProject(place));
     const actions = document.createElement('div');
@@ -177,13 +210,7 @@ function updatePlaces() {
     route.textContent = 'Get directions';
     route.dataset.route = place.id;
     route.disabled = sceneFailed;
-    route.addEventListener('click', () => {
-      routePlace = place;
-      closeDialogs();
-      journey?.leaveView();
-      updateDuty();
-      toast('Follow the gold route to ' + place.location + '.');
-    });
+    route.addEventListener('click', () => navigate(place));
     const storefront = document.createElement('button');
     storefront.type = 'button';
     storefront.textContent = 'Visit storefront ↗';
@@ -229,6 +256,12 @@ function showProject(place: Place) {
   visited.add(place.id);
   updatePlaces();
   open(project);
+  project.dataset.venue = place.id;
+  const reader = READERS[place.id];
+  $('reader-masthead').textContent = reader.title;
+  $('reader-edition').textContent = reader.edition;
+  $('reader-subtitle').textContent = reader.subtitle;
+  $('project-art').innerHTML = exhibitArt(place.id);
   $('project-category').textContent = place.category;
   $('project-number').textContent = String(PLACES.indexOf(place) + 1).padStart(2, '0');
   $('project-location').textContent = place.location;
@@ -305,7 +338,7 @@ function startExperience() {
   document.body.classList.add('started');
   $('welcome').classList.add('quiet');
   $('driving-hint').classList.add('quiet');
-  radio.playDefault();
+  if (!sceneFailed) radio.playDefault();
   void audio
     .enable()
     .then(() => {
@@ -319,6 +352,14 @@ function startExperience() {
   updateDuty();
 }
 $('start-driving').addEventListener('click', startExperience);
+// Any first click after loading unlocks audio in the same trusted event.
+window.addEventListener(
+  'click',
+  () => {
+    if (booted && !sceneFailed) startExperience();
+  },
+  { capture: true },
+);
 window.addEventListener(
   'keydown',
   (e) => {
@@ -347,10 +388,151 @@ $('interaction-button').addEventListener('click', () => {
 });
 $('fare-action').addEventListener('click', act);
 $('fare-route').addEventListener('click', () => {
+  if (!taxiEnabled) {
+    showPlaces();
+    return;
+  }
   routePlace = undefined;
   updateDuty();
-  toast('Follow the gold route. Stop beside the passenger and press E.');
+  toast('Follow the gold arrows. Stop beside the passenger and press E.');
 });
+$('taxi-toggle').addEventListener('click', () => {
+  taxiEnabled = !taxiEnabled;
+  if (!taxiEnabled && fares.cancel())
+    toast('Off duty. The passenger returns to the stop; no fare was charged.');
+  else
+    toast(
+      taxiEnabled
+        ? 'On duty. Your next passenger is marked on the map.'
+        : 'Off duty. Explore at your own pace.',
+    );
+  try {
+    localStorage.setItem('jaysworld-taxi-mode', taxiEnabled ? 'on' : 'off');
+  } catch {
+    /* Optional. */
+  }
+  updateDuty();
+});
+function navigate(place: Place) {
+  if (sceneFailed) return;
+  routePlace = place;
+  closeDialogs();
+  journey?.leaveView();
+  startExperience();
+  updateDuty();
+  toast('Follow the gold arrows to ' + place.location + '.');
+}
+$('navigation-clear').addEventListener('click', () => {
+  routePlace = undefined;
+  updateDuty();
+});
+const atlas = $<HTMLCanvasElement>('village-atlas');
+let atlasIndex = 0,
+  atlasDragged = false;
+let atlasDrag: { x: number; y: number; center: Point; pointer: number } | undefined;
+const atlasCenter = (): Point => ({
+  x: Number(atlas.dataset.centerX ?? -80),
+  z: Number(atlas.dataset.centerZ ?? 0),
+});
+const renderAtlas = () => drawVillageMap(atlas, position, yaw, atlasRoute, true);
+const atlasPointerHit = (event: MouseEvent) => {
+  const rect = atlas.getBoundingClientRect(),
+    fit = Math.min(rect.width / atlas.width, rect.height / atlas.height);
+  const left = rect.left + (rect.width - atlas.width * fit) / 2,
+    top = rect.top + (rect.height - atlas.height * fit) / 2;
+  return atlasHit(
+    (event.clientX - left) / fit,
+    (event.clientY - top) / fit,
+    atlas.width,
+    atlas.height,
+    Math.max(32, 16 / fit),
+    Number(atlas.dataset.zoom ?? 1),
+    atlasCenter(),
+  );
+};
+atlas.addEventListener('click', (event) => {
+  if (atlasDragged) return;
+  const place = atlasPointerHit(event);
+  if (place) navigate(place);
+  else toast('Tap one of the seven numbered project stops.');
+});
+atlas.addEventListener('pointerdown', (event) => {
+  atlasDragged = false;
+  atlasDrag = {
+    x: event.clientX,
+    y: event.clientY,
+    center: atlasCenter(),
+    pointer: event.pointerId,
+  };
+  atlas.setPointerCapture(event.pointerId);
+});
+atlas.addEventListener('pointermove', (event) => {
+  if (atlasDrag && event.pointerId === atlasDrag.pointer) {
+    const dx = event.clientX - atlasDrag.x,
+      dy = event.clientY - atlasDrag.y;
+    if (Math.hypot(dx, dy) < 5 && !atlasDragged) return;
+    atlasDragged = true;
+    const metres = 580 / (Number(atlas.dataset.zoom ?? 1) * atlas.getBoundingClientRect().width);
+    atlas.dataset.centerX = String(Math.max(-310, Math.min(150, atlasDrag.center.x - dx * metres)));
+    atlas.dataset.centerZ = String(Math.max(-270, Math.min(270, atlasDrag.center.z - dy * metres)));
+    renderAtlas();
+  } else {
+    const place = atlasPointerHit(event);
+    if (place) {
+      atlasIndex = PLACES.indexOf(place);
+      atlas.dataset.selected = place.id;
+      $('map-selection').textContent =
+        String(atlasIndex + 1).padStart(2, '0') + ' · ' + place.location;
+      renderAtlas();
+    }
+  }
+});
+atlas.addEventListener('pointerup', () => {
+  atlasDrag = undefined;
+});
+atlas.addEventListener('pointercancel', () => {
+  atlasDrag = undefined;
+  atlasDragged = false;
+});
+atlas.addEventListener('keydown', (event) => {
+  if (['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].includes(event.code)) {
+    event.preventDefault();
+    atlasIndex =
+      (atlasIndex + (['ArrowRight', 'ArrowDown'].includes(event.code) ? 1 : PLACES.length - 1)) %
+      PLACES.length;
+    if (event.code === 'Home') atlasIndex = 0;
+    if (event.code === 'End') atlasIndex = PLACES.length - 1;
+    const place = PLACES[atlasIndex];
+    atlas.dataset.selected = place.id;
+    atlas.dataset.zoom = String(Math.max(1.5, Number(atlas.dataset.zoom ?? 1)));
+    atlas.dataset.centerX = String(place.trigger.x);
+    atlas.dataset.centerZ = String(place.trigger.z);
+    $('map-selection').textContent =
+      String(atlasIndex + 1).padStart(2, '0') + ' · ' + place.location + ' · Enter to drive';
+    renderAtlas();
+  } else if (event.code === 'Enter') {
+    event.preventDefault();
+    navigate(PLACES[atlasIndex]);
+  }
+});
+function zoomAtlas(delta: number) {
+  const before = Number(atlas.dataset.zoom ?? 1),
+    next = Math.max(1, Math.min(3.5, before * delta));
+  atlas.dataset.zoom = String(next);
+  if (before === 1 && next > 1) {
+    atlas.dataset.centerX = String(position.x);
+    atlas.dataset.centerZ = String(position.z);
+  }
+  if (next === 1) {
+    delete atlas.dataset.centerX;
+    delete atlas.dataset.centerZ;
+  }
+  $('map-selection').textContent =
+    next === 1 ? 'Tap a numbered place · drag to pan' : 'Closer look · drag to pan';
+  renderAtlas();
+}
+$('atlas-zoom-in').addEventListener('click', () => zoomAtlas(1.5));
+$('atlas-zoom-out').addEventListener('click', () => zoomAtlas(1 / 1.5));
 $('view-back').addEventListener('click', () => journey?.leaveView());
 $('read-paper').addEventListener('click', () => {
   if (visitingPlace) showProject(visitingPlace);
@@ -419,6 +601,14 @@ $('camera-button').addEventListener('click', () => {
   closeDialogs();
   toast('Camera reset.');
 });
+$('camera-close').addEventListener('click', () => {
+  journey?.camera('close');
+  closeDialogs();
+});
+$('camera-wide').addEventListener('click', () => {
+  journey?.camera('wide');
+  closeDialogs();
+});
 $('quality-button').textContent = performanceMode ? 'Performance' : 'Balanced';
 $('quality-button').addEventListener('click', () => {
   performanceMode = !performanceMode;
@@ -476,6 +666,7 @@ const fallback = (message: string) => {
   $('minimap-button').hidden = true;
   $('fare-card').hidden = true;
   $('view-panel').hidden = true;
+  $('navigation-card').hidden = true;
   toast(message);
   showPlaces();
 };
@@ -495,7 +686,7 @@ void import('./engine')
         speed = v;
         position = { x, z };
         yaw = angle;
-        fares.update(position);
+        if (taxiEnabled) fares.update(position);
         $('speed').textContent = String(Math.round(v * 3.6));
         $('place-name').textContent = nearestPlace(x, z, 21)?.location ?? districtAt({ x, z });
         updateDuty();
@@ -524,6 +715,9 @@ void import('./engine')
               ? 'THE OBSERVATORY'
               : 'PARKED UP · ' + (visitingPlace?.location.toUpperCase() ?? '');
         $('read-paper').hidden = mode !== 'storefront';
+        $('read-paper').textContent = visitingPlace
+          ? READERS[visitingPlace.id].label
+          : 'Read the newspaper';
         $('view-experience').hidden = mode !== 'storefront' || visitingPlace?.id === 'about';
         $('view-experience').textContent =
           visitingPlace?.id === 'music'

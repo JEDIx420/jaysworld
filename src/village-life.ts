@@ -9,9 +9,13 @@ import {
   makeBench,
   makePalmGeometries,
   materials,
+  clearCameraFoliage,
 } from './models';
-import { ROADS, TAXI_STOPS, PASSENGERS, waterAt } from './village';
+import { ROAD_PATHS, TAXI_STOPS, PASSENGERS, waterAt } from './village';
 import { PLACES } from './projects';
+import { groundHeight } from './terrain';
+import { addField } from './surfaces';
+import type { Resident } from './safety';
 
 export function makePerson(color = '#b97673', seated = false) {
   const group = new THREE.Group();
@@ -51,15 +55,7 @@ export function makePerson(color = '#b97673', seated = false) {
 }
 
 export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, statics: THREE.Group) {
-  const curves = ROADS.map(
-    (r) =>
-      new THREE.CatmullRomCurve3(
-        r.points.map(([x, z]) => new THREE.Vector3(x, 0.045, z)),
-        !!r.closed,
-        'centripetal',
-      ),
-  );
-  const samples = curves.flatMap((c) => c.getSpacedPoints(Math.ceil(c.getLength() / 3)));
+  const samples = ROAD_PATHS.flatMap((c) => c.samples);
   const clear = (x: number, z: number, r = 10) =>
     !waterAt(x, z) &&
     !samples.some((p) => Math.hypot(p.x - x, p.z - z) < r) &&
@@ -67,7 +63,7 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
   const fixed = (x: number, z: number, w: number, d: number, yaw = 0) =>
     world.createCollider(
       RAPIER.ColliderDesc.cuboid(w / 2, 1.65, d / 2)
-        .setTranslation(x, 1.65, z)
+        .setTranslation(x, groundHeight(x, z) + 1.65, z)
         .setRotation(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw)),
     );
   // Everyday houses frame the roads; each keeps the existing tiled-roof style.
@@ -99,7 +95,7 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
   houses.forEach(([x, z], i) => {
     if (!clear(x, z, 9)) return;
     const house = makeBuilding('house', ['#c4b48c', '#a9b6a1', '#d1b695', '#bfc6ac'][i % 4]);
-    house.group.position.set(x, 0, z);
+    house.group.position.set(x, groundHeight(x, z), z);
     house.group.rotation.y = i % 2 ? Math.PI : 0;
     statics.add(house.group);
     fixed(x, z, house.width, house.depth);
@@ -164,22 +160,14 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
     [-99, 47, 42, 35],
     [-89, -156, 43, 42],
   ]) {
-    box(
-      statics,
-      [w, 0.04, d],
-      [x, 0.025, z],
-      new THREE.MeshStandardMaterial({ color: '#84984d', roughness: 1 }),
-    ).castShadow = false;
-    for (const side of [-1, 1])
-      box(statics, [w, 0.13, 0.6], [x, 0.06, z + (side * d) / 2], materials.wood).castShadow =
-        false;
+    addField(statics, x, z, w, d, '#84984d');
     for (let row = 0; row < d; row += 2)
       for (let col = 0; col < w; col += 2) {
         if (n >= rice.count) break;
         const px = x - w / 2 + col,
           pz = z - d / 2 + row;
-        if (!clear(px, pz, 5)) continue;
-        dummy.position.set(px, 0.25, pz);
+        if (!clear(px, pz, 6)) continue;
+        dummy.position.set(px, groundHeight(px, pz) + 0.25, pz);
         dummy.rotation.y = n * 0.8;
         dummy.scale.setScalar(0.85 + (n % 3) * 0.09);
         dummy.updateMatrix();
@@ -205,23 +193,27 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
     [13, 154],
   ]) {
     const trunks = new THREE.InstancedMesh(palm.trunk, materials.wood, 32);
-    const fronds = new THREE.InstancedMesh(
-      palm.fronds,
-      new THREE.MeshStandardMaterial({ color: '#467b42', roughness: 1, side: THREE.DoubleSide }),
-      32,
-    );
+    const palmMaterial = new THREE.MeshStandardMaterial({
+      color: '#467b42',
+      roughness: 1,
+      side: THREE.DoubleSide,
+    });
+    clearCameraFoliage(palmMaterial);
+    const fronds = new THREE.InstancedMesh(palm.fronds, palmMaterial, 32);
     let count = 0;
     for (let a = 0; a < 300 && count < 32; a++) {
       const x = cx + (rng() - 0.5) * 105,
         z = cz + (rng() - 0.5) * 105;
       if (x < -300 || z < -257 || z > 258 || !clear(x, z)) continue;
-      dummy.position.set(x, 0, z);
+      dummy.position.set(x, groundHeight(x, z), z);
       dummy.rotation.set(0, rng() * 6.28, 0);
       dummy.scale.setScalar(0.73 + rng() * 0.5);
       dummy.updateMatrix();
       trunks.setMatrixAt(count, dummy.matrix);
       fronds.setMatrixAt(count, dummy.matrix);
-      world.createCollider(RAPIER.ColliderDesc.cuboid(0.24, 2, 0.24).setTranslation(x, 2, z));
+      world.createCollider(
+        RAPIER.ColliderDesc.cuboid(0.24, 2, 0.24).setTranslation(x, groundHeight(x, z) + 2, z),
+      );
       count++;
     }
     trunks.count = fronds.count = count;
@@ -231,7 +223,7 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
   }
   const npcs = TAXI_STOPS.map((stop, i) => {
     const p = makePerson(PASSENGERS[i % PASSENGERS.length].color);
-    p.group.position.set(stop.npcX, 0, stop.npcZ);
+    p.group.position.set(stop.npcX, groundHeight(stop.npcX, stop.npcZ), stop.npcZ);
     p.group.rotation.y = Math.atan2(stop.x - stop.npcX, stop.z - stop.npcZ);
     scene.add(p.group);
     return p;
@@ -243,7 +235,8 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
   halo.rotation.x = -Math.PI / 2;
   scene.add(halo);
   let active = 0,
-    onboard = false;
+    onboard = false,
+    duty = false;
   const table = new THREE.Group();
   table.position.set(-47, 0, 36);
   cylinder(table, 1, 1, 0.12, [0, 0.87, 0], materials.wood, 16);
@@ -277,6 +270,19 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
   scene.add(steam);
   steam.visible = false;
   return {
+    residents(): Resident[] {
+      return npcs
+        .filter((p) => p.group.visible)
+        .map((p) => ({
+          x: p.group.position.x,
+          z: p.group.position.z,
+          y: p.group.position.y,
+          radius: 0.55,
+        }));
+    },
+    setDuty(enabled: boolean) {
+      duty = enabled;
+    },
     setPassenger(index: number, isOnboard: boolean) {
       active = index;
       onboard = isOnboard;
@@ -296,10 +302,14 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
       const index = TAXI_STOPS.findIndex((s) => s.id === PASSENGERS[active].from);
       npcs.forEach((p, i) => {
         p.arm.rotation.z =
-          i === index && !onboard ? -0.8 + Math.sin(t * 3) * 0.35 : 0.06 * Math.sin(t + i);
+          duty && i === index && !onboard ? -0.8 + Math.sin(t * 3) * 0.35 : 0.06 * Math.sin(t + i);
       });
-      halo.visible = !onboard;
-      halo.position.set(TAXI_STOPS[index].npcX, 0.04, TAXI_STOPS[index].npcZ);
+      halo.visible = duty && !onboard;
+      halo.position.set(
+        TAXI_STOPS[index].npcX,
+        groundHeight(TAXI_STOPS[index].npcX, TAXI_STOPS[index].npcZ) + 0.04,
+        TAXI_STOPS[index].npcZ,
+      );
       halo.scale.setScalar(1 + Math.sin(t * 2) * 0.1);
       if (steam.visible) {
         const a = steam.geometry.attributes.position;
