@@ -253,8 +253,16 @@ async function park(page, id) {
 async function start(page) {
   await page.keyboard.press('Enter');
   await page.waitForSelector('body.started', { state: 'attached' });
-  if (await page.locator('#toast .toast-close').isVisible())
-    await page.locator('#toast .toast-close').click();
+  const dismiss = page.locator('#toast .toast-close');
+  if (await dismiss.isVisible()) {
+    try {
+      await dismiss.click({ timeout: 18000 });
+    } catch (error) {
+      // A timed notification can expire between visibility and pointer dispatch on a slow runner.
+      // Only accept its disappearance; a still-visible or otherwise broken control must fail.
+      if (error.name !== 'TimeoutError' || (await dismiss.isVisible())) throw error;
+    }
+  }
 }
 async function clean(errors) {
   assert.deepEqual(
