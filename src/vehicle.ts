@@ -2,9 +2,11 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { Quaternion, Vector3 } from 'three';
 import type { DriveInput } from './input';
 import { groundHeight } from './terrain';
+import { AutoPowertrain, ROAD_SPEED, BOOST_SPEED } from './powertrain';
+import { ROAD_START } from './village';
 
 export const FIXED_STEP = 1 / 60;
-export const SPAWN = { x: -48, y: 0.95, z: -4 };
+export const SPAWN = { ...ROAD_START, y: 0.95 };
 export const WHEEL_POINTS = [
   { x: 0, y: -0.18, z: -1.04 },
   { x: -0.7, y: -0.18, z: 0.85 },
@@ -21,12 +23,15 @@ export class AutoVehicle {
   private braking = 0;
   private forward = new Vector3();
   private quaternion = new Quaternion();
+  readonly powertrain: AutoPowertrain;
 
   constructor(
     readonly world: RAPIER.World,
     readonly kind: 'auto' | 'car' = 'auto',
+    readonly player = kind === 'auto',
   ) {
     const car = kind === 'car';
+    this.powertrain = new AutoPowertrain(player && !car);
     this.wheelPoints = car
       ? [
           { x: -0.85, y: -0.18, z: -1.25 },
@@ -98,18 +103,22 @@ export class AutoVehicle {
   }
   beforeStep(input: DriveInput, dt = FIXED_STEP) {
     const signed = this.signedSpeed;
-    const limit = input.boost ? 16 : 12;
-    const steeringRange = 0.56 / (1 + this.speed * 0.065);
+    this.powertrain.update(dt, signed, input);
+    const boost = this.powertrain.boosted;
+    const limit = input.throttle < 0 ? 4 : this.player ? (boost ? BOOST_SPEED : ROAD_SPEED) : 12;
+    const steeringRange = 0.56 / (1 + this.speed * 0.1);
     this.steering += (-input.steer * steeringRange - this.steering) * (1 - Math.exp(-9 * dt));
     this.controller.setWheelSteering(0, this.steering);
     if (this.kind === 'car') this.controller.setWheelSteering(1, this.steering);
     const reversing = input.throttle * signed < -0.6;
     this.throttle += (input.throttle - this.throttle) * (1 - Math.exp(-5.5 * dt));
-    const softLimit = Math.max(0, Math.min(1, (limit + 1 - Math.abs(signed)) / 2));
+    const softLimit = Math.max(0, Math.min(1, (limit + 0.05 - Math.abs(signed)) / 0.4));
     const force =
       input.brake || reversing || input.throttle * signed > limit
         ? 0
-        : this.throttle * (this.kind === 'car' ? 1550 : input.boost ? 360 : 265) * softLimit;
+        : this.throttle *
+          (this.kind === 'car' ? 1550 : this.player ? (boost ? 720 : 430) : 265) *
+          softLimit;
     this.braking +=
       ((input.brake ? 9 : reversing ? 5 : input.throttle === 0 ? 0.065 : 0) - this.braking) *
       (1 - Math.exp(-14 * dt));
@@ -120,6 +129,21 @@ export class AutoVehicle {
       this.controller.setWheelEngineForce(i, i < (this.kind === 'car' ? 2 : 1) ? 0 : force);
     }
     this.controller.updateVehicle(dt, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC);
+    // Arcade downforce keeps the faster auto settled over ridge crests and during turns.
+    if (this.player && this.speed > 7) {
+      const downforce = Math.min(18, this.speed * this.speed * 0.085);
+      this.body.applyImpulse({ x: 0, y: -this.body.mass() * downforce * dt, z: 0 }, true);
+    }
+    const speed = this.speed;
+    if (speed > limit) {
+      // Gently return to road speed after boost; keep a hard ceiling on forward boost/reverse.
+      const cap = boost || input.throttle < 0 ? limit : Math.max(limit, speed - 7 * dt);
+      const velocity = this.body.linvel();
+      this.body.setLinvel(
+        { x: (velocity.x * cap) / speed, y: velocity.y, z: (velocity.z * cap) / speed },
+        true,
+      );
+    }
   }
 
   reset(x = SPAWN.x, z = SPAWN.z, yaw = 0) {
@@ -130,6 +154,7 @@ export class AutoVehicle {
     this.body.resetForces(true);
     this.body.resetTorques(true);
     this.steering = 0;
+    this.powertrain.reset();
     this.throttle = this.braking = 0;
     for (let i = 0; i < this.wheelPoints.length; i++) {
       this.controller.setWheelEngineForce(i, 0);

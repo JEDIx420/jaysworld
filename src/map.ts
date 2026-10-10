@@ -100,7 +100,11 @@ export function drawVillageMap(
     ctx.setLineDash([]);
     const end = route[route.length - 1];
     ctx.beginPath();
-    ctx.arc(x(end.x), z(end.z), full ? 10 : 6, 0, Math.PI * 2);
+    const markerSize = full ? 8 : 5;
+    ctx.moveTo(x(end.x) - markerSize, z(end.z) - markerSize);
+    ctx.lineTo(x(end.x) + markerSize, z(end.z) + markerSize);
+    ctx.moveTo(x(end.x) + markerSize, z(end.z) - markerSize);
+    ctx.lineTo(x(end.x) - markerSize, z(end.z) + markerSize);
     ctx.stroke();
   }
   for (const closure of ROAD_CLOSURES) {
@@ -130,12 +134,21 @@ export function drawVillageMap(
       ctx.fill();
     }
     ctx.fillStyle = full ? '#244b40' : '#e6c485';
-    ctx.beginPath();
-    ctx.arc(x(p.trigger.x), z(p.trigger.z), full ? 15 : 4, 0, Math.PI * 2);
-    ctx.fill();
     if (full) {
+      ctx.beginPath();
+      ctx.arc(x(p.trigger.x), z(p.trigger.z), 15, 0, Math.PI * 2);
+      ctx.fill();
       ctx.fillStyle = '#f3ead0';
       ctx.fillText(String(i + 1), x(p.trigger.x), z(p.trigger.z) + 7);
+    } else {
+      ctx.strokeStyle = '#e6c485';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x(p.trigger.x) - 4, z(p.trigger.z) - 4);
+      ctx.lineTo(x(p.trigger.x) + 4, z(p.trigger.z) + 4);
+      ctx.moveTo(x(p.trigger.x) + 4, z(p.trigger.z) - 4);
+      ctx.lineTo(x(p.trigger.x) - 4, z(p.trigger.z) + 4);
+      ctx.stroke();
     }
   });
   for (const offer of mapOffers) {

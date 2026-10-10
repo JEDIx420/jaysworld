@@ -1,6 +1,7 @@
 import './style.css';
 import './retro.css';
 import './venues.css';
+import './journey-hud.css';
 import '@fontsource/noto-sans-malayalam/malayalam-400.css';
 import { PLACES, nearestPlace, type Place } from './projects';
 import { VillageRadio } from './radio';
@@ -8,9 +9,24 @@ import { VenueControls, RetroExhibit } from './retro';
 import { JourneyAudio } from './audio';
 import { FareGame, type Snack } from './fares';
 import { passengerStop } from './passenger-stops';
-import { districtAt, routeBetween, distance2, PASSENGERS, stopById, type Point } from './village';
+import {
+  districtAt,
+  routeBetween,
+  distance2,
+  PASSENGERS,
+  stopById,
+  ROAD_START,
+  type Point,
+} from './village';
 import { drawVillageMap, atlasHit, atlasOfferHit, setMapOffers, navigationCue } from './map';
 import type { Journey, ViewMode } from './engine';
+import { prepareDials, updateDials } from './driving-hud';
+import {
+  JourneyProgress,
+  ACCOMPLISHMENTS,
+  type AccomplishmentId,
+  type Trail,
+} from './journey-progress';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('world'),
@@ -30,6 +46,15 @@ try {
   /* Storage is optional. */
 }
 const fares = new FareGame(saved);
+let savedJourney: unknown;
+try {
+  savedJourney = JSON.parse(localStorage.getItem('jaysworld-journey-v1') ?? 'null');
+} catch {
+  /* Optional. */
+}
+const discovery = new JourneyProgress(savedJourney);
+discovery.visits.forEach((id) => visited.add(id));
+prepareDials();
 let taxiEnabled = false;
 try {
   taxiEnabled = localStorage.getItem('jaysworld-taxi-mode') === 'on';
@@ -50,11 +75,16 @@ let journey: Journey | undefined,
   viewMode: ViewMode = 'drive',
   routePlace: Place | undefined,
   atlasRoute: readonly Point[] = [],
-  position: Point = { x: -48, z: -4 },
+  position: Point = { ...ROAD_START },
   speed = 0,
   yaw = 0,
   lastPassenger = '',
-  lastDutySignature = '';
+  lastDutySignature = '',
+  lastOfferSignature = '',
+  lastRouteTarget = '',
+  lastRoutePosition: Point = { x: Infinity, z: Infinity },
+  lastDrivePoint: Point = { ...ROAD_START },
+  drivenDistance = 0;
 const paused = () => dialogs.some((d) => d.open) || document.hidden || !experienceStarted;
 const announce = (text: string) => {
   $('announcements').textContent = text;
@@ -66,12 +96,146 @@ const save = () => {
     /* Private browsing may disable storage. */
   }
 };
-function toast(text: string) {
-  $('toast').textContent = text;
-  $('toast').hidden = false;
+type ToastMessage = {
+  text: string;
+  title?: string;
+  choices?: { label: string; action: () => void }[];
+  duration: number;
+};
+const toastQueue: ToastMessage[] = [];
+let currentToast = '';
+function nextToast() {
   clearTimeout(toastTimer);
-  toastTimer = window.setTimeout(() => ($('toast').hidden = true), 4000);
-  announce(text);
+  const message = toastQueue.shift();
+  const node = $('toast');
+  node.replaceChildren();
+  node.hidden = !message;
+  currentToast = message?.text ?? '';
+  if (!message) return;
+  if (message.title) {
+    const heading = document.createElement('strong');
+    heading.textContent = message.title;
+    node.append(heading);
+  }
+  const copy = document.createElement('span');
+  copy.textContent = message.text;
+  node.append(copy);
+  if (message.choices) {
+    const actions = document.createElement('div');
+    actions.className = 'toast-choices';
+    message.choices.forEach(({ label, action }) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = label;
+      button.addEventListener('click', () => {
+        nextToast();
+        action();
+        canvas.focus({ preventScroll: true });
+      });
+      actions.append(button);
+    });
+    node.append(actions);
+  }
+  const close = document.createElement('button');
+  close.className = 'toast-close';
+  close.type = 'button';
+  close.textContent = 'Continue';
+  close.setAttribute('aria-label', 'Dismiss notification');
+  close.addEventListener('click', () => {
+    nextToast();
+    canvas.focus({ preventScroll: true });
+  });
+  node.append(close);
+  toastTimer = window.setTimeout(nextToast, message.duration);
+  announce((message.title ? message.title + '. ' : '') + message.text);
+}
+function toast(text: string, title?: string, choices?: ToastMessage['choices'], duration = 4500) {
+  if (currentToast === text || toastQueue.some((m) => m.text === text)) return;
+  toastQueue.push({ text, title, choices, duration });
+  if (toastQueue.length > 4) toastQueue.shift();
+  if (!currentToast) nextToast();
+}
+function saveJourney() {
+  try {
+    localStorage.setItem('jaysworld-journey-v1', JSON.stringify(discovery.saved));
+  } catch {
+    /* Optional. */
+  }
+  updateJourney();
+}
+function accomplish(id: AccomplishmentId) {
+  const item = discovery.earn(id);
+  if (!item) return;
+  saveJourney();
+  toast(item.hint, item.title + ' · accomplished');
+}
+function nextCompanyPlace() {
+  return (
+    PLACES.find((p) => p.id !== 'about' && !discovery.visits.has(p.id)) ??
+    (!discovery.visits.has('about') ? PLACES[0] : undefined)
+  );
+}
+function updateJourney() {
+  $('journey-button').textContent = discovery.earned.size + ' / ' + ACCOMPLISHMENTS.length;
+  $('mission-route').textContent =
+    discovery.trail === 'company'
+      ? nextCompanyPlace()
+        ? 'Next · visit ' + nextCompanyPlace()!.name
+        : 'Tour complete · explore freely'
+      : discovery.trail === 'taxi'
+        ? discovery.earned.has('fare')
+          ? 'Take another fare'
+          : 'First fare · follow gold arrows'
+        : 'Explore · ' + discovery.visits.size + ' / 7 places';
+  const list = $('accomplishments');
+  list.replaceChildren();
+  for (const trail of ['company', 'taxi', 'explore'] as const)
+    $('trail-' + trail).setAttribute('aria-pressed', String(discovery.trail === trail));
+  ACCOMPLISHMENTS.forEach((item) => {
+    const row = document.createElement('div');
+    row.className = 'accomplishment' + (discovery.earned.has(item.id) ? ' earned' : '');
+    row.dataset.accomplishment = item.id;
+    row.dataset.earned = String(discovery.earned.has(item.id));
+    const title = document.createElement('strong');
+    title.textContent = (discovery.earned.has(item.id) ? '✓ ' : '○ ') + item.title;
+    const hint = document.createElement('small');
+    hint.textContent = item.hint;
+    row.append(title, hint);
+    list.append(row);
+  });
+}
+function chooseTrail(trail: Trail) {
+  discovery.trail = trail;
+  saveJourney();
+  closeDialogs();
+  journey?.leaveView();
+  startExperience();
+  if (trail !== 'taxi' && taxiEnabled) $('taxi-toggle').click();
+  if (trail === 'company') {
+    const next = nextCompanyPlace() ?? PLACES[1];
+    navigate(next);
+    toast(
+      'Follow the arrows to the X at ' + next.location + '. Stop there and press Enter.',
+      'Meet ' + next.name,
+    );
+  } else if (trail === 'taxi') {
+    if (!taxiEnabled) $('taxi-toggle').click();
+    routePlace = undefined;
+    lastDutySignature = '';
+    updateDuty();
+    toast(
+      'Follow a gold passenger route. Stop beside them, press Enter, then drive to their destination.',
+      'Your first fare',
+    );
+  } else {
+    routePlace = undefined;
+    lastDutySignature = '';
+    updateDuty();
+    toast(
+      'Visit any X marker. M opens the map; Shift or the Boost button gives your auto a little extra.',
+      'The road is yours',
+    );
+  }
 }
 function closeDialogs() {
   dialogs.forEach((d) => {
@@ -123,36 +287,47 @@ function updateDuty() {
     journey?.setPassenger(state.passengerIndex, state.onboard);
     journey?.setDuty(taxiEnabled);
   }
-  journey?.setOffers(taxiEnabled ? fares.offers : [], fares.unavailable);
-  setMapOffers(
-    taxiEnabled
-      ? fares.offers.map((id) => ({
-          ...passengerStop(PASSENGERS[id].from),
-          id,
-          name: PASSENGERS[id].name,
-        }))
-      : [],
-  );
-  const offers = $('fare-offers');
-  offers.replaceChildren();
-  if (taxiEnabled && !state.onboard)
-    fares.offers.forEach((id) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.textContent = PASSENGERS[id].name;
-      button.setAttribute(
-        'aria-label',
-        'Route to ' + PASSENGERS[id].name + ' at ' + stopById(PASSENGERS[id].from).label,
-      );
-      button.setAttribute('aria-pressed', String(id === state.passengerIndex));
-      button.addEventListener('click', () => {
-        fares.select(id);
-        routePlace = undefined;
-        updateDuty();
-        canvas.focus({ preventScroll: true });
+  const offerSignature = [
+    booted,
+    taxiEnabled,
+    state.onboard,
+    state.passengerIndex,
+    fares.offers.join(),
+    fares.unavailable.join(),
+  ].join('|');
+  if (offerSignature !== lastOfferSignature) {
+    lastOfferSignature = offerSignature;
+    journey?.setOffers(taxiEnabled ? fares.offers : [], fares.unavailable);
+    setMapOffers(
+      taxiEnabled
+        ? fares.offers.map((id) => ({
+            ...passengerStop(PASSENGERS[id].from),
+            id,
+            name: PASSENGERS[id].name,
+          }))
+        : [],
+    );
+    const offers = $('fare-offers');
+    offers.replaceChildren();
+    if (taxiEnabled && !state.onboard)
+      fares.offers.forEach((id) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = PASSENGERS[id].name;
+        button.setAttribute(
+          'aria-label',
+          'Route to ' + PASSENGERS[id].name + ' at ' + stopById(PASSENGERS[id].from).label,
+        );
+        button.setAttribute('aria-pressed', String(id === state.passengerIndex));
+        button.addEventListener('click', () => {
+          fares.select(id);
+          routePlace = undefined;
+          updateDuty();
+          canvas.focus({ preventScroll: true });
+        });
+        offers.append(button);
       });
-      offers.append(button);
-    });
+  }
   $('wallet').textContent = '₹' + state.wallet;
   $('taxi-toggle').setAttribute('aria-pressed', String(taxiEnabled));
   $('taxi-toggle').innerHTML = (taxiEnabled ? 'ON DUTY' : 'OFF DUTY') + '<i></i>';
@@ -179,8 +354,14 @@ function updateDuty() {
   $('fare-action').hidden = !action || viewMode !== 'drive';
   $('fare-action').textContent = action === 'dropoff' ? 'Drop off ↵' : 'Pick up ↵';
   updateInteraction();
-  const route = target ? routeBetween(position, target).points : [];
-  atlasRoute = route;
+  const routeTarget = target ? target.x + ',' + target.z : '';
+  if (routeTarget !== lastRouteTarget || distance2(position, lastRoutePosition) > 8) {
+    lastRouteTarget = routeTarget;
+    lastRoutePosition = { ...position };
+    atlasRoute = target ? routeBetween(position, target).points : [];
+    journey?.route(atlasRoute);
+  }
+  const route = atlasRoute;
   const cue = navigationCue(position, yaw, route);
   $('navigation-card').hidden = !target || viewMode !== 'drive';
   $('navigation-destination').textContent =
@@ -188,7 +369,6 @@ function updateDuty() {
   $('navigation-instruction').textContent = cue.instruction;
   $('navigation-distance').textContent = Math.round(cue.distance) + ' m along the road';
   $('navigation-arrow').style.transform = 'rotate(' + cue.turn + 'rad)';
-  journey?.route(route);
   if (places.open || !booted)
     drawVillageMap($<HTMLCanvasElement>('village-atlas'), position, yaw, route, true);
   $('fare-card').dataset.onboard = String(state.onboard);
@@ -222,6 +402,7 @@ function act() {
       save();
       audio.cue(action === 'pickup' ? 'pickup' : 'coins');
       toast(result.message);
+      if (action === 'dropoff') accomplish('fare');
       updateDuty();
     }
   } else if (
@@ -238,6 +419,7 @@ function visit(place: Place) {
   journey?.visit(place);
 }
 function updatePlaces() {
+  updateJourney();
   const list = $('places-list');
   list.replaceChildren();
   PLACES.forEach((place, index) => {
@@ -303,6 +485,7 @@ const exhibit = new RetroExhibit(project, {
   stars: observeStars,
   playback: (active) => {
     canvas.dataset.beatPlaying = String(active);
+    if (active) accomplish('beat');
   },
   roof: () => journey?.roof(),
   buy,
@@ -337,6 +520,10 @@ function showProject(place: Place) {
   visitingPlace = place;
   if (!sceneFailed) journey?.interior(place);
   visited.add(place.id);
+  const completed = discovery.visit(place.id);
+  if (completed) toast(completed.hint, completed.title + ' · accomplished');
+  saveJourney();
+  if (place.id === 'eagle-eye') accomplish('company');
   updatePlaces();
   exhibit.show(place);
   open(project);
@@ -388,6 +575,16 @@ function startExperience() {
   journey?.pause();
   canvas.focus({ preventScroll: true });
   updateDuty();
+  toast(
+    'Visit Eagle Eye, earn your first taxi fare, or just ride around. Nothing is locked behind a mission.',
+    'Welcome to Jay’s World',
+    [
+      { label: 'Visit Eagle Eye', action: () => chooseTrail('company') },
+      { label: 'Take fares', action: () => chooseTrail('taxi') },
+      { label: 'Explore freely', action: () => chooseTrail('explore') },
+    ],
+    16000,
+  );
 }
 $('start-driving').addEventListener('click', startExperience);
 // Any first click after loading unlocks audio in the same trusted event.
@@ -539,6 +736,20 @@ window.addEventListener(
 $('joystick').addEventListener('pointerdown', startExperience, { capture: true });
 $('places-button').addEventListener('click', showPlaces);
 $('minimap-button').addEventListener('click', showPlaces);
+$('mission-route').addEventListener('click', () => {
+  if (discovery.trail === 'company') {
+    const next = nextCompanyPlace();
+    if (next) navigate(next);
+    else showPlaces();
+  } else if (discovery.trail === 'taxi') $('fare-route').click();
+  else showPlaces();
+});
+for (const trail of ['company', 'taxi', 'explore'] as const)
+  $('trail-' + trail).addEventListener('click', () => chooseTrail(trail));
+$('journey-button').addEventListener('click', () => {
+  showPlaces();
+  $('accomplishments').scrollIntoView({ block: 'center' });
+});
 $('loading-places').addEventListener('click', showPlaces);
 $('about-link').addEventListener('click', (e) => {
   e.preventDefault();
@@ -862,16 +1073,22 @@ void import('./engine')
         $('welcome').classList.add('quiet');
         $('driving-hint').classList.add('quiet');
       },
-      onTelemetry: (v, x, z, angle) => {
+      onTelemetry: (v, x, z, angle, gear, rpm, boost) => {
         speed = v;
         position = { x, z };
         yaw = angle;
         if (taxiEnabled) fares.update(position);
-        $('speed').textContent = String(Math.round(v * 3.6));
+        updateDials(v, gear, rpm, boost);
+        const driven = distance2(position, lastDrivePoint);
+        if (experienceStarted && viewMode === 'drive' && v > 0.5 && driven < 10)
+          drivenDistance += driven;
+        lastDrivePoint = { ...position };
+        if (drivenDistance > 20) accomplish('first-road');
         $('place-name').textContent = nearestPlace(x, z, 21)?.location ?? districtAt({ x, z });
         updateDuty();
       },
       onNear: (place) => {
+        if (activePlace?.id === place?.id) return;
         activePlace = place;
         updateInteraction();
         if (place) {
@@ -884,6 +1101,9 @@ void import('./engine')
         const changed = viewMode !== mode;
         viewMode = mode;
         document.body.classList.toggle('visiting', mode !== 'drive');
+        if (experienceStarted && mode === 'roof') accomplish('roof');
+        if (experienceStarted && mode === 'croc') accomplish('wetland');
+        if (experienceStarted && mode === 'stars') accomplish('stars');
         if (changed) observerIndex = 0;
         if (changed || !$('view-panel').childElementCount)
           venue.show(mode, visitingPlace, title, detail);
@@ -894,8 +1114,8 @@ void import('./engine')
         toast(message);
       },
       onError: fallback,
-      onAudio: (v, p, t, b) => {
-        audio.update(v, p, t, b);
+      onAudio: (v, p, t, b, gear, rpm) => {
+        audio.update(v, p, t, b, gear, rpm);
         audio.studio(
           distance2(position, PLACES.find((v) => v.id === 'music')!.position),
           (viewMode === 'drive' || viewMode === 'storefront') && !dialogs.some((d) => d.open),
@@ -919,7 +1139,12 @@ void import('./engine')
     updateDuty();
     loading.hidden = true;
     const hashPlace = PLACES.find((p) => '#' + p.id === location.hash);
-    if (hashPlace) showProject(hashPlace);
+    // A shared/reloaded project URL is a route suggestion, never forced entry.
+    if (hashPlace) {
+      routePlace = hashPlace;
+      lastDutySignature = '';
+      updateDuty();
+    }
   })
   .catch((error: unknown) => {
     console.error('Journey initialization failed', error);

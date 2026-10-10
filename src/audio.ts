@@ -112,18 +112,15 @@ export class JourneyAudio {
     if (this.enabled) this.cue('ignition');
     return this.enabled;
   }
-  update(speed: number, paused: boolean, throttle = 0, brake = false) {
+  update(speed: number, paused: boolean, throttle = 0, brake = false, gear = 1, engineRpm = 1000) {
     if (!this.context) return;
     const t = this.context.currentTime;
     this.master!.gain.setTargetAtTime(this.enabled ? 0.65 : 0, t, 0.1);
-    const gear = speed < 3.5 ? 1 : speed < 7.8 ? 2 : 3;
     if (gear !== this.gear && this.enabled && !paused) {
       this.gear = gear;
       this.tone(110, 0.06, 0.022, 'triangle');
     }
-    const rpm = paused
-      ? 0
-      : 13 + speed * (gear === 1 ? 3.8 : gear === 2 ? 2.2 : 1.45) + Math.abs(throttle) * 7;
+    const rpm = paused ? 0 : engineRpm / 110;
     this.exhaust!.frequency.setTargetAtTime(38 + rpm * 2, t, 0.1);
     this.pulse!.frequency.setTargetAtTime(Math.max(1, rpm), t, 0.08);
     this.engineFilter!.frequency.setTargetAtTime(

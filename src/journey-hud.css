@@ -1,0 +1,430 @@
+/* v0.7: one responsive layout owns the driving HUD. */
+:root {
+  --instrument-width: 156px;
+  --hud-edge: max(18px, env(safe-area-inset-right));
+}
+.topbar {
+  padding: max(16px, env(safe-area-inset-top)) var(--hud-edge);
+}
+.topbar .identity,
+.topbar .monogram {
+  width: 44px;
+  height: 44px;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+.topbar .monogram {
+  font-size: 29px;
+  line-height: 1;
+}
+.topbar .monogram span {
+  display: inline;
+}
+#fare-card {
+  top: calc(max(16px, env(safe-area-inset-top)) + 60px);
+  left: max(18px, env(safe-area-inset-left));
+  width: 225px;
+  max-width: calc(100vw - 36px);
+}
+.driving-instruments {
+  position: fixed;
+  right: var(--hud-edge);
+  bottom: max(16px, env(safe-area-inset-bottom));
+  width: var(--instrument-width);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  pointer-events: none;
+}
+#minimap-button {
+  position: relative;
+  inset: auto;
+  transform: none;
+  width: calc(var(--instrument-width) - 28px);
+  height: calc(var(--instrument-width) - 28px);
+  margin: 0;
+  pointer-events: auto;
+  background: #163d35;
+  box-shadow: 0 5px 22px #08271d44;
+}
+#minimap-button canvas {
+  width: 100%;
+  height: 100%;
+}
+.speedometer {
+  position: relative;
+  width: var(--instrument-width);
+  height: calc(var(--instrument-width) * 0.94);
+  filter: drop-shadow(0 3px 7px #0003);
+}
+.speedometer svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.dial-face,
+.rev-face {
+  fill: #102d2bea;
+  stroke: #e8d7a77c;
+  stroke-width: 1;
+}
+.dial-ring {
+  fill: none;
+  stroke: #c5a775;
+  stroke-width: 2;
+}
+.dial-tick {
+  stroke: #dcccad;
+  stroke-width: 1.2;
+}
+.dial-number,
+.dial-unit,
+.rev-label {
+  fill: #eddfc4;
+  font: 9px monospace;
+  text-anchor: middle;
+}
+.dial-unit {
+  font-size: 8px;
+}
+.rev-label {
+  font-size: 5px;
+}
+.dial-needle {
+  stroke: #f0b66b;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: transform 0.1s linear;
+}
+.dial-hub {
+  fill: #ecd4a0;
+}
+.rev-needle {
+  stroke: #88dac9;
+  stroke-width: 1.8;
+  transition: transform 0.1s linear;
+}
+.dial-speed {
+  position: absolute;
+  top: 49%;
+  left: 50%;
+  transform: translateX(-50%);
+  font: 600 18px monospace;
+  color: #f7e4ba;
+}
+.gear-readout {
+  position: absolute;
+  left: 16%;
+  top: 79%;
+  color: #dedac2;
+  font: 7px monospace;
+}
+.gear-readout b {
+  font-size: 16px;
+  color: #f3c77d;
+  margin-left: 4px;
+}
+.boost-status {
+  position: absolute;
+  top: 99%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: #dec69b;
+  font: 7px monospace;
+  letter-spacing: 0.1em;
+}
+.instrument-place {
+  max-width: 100%;
+  font: 9px monospace;
+  text-align: center;
+  color: #eddfc4;
+  padding: 3px 7px;
+  border-radius: 9px;
+  background: #123b31bb;
+}
+.journey-guide {
+  position: fixed;
+  left: max(18px, env(safe-area-inset-left));
+  bottom: max(20px, env(safe-area-inset-bottom));
+  display: flex;
+  gap: 5px;
+  max-width: 340px;
+}
+.journey-guide button {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid #cfca9f44;
+  border-radius: 10px;
+  background: #163d35e8;
+  color: #e6dbbe;
+  font-size: 10px;
+}
+#journey-button {
+  color: #f2c47b;
+  white-space: nowrap;
+}
+#toast {
+  position: fixed;
+  left: 50%;
+  top: 42%;
+  right: auto;
+  bottom: auto;
+  transform: translate(-50%, -50%);
+  width: max-content;
+  max-width: min(430px, calc(100vw - 36px));
+  padding: 17px 22px;
+  border-radius: 14px;
+  background: #15372ff2;
+  border: 1px solid #e6cfa464;
+  color: #f3e6c8;
+  line-height: 1.5;
+  text-align: center;
+  font-size: 13px;
+  pointer-events: auto;
+  box-shadow: 0 10px 40px #102d2a33;
+  z-index: 30;
+}
+#toast > strong {
+  display: block;
+  margin-bottom: 7px;
+  font:
+    23px Georgia,
+    serif;
+}
+.toast-choices {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+.toast-choices button,
+.toast-close {
+  min-height: 40px;
+  border-radius: 7px;
+  border: 1px solid #dcce9d66;
+  background: #e5c27e;
+  color: #1a392d;
+  padding: 8px 12px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.toast-close {
+  display: block;
+  margin: 8px auto 0;
+  background: transparent;
+  color: #e6d4b7;
+}
+.journey-achievements {
+  margin-top: 28px;
+}
+.journey-achievements h2 {
+  font:
+    26px Georgia,
+    serif;
+}
+.journey-achievements p {
+  font-size: 12px;
+}
+.journey-trails {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 15px 0;
+}
+.journey-trails button {
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid #48625066;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 12px;
+}
+.journey-trails button[aria-pressed='true'] {
+  background: #294f40;
+  color: #f4e5be;
+}
+#accomplishments {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.accomplishment {
+  border: 1px solid #88997f44;
+  border-radius: 8px;
+  padding: 12px;
+  opacity: 0.65;
+}
+.accomplishment.earned {
+  background: #dce1c2;
+  opacity: 1;
+}
+.accomplishment strong,
+.accomplishment small {
+  display: block;
+}
+.accomplishment strong {
+  font-size: 12px;
+}
+.accomplishment small {
+  font-size: 10px;
+  margin-top: 5px;
+  line-height: 1.5;
+}
+dialog::backdrop,
+.radio-cabinet::backdrop {
+  backdrop-filter: none;
+  background: #102c2966;
+}
+body.visiting .driving-instruments,
+body.visiting .journey-guide,
+body:not(.started) .driving-instruments,
+body:not(.started) .journey-guide,
+body[data-scene='fallback'] .driving-instruments,
+body[data-scene='fallback'] .journey-guide {
+  display: none;
+}
+.boost-edge {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  box-shadow: inset 0 0 90px #5edbd838;
+  border: 2px solid #95edce33;
+  transition: opacity 0.2s;
+}
+body.boosting .boost-edge {
+  opacity: 1;
+}
+body.boosting .dial-needle,
+body.boosting .rev-needle {
+  stroke: #80e8d3;
+}
+#boost-button {
+  color: #94ebd4;
+}
+@media (pointer: coarse) {
+  :root {
+    --instrument-width: 128px;
+    --hud-edge: max(12px, env(safe-area-inset-right));
+  }
+  #touch-controls {
+    bottom: max(18px, env(safe-area-inset-bottom));
+    left: max(12px, env(safe-area-inset-left));
+    right: calc(var(--hud-edge) + var(--instrument-width) + 10px);
+    height: 112px;
+  }
+  .touch-actions {
+    align-self: flex-end;
+    display: grid;
+    gap: 5px;
+  }
+  .touch-actions button {
+    min-width: 50px;
+    min-height: 34px;
+    height: 34px;
+    padding: 5px 8px;
+    font-size: 10px;
+  }
+  #honk-button {
+    display: none;
+  }
+  .journey-guide {
+    top: calc(max(16px, env(safe-area-inset-top)) + 60px);
+    bottom: auto;
+    max-width: calc(100% - 30px);
+  }
+  #fare-card {
+    top: calc(max(16px, env(safe-area-inset-top)) + 108px);
+    width: 180px;
+  }
+  .navigation-card {
+    top: calc(max(16px, env(safe-area-inset-top)) + 108px);
+    right: 12px;
+    width: 145px;
+  }
+  #interaction-button {
+    bottom: 156px;
+    max-width: calc(100vw - 160px);
+    left: 12px;
+    transform: none;
+  }
+  .interaction strong {
+    font-size: 11px;
+  }
+  .radio-now {
+    bottom: 132px;
+    left: 12px;
+  }
+}
+@media (max-width: 380px) {
+  :root {
+    --instrument-width: 110px;
+  }
+  #fare-card {
+    width: 160px;
+    padding: 6px 8px;
+  }
+  .navigation-card {
+    width: 118px;
+    padding: 7px;
+  }
+  #toast {
+    padding: 13px 15px;
+    font-size: 12px;
+  }
+  #accomplishments {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  :root {
+    --instrument-width: 98px;
+  }
+  .journey-guide {
+    top: calc(max(12px, env(safe-area-inset-top)) + 54px);
+  }
+  #fare-card {
+    top: calc(max(12px, env(safe-area-inset-top)) + 100px);
+    width: 180px;
+  }
+  #fare-card .fare-bottom {
+    margin-top: 0;
+  }
+  .navigation-card {
+    top: 68px;
+    right: 12px;
+    width: 170px;
+  }
+  #toast {
+    top: 45%;
+    max-width: 370px;
+    padding: 12px 18px;
+  }
+  #interaction-button {
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 260px;
+  }
+  .radio-now {
+    display: none;
+  }
+  .journey-caption {
+    padding-bottom: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .boost-edge {
+    display: none;
+  }
+  .dial-needle,
+  .rev-needle {
+    transition: none;
+  }
+}

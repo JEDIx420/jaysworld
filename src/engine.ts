@@ -27,7 +27,15 @@ export interface JourneyOptions {
   rivalArrive: (id: number, point: Point, speed: number) => boolean;
   onTick: (dt: number) => void;
   onProgress: (progress: number, text: string) => void;
-  onTelemetry: (speed: number, x: number, z: number, yaw: number) => void;
+  onTelemetry: (
+    speed: number,
+    x: number,
+    z: number,
+    yaw: number,
+    gear: number,
+    rpm: number,
+    boost: boolean,
+  ) => void;
   onNear: (place: Place | undefined) => void;
   onDrive: () => void;
   onRecover: (message: string) => void;
@@ -40,7 +48,14 @@ export interface JourneyOptions {
     weather: string,
     season: string,
   ) => void;
-  onAudio: (speed: number, paused: boolean, throttle: number, brake: boolean) => void;
+  onAudio: (
+    speed: number,
+    paused: boolean,
+    throttle: number,
+    brake: boolean,
+    gear: number,
+    rpm: number,
+  ) => void;
   onView: (mode: ViewMode, title: string, detail: string) => void;
   onQuality: (performance: boolean) => void;
   interact: () => void;
@@ -94,7 +109,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
   renderer.toneMappingExposure = 1.1;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   const scene = new THREE.Scene(),
-    dayColor = new THREE.Color('#c4d1aa'),
+    dayColor = new THREE.Color('#bed5df'),
     nightColor = new THREE.Color('#12283c');
   const rooms = createVenueRooms();
   scene.background = dayColor.clone();
@@ -133,7 +148,26 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
   autoShadow.rotation.x = -Math.PI / 2;
   autoShadow.scale.set(0.9, 1.65, 1);
   scene.add(autoShadow);
+  const boostMaterial = new THREE.MeshBasicMaterial({
+    color: '#ffc767',
+    transparent: true,
+    opacity: 0.65,
+    depthWrite: false,
+  });
+  const boostStreaks = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(0.055, 1),
+    boostMaterial,
+    12,
+  );
+  boostStreaks.frustumCulled = false;
+  boostStreaks.visible = false;
+  scene.add(boostStreaks);
+  const boostDummy = new THREE.Object3D(),
+    wheelieRotation = new THREE.Quaternion(),
+    rearPivot = new THREE.Vector3();
   const sky = createSky(scene);
+  // Populate the static query index before choosing collision-free traffic spawns.
+  world.step();
   const traffic = createTraffic(
     scene,
     world,
@@ -179,6 +213,10 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     distance = 13,
     frame = 0,
     lastRendered = 0,
+    renderedFrames = 0,
+    frameTicks = 0,
+    slowSeconds = 0,
+    renderScale = 1,
     lastFrame = performance.now(),
     accumulator = 0,
     elapsed = 0,
@@ -272,9 +310,12 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
   };
   const quality = (value: boolean) => {
     performanceMode = value;
+    renderScale = 1;
+    slowSeconds = 0;
     renderer.setPixelRatio(Math.min(devicePixelRatio, value ? 1 : 1.5));
     renderer.shadowMap.enabled = !value;
     environment.setQuality(value);
+    weather.setQuality(value);
     options.onQuality(value);
     resize();
   };
@@ -295,6 +336,20 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     const visualDt = Math.min(Math.max((now - lastFrame) / 1000, 0), 0.5);
     const dt = Math.min(visualDt, 0.1);
     lastFrame = now;
+    // A sustained frame budget miss reduces shadows and resolution once, including on phones.
+    if (options.isStarted() && !document.hidden && !options.isPaused()) {
+      slowSeconds =
+        visualDt > 0.037 ? slowSeconds + visualDt : Math.max(0, slowSeconds - visualDt * 2);
+      if (slowSeconds > 3) {
+        if (!performanceMode) quality(true);
+        else if (renderScale > 0.65) {
+          renderScale = Math.max(0.65, renderScale - 0.15);
+          renderer.setPixelRatio(Math.min(devicePixelRatio, 1) * renderScale);
+          resize();
+        }
+        slowSeconds = 0;
+      }
+    }
     if (!document.hidden && options.isStarted()) elapsed += visualDt;
     const inputPaused = options.isPaused() || document.hidden || contextLost;
     const paused = inputPaused || mode !== 'drive';
@@ -380,6 +435,34 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       currentQ,
       paused ? 1 : accumulator / FIXED_STEP,
     );
+    const powertrain = vehicle.powertrain;
+    const lift = paused || reducedMotion ? 0 : powertrain.wheelie;
+    // Rotate the visual chassis around the rear axle; the stable physics body stays on the road.
+    if (lift > 0) {
+      rearPivot.set(0, -0.5, 0.85).applyQuaternion(auto.group.quaternion).add(auto.group.position);
+      wheelieRotation.setFromAxisAngle(new THREE.Vector3(1, 0, 0), lift);
+      auto.group.quaternion.multiply(wheelieRotation);
+      auto.group.position
+        .copy(rearPivot)
+        .sub(new THREE.Vector3(0, -0.5, 0.85).applyQuaternion(auto.group.quaternion));
+    }
+    boostStreaks.visible = powertrain.boosted && !paused && !reducedMotion;
+    if (boostStreaks.visible) {
+      for (let i = 0; i < 12; i++) {
+        boostDummy.position.set(
+          (i % 2 ? -1 : 1) * (1.3 + (i % 3) * 0.18),
+          0.3 + (i % 4) * 0.18,
+          1 + ((elapsed * 20 + i * 0.7) % 4),
+        );
+        boostDummy.position.applyQuaternion(currentQ).add(current);
+        boostDummy.quaternion.copy(currentQ);
+        boostDummy.rotateX(Math.PI / 2);
+        boostDummy.scale.set(1, 0.5 + (i % 3) * 0.4, 1);
+        boostDummy.updateMatrix();
+        boostStreaks.setMatrixAt(i, boostDummy.matrix);
+      }
+      boostStreaks.instanceMatrix.needsUpdate = true;
+    }
     autoShadow.position.set(current.x, groundHeight(current.x, current.z) + 0.085, current.z);
     autoShadow.rotation.z = -new THREE.Euler().setFromQuaternion(currentQ, 'YXZ').y;
     for (let i = 0; i < 3; i++) {
@@ -393,7 +476,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       item.mesh.position.copy(item.body.translation());
       item.mesh.quaternion.copy(item.body.rotation());
     }
-    traffic.update(dt);
+    traffic.update(dt, current, mode === 'roof' ? 250 : performanceMode ? 115 : 280);
     environment.update(reducedMotion && mode !== 'croc' ? 0 : elapsed, dt, current);
     const climate = weather.update(document.hidden || !options.isStarted() ? 0 : visualDt, camera);
     nightAmount += (climate.night - nightAmount) * (1 - Math.exp(-visualDt * 0.65));
@@ -469,7 +552,8 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       camera.updateProjectionMatrix();
       camera.lookAt(doorway);
     } else {
-      camera.fov += (46 - camera.fov) * (1 - Math.exp(-dt * 5));
+      const driveFov = powertrain.boosted && !paused && !reducedMotion ? 53 : 46;
+      camera.fov += (driveFov - camera.fov) * (1 - Math.exp(-dt * 5));
       camera.updateProjectionMatrix();
       desiredCamera.set(
         target.x + Math.sin(orbitYaw) * Math.cos(elevation) * distance,
@@ -524,24 +608,53 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     if (uiTimer > 0.1) {
       uiTimer = 0;
       const yaw = new THREE.Euler().setFromQuaternion(currentQ, 'YXZ').y;
-      options.onTelemetry(vehicle.speed, current.x, current.z, yaw);
+      options.onTelemetry(
+        vehicle.speed,
+        current.x,
+        current.z,
+        yaw,
+        powertrain.gear,
+        powertrain.rpm,
+        powertrain.boosted && !paused,
+      );
       drawVillageMap(map, current, yaw, routePoints);
       if ((atlas.closest('dialog') as HTMLDialogElement).open)
         drawVillageMap(atlas, current, yaw, routePoints, true);
-      options.onAudio(vehicle.speed, paused, throttle, braking);
+      options.onAudio(vehicle.speed, paused, throttle, braking, powertrain.gear, powertrain.rpm);
       canvas.dataset.trafficActors = JSON.stringify(
         traffic.actors.map((a) => ({
           kind: a.kind,
           x: a.body.translation().x,
           z: a.body.translation().z,
           speed: a.speed,
+          stopped: a.stopped,
+          recoveries: a.recoveries,
         })),
       );
       canvas.dataset.drawCalls = String(renderer.info.render.calls);
       canvas.dataset.triangles = String(renderer.info.render.triangles);
+      canvas.dataset.marketResidents = String(
+        environment.roadside
+          .residents()
+          .filter((p) => p.x < -154 && p.x > -224 && p.z > 5 && p.z < 23).length,
+      );
+      canvas.dataset.entryMarkers = JSON.stringify(
+        environment.markers.map((m) => ({
+          x: m.x,
+          z: m.z,
+          scale: m.mesh.scale.x,
+          name: m.mesh.name,
+        })),
+      );
     }
     const reading = mode !== 'interior' && !!document.querySelector('dialog[open]');
-    if (!contextLost && !document.hidden && (!reading || now - lastRendered > 350)) {
+    // Keep the live radio backdrop smooth. Other reading menus need only a 30 Hz backdrop.
+    const radioOpen = (document.getElementById('radio-dialog') as HTMLDialogElement).open;
+    if (
+      !contextLost &&
+      !document.hidden &&
+      (!reading || radioOpen || now - lastRendered >= 1000 / 30)
+    ) {
       lastRendered = now;
       if (mode === 'interior') {
         const exposure = renderer.toneMappingExposure;
@@ -550,9 +663,11 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
         renderer.toneMappingExposure = exposure;
       } else renderer.render(scene, camera);
       canvas.dataset.rendered = 'true';
+      canvas.dataset.renderFrames = String(++renderedFrames);
     }
     // Read-only diagnostics make meaningful end-to-end driving assertions possible.
     canvas.dataset.safety = yielding ? 'yielding' : 'clear';
+    canvas.dataset.frameTicks = String(++frameTicks);
     canvas.dataset.y = current.y.toFixed(3);
     canvas.dataset.elevation = groundHeight(current.x, current.z).toFixed(2);
     canvas.dataset.route = String(routePoints.length);
@@ -564,6 +679,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     canvas.dataset.night = nightAmount.toFixed(3);
     canvas.dataset.view = mode;
     canvas.dataset.zoom = (mode === 'stars' || mode === 'roof' ? camera.fov : distance).toFixed(2);
+    canvas.dataset.lookYaw = orbitYaw.toFixed(4);
     canvas.dataset.croc = String(crocIndex);
     canvas.dataset.traffic = String(traffic.actors.length);
     canvas.dataset.weather = climate.weather;
@@ -572,6 +688,17 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     canvas.dataset.season = climate.season;
     canvas.dataset.signalTime = traffic.time.toFixed(2);
     canvas.dataset.rival = traffic.actors[0].jobOnboard ? 'passenger' : 'available';
+    canvas.dataset.gear = String(powertrain.gear);
+    canvas.dataset.rpm = powertrain.rpm.toFixed(0);
+    canvas.dataset.boost = String(powertrain.boosted && !paused);
+    canvas.dataset.wheelie = lift.toFixed(3);
+    canvas.dataset.eagles = JSON.stringify(
+      weather.eagles.map((b) => ({
+        x: b.group.position.x,
+        y: b.group.position.y,
+        z: b.group.position.z,
+      })),
+    );
   }
   frame = requestAnimationFrame(render);
   canvas.dataset.ready = 'true';
@@ -594,14 +721,16 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       weather.clock.setWeather(kind);
     },
     look(x, y) {
-      orbitYaw += x * 0.12;
+      orbitYaw -= x * 0.12;
       elevation = THREE.MathUtils.clamp(elevation + y * 0.08, mode === 'roof' ? -0.6 : 0.08, 1.48);
       manualCameraAt = elapsed;
     },
     roof() {
       view('roof', 'Above Eagle Towers', 'Look around · listen to the town');
-      orbitYaw = -1.33;
-      elevation = -0.28;
+      const p = PLACES.find((p) => p.id === 'eagle-eye')!.position;
+      const eagle = weather.eagles[0].group.position;
+      orbitYaw = Math.atan2(eagle.x - (p.x - 4.27), eagle.z - (p.z + 1.07));
+      elevation = 0.12;
       camera.fov = 58;
       camera.updateProjectionMatrix();
     },

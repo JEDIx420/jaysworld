@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { groundHeight } from './terrain';
 import { roadClearance, waterAt } from './village';
+import { makeBird } from './birds';
+import { createClouds } from './clouds';
+import { TOWER_ROOF } from './models';
 export type WeatherKind = 'clear' | 'haze' | 'wind' | 'rain';
 export function nightAt(hour: number) {
   const h = ((hour % 24) + 24) % 24;
@@ -39,19 +42,10 @@ export function createWeather(scene: THREE.Scene, small: boolean) {
   let rainAmount = 0,
     hazeAmount = 0,
     windAmount = 0.2;
-  const cloudMaterial = new THREE.MeshStandardMaterial({
-    color: '#e7e9d5',
-    roughness: 1,
-    transparent: true,
-    opacity: 0.92,
-    depthWrite: false,
-  });
-  const clouds = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 8, 6), cloudMaterial, 96);
-  clouds.frustumCulled = false;
-  scene.add(clouds);
+  const clouds = createClouds(scene);
   const dummy = new THREE.Object3D();
-  const count = small ? 300 : 720,
-    verts = new Float32Array(count * 6);
+  let count = small ? 300 : 720;
+  const verts = new Float32Array(720 * 6);
   const rainGeometry = new THREE.BufferGeometry().setAttribute(
     'position',
     new THREE.BufferAttribute(verts, 3),
@@ -82,36 +76,10 @@ export function createWeather(scene: THREE.Scene, small: boolean) {
   );
   dust.frustumCulled = false;
   scene.add(dust);
-  const birds = Array.from({ length: small ? 7 : 14 }, (_, i) => {
-    const group = new THREE.Group(),
-      material = new THREE.MeshStandardMaterial({
-        color: i % 3 ? '#e4dcc3' : '#354b3f',
-        roughness: 1,
-      });
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 5), material);
-    body.scale.set(0.7, 0.65, 2.2);
-    group.add(body);
-    const wings = [-1, 1].map((side) => {
-      const pivot = new THREE.Group(),
-        g = new THREE.BufferGeometry();
-      g.setAttribute(
-        'position',
-        new THREE.Float32BufferAttribute(
-          [0, 0, -0.15, side * 0.7, 0, 0.08, side * 0.42, 0, 0.35, 0, 0, 0.17],
-          3,
-        ),
-      );
-      g.setIndex([0, 1, 2, 0, 2, 3]);
-      g.computeVertexNormals();
-      const mat = material.clone();
-      mat.side = THREE.DoubleSide;
-      const wing = new THREE.Mesh(g, mat);
-      pivot.add(wing);
-      group.add(pivot);
-      return pivot;
-    });
-    scene.add(group);
-    return { group, wings };
+  const birds = Array.from({ length: 8 }, (_, i) => {
+    const bird = makeBird(i < 2);
+    scene.add(bird.group);
+    return bird;
   });
   // Low flowers and shrub clusters use one draw call and keep all roads clear.
   const flowers = new THREE.InstancedMesh(
@@ -134,6 +102,15 @@ export function createWeather(scene: THREE.Scene, small: boolean) {
   scene.add(flowers);
   return {
     clock,
+    eagles: birds.slice(0, 2),
+    setQuality(value: boolean) {
+      count = value ? 300 : 720;
+      rainGeometry.setDrawRange(0, count * 2);
+      clouds.quality(value);
+      birds.forEach((b, i) => {
+        b.group.visible = i < (value ? 5 : 8);
+      });
+    },
     get rain() {
       return rainAmount;
     },
@@ -148,24 +125,7 @@ export function createWeather(scene: THREE.Scene, small: boolean) {
       rainAmount += ((k === 'rain' ? 1 : 0) - rainAmount) * blend;
       hazeAmount += ((k === 'haze' ? 0.65 : k === 'rain' ? 0.3 : 0) - hazeAmount) * blend;
       windAmount += ((k === 'wind' ? 1 : k === 'rain' ? 0.7 : 0.2) - windAmount) * blend;
-      clouds.visible = true;
-      cloudMaterial.color
-        .set('#e8e7cf')
-        .lerp(new THREE.Color('#738991'), rainAmount * 0.7 + clock.night * 0.6);
-      for (let i = 0; i < 96; i++) {
-        const cluster = Math.floor(i / 8),
-          part = i % 8;
-        dummy.position.set(
-          -280 + (cluster % 4) * 130 + Math.sin(part * 2) * 13 + ((t * windAmount * 0.7) % 90),
-          80 + Math.floor(cluster / 4) * 18 + Math.sin(part) * 4,
-          -200 + Math.floor(cluster / 4) * 190 + Math.cos(part * 2) * 12,
-        );
-        dummy.scale.set(9 + (part % 3) * 3, 3.8 + (part % 2), 8 + (part % 4));
-        dummy.rotation.set(0, 0, 0);
-        dummy.updateMatrix();
-        clouds.setMatrixAt(i, dummy.matrix);
-      }
-      clouds.instanceMatrix.needsUpdate = true;
+      clouds.update(t, windAmount, rainAmount, clock.night, camera);
       rain.visible = rainAmount > 0.02;
       rainMaterial.opacity = rainAmount * 0.35;
       if (rain.visible)
@@ -187,18 +147,23 @@ export function createWeather(scene: THREE.Scene, small: boolean) {
         }
       dust.geometry.attributes.position.needsUpdate = dust.visible;
       birds.forEach((b, i) => {
-        const a = t * (0.06 + i * 0.001) + i * 0.7,
-          cx = i < 5 ? -36 : i < 9 ? 35 : -150,
-          cz = i < 5 ? -7 : i < 9 ? -185 : 80,
-          r = 11 + i * 1.5;
+        const eagle = i < 2;
+        const a = t * (eagle ? 0.09 - i * 0.02 : 0.07) + (eagle ? 4.9 - i * 1.05 : i * 2.1),
+          cx = eagle ? -36 : i < 5 ? 35 : -150,
+          cz = eagle ? -7 : i < 5 ? -185 : 80,
+          r = eagle ? 12 + i * 8 : 16 + i * 2;
         b.group.position.set(
           cx + Math.sin(a) * r,
-          (i < 5 ? 31 : i < 9 ? 31 : 12) + Math.sin(a * 2) * 2,
+          (eagle ? groundHeight(-36, -7) + TOWER_ROOF + 3 + i * 3 : i < 5 ? 38 : 12) +
+            Math.sin(a * 2) * 1.2,
           cz + Math.cos(a) * r,
         );
         b.group.rotation.y = Math.atan2(-Math.cos(a), Math.sin(a));
         b.group.rotation.z = Math.sin(a) * 0.12;
-        b.wings.forEach((w, side) => (w.rotation.z = Math.sin(t * 5 + i) * 0.45 * (side ? -1 : 1)));
+        const flap = eagle
+          ? Math.pow(Math.max(0, Math.sin(t * 0.45 + i)), 8) * Math.sin(t * 4) * 0.28
+          : Math.sin(t * 4 + i) * 0.3;
+        b.wings.forEach((w, side) => (w.rotation.z = (-0.07 + flap) * (side ? -1 : 1)));
       });
       return {
         night: clock.night,

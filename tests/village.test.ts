@@ -57,7 +57,12 @@ test('Rapier driving earns a fare which funds tea and a snack, with exact wallet
     for (let i = 0; i < 3000; i++) {
       const p = v.body.translation();
       const distance = Math.hypot(p.x - g.destination.x, p.z - g.destination.z);
-      v.beforeStep({ ...REST_INPUT, throttle: distance > 7 ? 1 : 0, brake: distance <= 7 });
+      const stoppingDistance = 5 + (v.speed * v.speed) / 22;
+      v.beforeStep({
+        ...REST_INPUT,
+        throttle: distance > stoppingDistance ? 1 : 0,
+        brake: distance <= stoppingDistance,
+      });
       world.step();
       g.update(v.body.translation());
       if (g.actionAt(v.body.translation(), v.speed) === 'dropoff') break;

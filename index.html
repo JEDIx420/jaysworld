@@ -74,9 +74,9 @@
       <h1>Take the<br /><em>scenic route.</em></h1>
       <p>I'm Jay. I build AI systems, music tools,<br />and worlds you can get lost in.</p>
       <button class="start-driving" id="start-driving" type="button">
-        Start driving <span>↗</span>
+        Enter Jay’s World <span>↵</span>
       </button>
-      <p class="start-note">Ente Radio, engine sounds, and a road full of stories.</p>
+      <p class="start-note">Press Enter. Visit Eagle Eye, take fares, or follow your curiosity.</p>
       <div class="welcome-controls">
         <kbd>W</kbd><span>Drive the auto. Stop where you're curious.</span>
       </div>
@@ -105,24 +105,39 @@
       <button id="navigation-clear" type="button" aria-label="Clear directions">×</button>
     </aside>
     <section class="hud view-panel" id="view-panel" hidden aria-label="Village visit"></section>
-    <button
-      class="hud minimap-button"
-      id="minimap-button"
-      type="button"
-      aria-label="Open the village map"
-    >
-      <canvas id="minimap" width="256" height="256" aria-hidden="true"></canvas
-      ><span>VILLAGE MAP <kbd>M</kbd></span>
-    </button>
-    <div class="hud dashboard">
-      <div>
-        <small id="place-name">Eagle Towers</small
-        ><span><b id="speed">0</b><small>km/h</small></span>
+    <aside class="hud journey-guide" id="journey-guide" aria-label="Optional journey">
+      <button id="mission-route" type="button">Explore at your pace</button>
+      <button id="journey-button" type="button" aria-label="View accomplishments">0 / 8</button>
+    </aside>
+    <section class="hud driving-instruments" id="driving-instruments" aria-label="Auto instruments">
+      <div class="speedometer" id="speedometer" aria-label="Speed and five-speed transmission">
+        <svg viewBox="0 0 180 155" aria-hidden="true">
+          <circle cx="90" cy="79" r="69" class="dial-face" />
+          <g id="dial-ticks"></g>
+          <path d="M37 120 A67 67 0 1 1 143 120" class="dial-ring" />
+          <line id="speed-needle" x1="90" y1="86" x2="90" y2="25" class="dial-needle" />
+          <circle cx="90" cy="79" r="5" class="dial-hub" />
+          <text x="90" y="104" class="dial-unit">km/h</text>
+          <circle cx="139" cy="128" r="20" class="rev-face" />
+          <line id="rev-needle" x1="139" y1="132" x2="139" y2="112" class="rev-needle" />
+          <text x="139" y="152" class="rev-label">RPM ×1000</text>
+        </svg>
+        <output id="speed" class="dial-speed">0</output>
+        <span class="gear-readout">GEAR <b id="gear">1</b></span>
+        <span id="boost-status" class="boost-status">SHIFT · BOOST</span>
       </div>
-      <div class="explored">
-        <span id="visited-count">0 / 7</span><small>places explored</small>
-      </div>
-    </div>
+      <button
+        class="hud minimap-button"
+        id="minimap-button"
+        type="button"
+        aria-label="Open the village map"
+      >
+        <canvas id="minimap" width="256" height="256" aria-hidden="true"></canvas
+        ><span>VILLAGE MAP <kbd>M</kbd></span>
+      </button>
+      <small id="place-name" class="instrument-place">Eagle Towers</small>
+    </section>
+    <span id="visited-count" hidden>0 / 7</span>
     <div class="hud driving-hint" id="driving-hint">
       <span><kbd>W A S D</kbd> / arrows</span><span>Drag to look</span
       ><span><kbd>Space</kbd> brake</span><span><kbd>H</kbd> honk</span>
@@ -149,10 +164,12 @@
       </div>
       <div class="touch-actions">
         <button type="button" id="brake-button">Brake</button
+        ><button type="button" id="boost-button">Boost</button
         ><button type="button" id="honk-button">Honk</button>
       </div>
     </div>
     <div class="hud toast" id="toast" role="status" hidden></div>
+    <div class="boost-edge" aria-hidden="true"></div>
     <section id="loading" class="loading" aria-live="polite">
       <span class="loading-mark">J<span>.</span></span>
       <h2>On the way to Kerala.</h2>
@@ -205,6 +222,19 @@
         ● Tap a project &nbsp; ▲ Your auto &nbsp; - - Your route &nbsp; ▰ Road closed
       </p>
       <div id="places-list" class="places-list"></div>
+      <section class="journey-achievements" aria-label="Journey accomplishments">
+        <h2>Your journey</h2>
+        <p>
+          Discover in any order. Change your route whenever you like. Your accomplishments stay on
+          this device.
+        </p>
+        <div class="journey-trails">
+          <button type="button" id="trail-company">Company tour</button
+          ><button type="button" id="trail-taxi">Taxi fares</button
+          ><button type="button" id="trail-explore">Explore freely</button>
+        </div>
+        <div id="accomplishments"></div>
+      </section>
       <p class="dialog-foot">The road is yours. Every place has something to explore.</p>
     </dialog>
     <dialog class="retro-exhibit" id="project-dialog" aria-labelledby="project-title">

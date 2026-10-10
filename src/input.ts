@@ -20,6 +20,7 @@ export class Input {
   private touch: DriveInput = { ...REST_INPUT };
   private stickPointer: number | null = null;
   private brakePointer: number | null = null;
+  private boostPointer: number | null = null;
   private orbitPointer: number | null = null;
   private previous = { x: 0, y: 0 };
   private cameraTouches = new Map<number, { x: number; y: number }>();
@@ -77,6 +78,7 @@ export class Input {
     );
     window.addEventListener('keyup', (e) => this.keys.delete(e.code), { signal });
     window.addEventListener('blur', () => this.clear(), { signal });
+    window.addEventListener('resize', () => this.clear(), { signal });
     document.addEventListener(
       'visibilitychange',
       () => {
@@ -139,6 +141,22 @@ export class Input {
     };
     for (const name of ['pointerup', 'pointercancel', 'lostpointercapture'] as const)
       brake.addEventListener(name, releaseBrake, { signal });
+    const boost = document.getElementById('boost-button')!;
+    boost.addEventListener(
+      'pointerdown',
+      (e) => {
+        if (this.paused) return;
+        this.boostPointer = e.pointerId;
+        boost.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      },
+      { signal },
+    );
+    const releaseBoost = (e: PointerEvent) => {
+      if (e.pointerId === this.boostPointer) this.boostPointer = null;
+    };
+    for (const name of ['pointerup', 'pointercancel', 'lostpointercapture'] as const)
+      boost.addEventListener(name, releaseBoost, { signal });
     document.getElementById('honk-button')!.addEventListener('click', callbacks.honk, { signal });
 
     canvas.addEventListener(
@@ -207,7 +225,8 @@ export class Input {
       throttle: clamp(key('KeyW', 'ArrowUp') - key('KeyS', 'ArrowDown') + this.touch.throttle),
       steer: clamp(key('KeyD', 'ArrowRight') - key('KeyA', 'ArrowLeft') + this.touch.steer),
       brake: this.keys.has('Space') || this.brakePointer !== null,
-      boost: this.keys.has('ShiftLeft') || this.keys.has('ShiftRight'),
+      boost:
+        this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || this.boostPointer !== null,
     };
   }
 
@@ -215,7 +234,7 @@ export class Input {
     this.keys.clear();
     this.cameraTouches.clear();
     this.touch = { ...REST_INPUT };
-    this.stickPointer = this.brakePointer = this.orbitPointer = null;
+    this.stickPointer = this.brakePointer = this.boostPointer = this.orbitPointer = null;
     const knob = document.getElementById('joystick-knob');
     if (knob) knob.style.transform = '';
   }

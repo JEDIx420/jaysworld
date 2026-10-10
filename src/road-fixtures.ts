@@ -100,3 +100,33 @@ export function signalApproaches() {
     return directions;
   });
 }
+
+/** Guardrails stop before intersecting driveways and destination approach bays. */
+export function ridgeGuardrails() {
+  const ridge = ROAD_PATHS.find((r) => r.id === 'observatory-road')!;
+  const access = ROAD_PATHS.find((r) => r.id === 'observatory-drive')!;
+  const rails: { a: Point; b: Point }[] = [];
+  for (let i = 24; i < ridge.samples.length - 6; i += 5) {
+    for (const side of [-1, 1]) {
+      const edge = (n: number) => {
+        const p = ridge.samples[n],
+          next = ridge.samples[n + 1];
+        const yaw = Math.atan2(next.x - p.x, next.z - p.z);
+        return { x: p.x + Math.cos(yaw) * side * 4.45, z: p.z - Math.sin(yaw) * side * 4.45 };
+      };
+      const a = edge(i),
+        b = edge(i + 5);
+      // Sample the whole segment, not only its endpoints: long rails can cross a short driveway.
+      const blocked = Array.from({ length: 11 }, (_, n) => ({
+        x: a.x + ((b.x - a.x) * n) / 10,
+        z: a.z + ((b.z - a.z) * n) / 10,
+      })).some(
+        (p) =>
+          access.samples.some((q) => distance2(p, q) < 5.8) ||
+          distance2(p, PLACES.find((v) => v.id === 'space')!.trigger) < 10,
+      );
+      if (!blocked) rails.push({ a, b });
+    }
+  }
+  return rails;
+}

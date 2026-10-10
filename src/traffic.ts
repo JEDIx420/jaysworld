@@ -7,7 +7,7 @@ import { signalPhase, signalStops } from './signals';
 import { signalApproaches } from './road-fixtures';
 import { routeBetween, distance2, TAXI_STOPS, waterAt, type Point } from './village';
 import { groundHeight } from './terrain';
-import { closureTravel, nearestRoad, inClosedRegion } from './placement';
+import { closureTravel, inClosedRegion } from './placement';
 import { PLACES } from './projects';
 import { safeTravel, shouldYield, type Resident } from './safety';
 export type RivalJob = { id: number; target: Point; onboard: boolean };
@@ -24,18 +24,76 @@ export function lanePath(from: Point, to: Point) {
     };
   });
 }
-export function trafficSpawn(path: readonly Point[], occupied: readonly Point[] = []) {
+export function trafficSpawn(
+  path: readonly Point[],
+  occupied: readonly Point[] = [],
+  clear: (point: Point, index: number) => boolean = () => true,
+) {
   for (let i = 4; i < path.length - 1; i++) {
     const p = path[i];
     if (
       !waterAt(p.x, p.z) &&
       !inClosedRegion(p) &&
       PLACES.every((v) => distance2(v.trigger, p) > 10) &&
-      occupied.every((o) => distance2(o, p) > 6)
+      occupied.every((o) => distance2(o, p) > 6) &&
+      clear(p, i)
     )
       return { point: p, index: i };
   }
   throw new Error('No clear traffic spawn on this route');
+}
+
+export function clearTrafficSpace(
+  world: RAPIER.World,
+  point: Point,
+  yaw: number,
+  car = false,
+  body?: RAPIER.RigidBody,
+) {
+  return !world.intersectionWithShape(
+    { x: point.x, y: groundHeight(point.x, point.z) + 0.85, z: point.z },
+    new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw),
+    new RAPIER.Cuboid(car ? 1 : 0.75, 0.7, car ? 1.95 : 1.3),
+    RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC,
+    undefined,
+    undefined,
+    body,
+    (c) => c.shapeType() !== RAPIER.ShapeType.TriMesh,
+  );
+}
+
+/** Terrain-following traffic sweeps barriers, while the road mesh supplies height only. */
+export function twoWheelerTravel(
+  world: RAPIER.World,
+  body: RAPIER.RigidBody,
+  to: Point,
+  blockers: readonly Resident[],
+) {
+  const pos = body.translation();
+  const move = {
+    x: to.x - pos.x,
+    y: groundHeight(to.x, to.z) - groundHeight(pos.x, pos.z),
+    z: to.z - pos.z,
+  };
+  const hit = world.castShape(
+    pos,
+    body.rotation(),
+    move,
+    new RAPIER.Cuboid(0.26, 0.6, 0.82),
+    0.02,
+    1,
+    true,
+    RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC,
+    undefined,
+    undefined,
+    body,
+    (collider) => collider.shapeType() !== RAPIER.ShapeType.TriMesh,
+  );
+  return Math.min(
+    safeTravel(pos, to, pos.y, blockers),
+    closureTravel(pos, to, 0.6),
+    hit ? Math.max(0, hit.time_of_impact - 0.03) : 1,
+  );
 }
 export function createTraffic(
   scene: THREE.Scene,
@@ -68,18 +126,39 @@ export function createTraffic(
     bakeStatic(g);
     scene.add(g);
   });
-  const count = small ? 4 : 7;
+  const count = small ? 8 : 12;
   const occupied: Point[] = [];
   const actors = Array.from({ length: count }, (_, i) => {
-    const kind = i === 0 ? 'rival' : i % 3 === 1 ? 'car' : i % 3 === 2 ? 'bike' : 'cycle';
-    const dynamic = kind === 'rival' || kind === 'car';
+    const kind = [
+      'rival',
+      'car',
+      'bike',
+      'cycle',
+      'car',
+      'bike',
+      'car',
+      'car',
+      'auto',
+      'cycle',
+      'car',
+      'bike',
+    ][i];
+    const dynamic = kind === 'rival' || kind === 'auto' || kind === 'car';
     const model =
-      kind === 'rival'
+      kind === 'rival' || kind === 'auto'
         ? makeAuto()
         : kind === 'car'
-          ? makeCar(false, ['#e1ded0', '#ae7459'][i % 2])
+          ? makeCar(
+              false,
+              ['#e1ded0', '#758a9a', '#934d3e', '#3e484d'][i % 4],
+              ['classic', 'hatch', 'suv', 'luxury'][
+                Math.floor(i / 2) % 4
+              ] as import('./traffic-models').CarStyle,
+            )
           : makeTwoWheeler(kind === 'cycle');
-    const vehicle = dynamic ? new AutoVehicle(world, kind === 'car' ? 'car' : 'auto') : undefined;
+    const vehicle = dynamic
+      ? new AutoVehicle(world, kind === 'car' ? 'car' : 'auto', false)
+      : undefined;
     const body =
       vehicle?.body ?? world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
     if (!dynamic)
@@ -90,10 +169,20 @@ export function createTraffic(
           .setRestitution(0),
         body,
       );
-    const start = TAXI_STOPS[[5, 1, 9, 4, 8, 10, 0][i]],
-      end = TAXI_STOPS[(i * 2 + 2) % TAXI_STOPS.length];
+    const start = TAXI_STOPS[[5, 1, 9, 4, 8, 10, 0, 2, 6, 3, 7, 9][i]];
+    let end = TAXI_STOPS[(i * 2 + 2) % TAXI_STOPS.length];
+    if (end.id === start.id) end = TAXI_STOPS[(i * 2 + 5) % TAXI_STOPS.length];
     const path = lanePath(start, end),
-      spawn = trafficSpawn(path, occupied),
+      spawn = trafficSpawn(path, occupied, (p, n) => {
+        const next = path[Math.min(n + 1, path.length - 1)];
+        return clearTrafficSpace(
+          world,
+          p,
+          Math.atan2(p.x - next.x, p.z - next.z),
+          kind === 'car',
+          body,
+        );
+      }),
       startPoint = spawn.point,
       first = path[spawn.index + 1] ?? end;
     occupied.push(startPoint);
@@ -122,6 +211,8 @@ export function createTraffic(
       target: { x: end.x, z: end.z } as Point,
       trip: i,
       stopped: 0,
+      reverse: 0,
+      recoveries: 0,
       wait: 0,
       jobId: -1,
       jobOnboard: false,
@@ -143,7 +234,14 @@ export function createTraffic(
               distance2(p, point) > 10 &&
               other.every((o) => distance2(p, o) > 6) &&
               !waterAt(p.x, p.z) &&
-              !inClosedRegion(p),
+              !inClosedRegion(p) &&
+              clearTrafficSpace(
+                world,
+                p,
+                Math.atan2(p.x - (a.path[i + 1]?.x ?? p.x), p.z - (a.path[i + 1]?.z ?? p.z)),
+                a.kind === 'car',
+                a.body,
+              ),
           );
           if (sample < 0) continue;
           const p = a.path[sample],
@@ -166,10 +264,14 @@ export function createTraffic(
     beforeStep(dt: number, residents: readonly Resident[], competition: boolean) {
       time += dt;
       for (const a of actors) {
-        const pos = a.body.translation(),
-          old = a.previous.copy(pos);
+        const pos = a.body.translation();
+        a.previous.copy(pos);
         let rivalJob: RivalJob | undefined;
         if (a.kind === 'rival' && competition) rivalJob = job(pos);
+        if (a.kind === 'rival' && !competition) {
+          a.jobOnboard = false;
+          a.jobId = -1;
+        }
         if (rivalJob && (rivalJob.id !== a.jobId || rivalJob.onboard !== a.jobOnboard)) {
           a.target = { ...rivalJob.target };
           a.path = lanePath(pos, a.target);
@@ -201,6 +303,8 @@ export function createTraffic(
         );
         const red = signalStops(pos, direction, time);
         const stop = blocked || red || nearby || a.wait > 0;
+        const turningBack = a.reverse > 0;
+        a.reverse = Math.max(0, a.reverse - dt);
         if (a.vehicle) {
           const angle = Math.atan2(-direction.x, -direction.z),
             yaw = new THREE.Euler().setFromQuaternion(
@@ -208,12 +312,13 @@ export function createTraffic(
               'YXZ',
             ).y;
           const error = Math.atan2(Math.sin(angle - yaw), Math.cos(angle - yaw));
-          const wanted = a.kind === 'car' ? 6.5 : 5.5;
+          const wanted =
+            (a.kind === 'car' ? 6.5 : 5.5) * Math.max(0.35, 1 - Math.abs(error) * 0.45);
           a.vehicle.beforeStep(
             {
-              throttle: stop ? 0 : a.speed > wanted ? 0 : 0.85,
-              steer: THREE.MathUtils.clamp(-error * 2.6, -1, 1),
-              brake: stop,
+              throttle: turningBack ? -0.45 : stop ? 0 : a.speed > wanted ? 0 : 0.85,
+              steer: THREE.MathUtils.clamp(-error * (turningBack ? -2.6 : 2.6), -1, 1),
+              brake: turningBack ? false : stop || a.speed > wanted + 0.8,
               boost: false,
             },
             dt,
@@ -225,29 +330,7 @@ export function createTraffic(
             x: pos.x + direction.x * a.speed * dt,
             z: pos.z + direction.z * a.speed * dt,
           };
-          const move = {
-            x: proposed.x - pos.x,
-            y: groundHeight(proposed.x, proposed.z) - groundHeight(pos.x, pos.z),
-            z: proposed.z - pos.z,
-          };
-          const hit = world.castShape(
-            pos,
-            a.body.rotation(),
-            move,
-            new RAPIER.Cuboid(0.26, 0.6, 0.82),
-            0.02,
-            1,
-            true,
-            RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC,
-            undefined,
-            undefined,
-            a.body,
-          );
-          const safe = Math.min(
-            safeTravel(pos, proposed, pos.y, blockers),
-            closureTravel(pos, proposed, 0.6),
-            hit ? Math.max(0, hit.time_of_impact - 0.03) : 1,
-          );
+          const safe = twoWheelerTravel(world, a.body, proposed, blockers);
           const nx = pos.x + (proposed.x - pos.x) * safe,
             nz = pos.z + (proposed.z - pos.z) * safe;
           if (!waterAt(nx, nz))
@@ -265,7 +348,7 @@ export function createTraffic(
               a.jobId = -1;
               a.wait = 2;
             }
-          } else if (a.kind !== 'rival' || (!competition && !a.jobOnboard)) {
+          } else if (a.kind !== 'rival' || !competition || !rivalJob) {
             a.trip++;
             const target = TAXI_STOPS[(a.trip * 3 + 5) % TAXI_STOPS.length];
             a.target = { x: target.x, z: target.z };
@@ -274,22 +357,56 @@ export function createTraffic(
             a.wait = 2;
           }
         }
-        a.stopped = stop ? 0 : a.speed < 0.3 ? a.stopped + dt : 0;
-        // A blocked lane stays stopped. A tipped or physically stranded AI returns to its own lane, never near the player.
+        // Count real motion, including collision-blocked kinematic bikes. Lights and loading are intentional stops.
+        a.stopped = red || nearby || a.wait > 0 ? 0 : a.speed < 0.3 ? a.stopped + dt : 0;
+        if (a.vehicle && a.stopped > 4 && a.stopped < 4 + dt * 2 && !red) a.reverse = 1.8;
+        // A prolonged jam is recovered on an unoccupied forward lane sample, away from the visitor.
         if (
-          a.vehicle &&
-          (a.vehicle.isOverturned() || a.stopped > 25 || pos.y < groundHeight(pos.x, pos.z) - 0.8)
+          a.vehicle?.isOverturned() ||
+          a.stopped > 18 ||
+          pos.y < groundHeight(pos.x, pos.z) - 0.8
         ) {
-          const road = nearestRoad(pos),
-            yaw = Math.atan2(-direction.x, -direction.z);
-          if (distance2(road, residents[residents.length - 1] ?? road) > 15) {
-            a.vehicle.reset(road.x, road.z, yaw);
-            a.path = lanePath(road, a.target);
-            a.index = 0;
+          const candidate = a.path.findIndex(
+            (p, i) =>
+              i > a.index + 2 &&
+              !waterAt(p.x, p.z) &&
+              !inClosedRegion(p) &&
+              residents.every(
+                (r) => distance2(p, r) > (r === residents[residents.length - 1] ? 28 : 5),
+              ) &&
+              others.every((o) => distance2(p, o) > 7) &&
+              clearTrafficSpace(
+                world,
+                p,
+                Math.atan2(p.x - (a.path[i + 1]?.x ?? p.x), p.z - (a.path[i + 1]?.z ?? p.z)),
+                a.kind === 'car',
+                a.body,
+              ),
+          );
+          if (candidate >= 0 && distance2(pos, residents[residents.length - 1] ?? pos) > 20) {
+            const p = a.path[candidate],
+              next = a.path[Math.min(candidate + 1, a.path.length - 1)];
+            const yaw = Math.atan2(p.x - next.x, p.z - next.z);
+            if (a.vehicle) a.vehicle.reset(p.x, p.z, yaw);
+            else {
+              const target = { x: p.x, y: groundHeight(p.x, p.z) + 0.75, z: p.z };
+              const rotation = new THREE.Quaternion().setFromAxisAngle(
+                new THREE.Vector3(0, 1, 0),
+                yaw,
+              );
+              a.body.setTranslation(target, true);
+              a.body.setNextKinematicTranslation(target);
+              a.body.setRotation(rotation, true);
+              a.body.setNextKinematicRotation(rotation);
+            }
+            a.index = candidate;
+            a.speed = 0;
+            a.stopped = 0;
+            a.reverse = 0;
+            a.recoveries++;
+            a.previous.copy(a.body.translation());
           }
-          a.stopped = 0;
         }
-        old.copy(pos);
       }
     },
     afterStep(residents: readonly Resident[]) {
@@ -312,10 +429,10 @@ export function createTraffic(
             a.body.setLinvel({ x: 0, y: a.body.linvel().y, z: 0 }, true);
           }
           a.speed = a.vehicle.speed;
-        }
+        } else a.speed = distance2(a.previous, p) / world.timestep;
       }
     },
-    update(dt: number) {
+    update(dt: number, driver?: Point, visibleDistance = Infinity) {
       signalHeads.forEach((h) => {
         const phase = signalPhase(time, h.axis, h.index * 3);
         h.lamps.forEach(
@@ -327,6 +444,9 @@ export function createTraffic(
         a.model.group.position.copy(a.body.translation());
         if (!a.vehicle) a.model.group.position.y -= 0.75;
         a.model.group.quaternion.copy(a.body.rotation());
+        a.model.group.visible =
+          !driver || distance2(a.model.group.position, driver) < visibleDistance;
+        if (!a.model.group.visible) continue;
         const model = a.model;
         if (a.vehicle && 'spinners' in model) {
           a.model.wheels.forEach((w, i) => {

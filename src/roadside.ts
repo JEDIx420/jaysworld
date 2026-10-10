@@ -11,6 +11,8 @@ import {
 } from './models';
 import { makePerson, animatePerson } from './village-life';
 import { makeCar, makePolice } from './traffic-models';
+import { ridgeGuardrails } from './road-fixtures';
+import { PLACES } from './projects';
 import { ROAD_CLOSURES, ROAD_PATHS, roadClearance, waterAt } from './village';
 import { groundHeight } from './terrain';
 import type { Resident } from './safety';
@@ -158,7 +160,15 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
   const flags: THREE.Mesh[] = [],
     machines: ReturnType<typeof excavator>[] = [];
   const residents: Resident[] = [];
+  let lowQuality = false;
   const patrols: ReturnType<typeof makeCar>[] = [];
+  const shoppers: {
+    person: ReturnType<typeof makePerson>;
+    from: number;
+    to: number;
+    z: number;
+    phase: number;
+  }[] = [];
   const personAt = (
     x: number,
     z: number,
@@ -351,6 +361,27 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
   ])
     personAt(x, z, ['#ddd8bf', '#729292', '#a77164'][people.length % 3], people.length, 0.5);
 
+  // Every open market stall has a vendor and a customer. Shoppers stay on the broad verge.
+  for (let i = 0; i < 5; i++) {
+    const x = -161 - i * 12;
+    personAt(x - 0.7, 8.4, ['#b76e51', '#799682', '#d0b878'][i % 3], i + 11, Math.PI);
+    personAt(x + 1.2, 12.6, ['#809ead', '#dfbb93', '#b7889c'][i % 3], i + 17, 0);
+  }
+  for (let i = 0; i < 4; i++) {
+    const person = makePerson(['#c38b61', '#759ba0', '#b17d92', '#c2b480'][i]);
+    const shopper = {
+      person,
+      from: -164 - i * 10,
+      to: -181 - i * 9,
+      z: 16 + (i % 2) * 3,
+      phase: i * 5,
+    };
+    person.group.position.set(shopper.from, groundHeight(shopper.from, shopper.z), shopper.z);
+    box(person.group, [0.22, 0.31, 0.18], [0.29, 0.55, 0.01], materials.cream);
+    shoppers.push(shopper);
+    scene.add(person.group);
+  }
+
   const animals = [
     { kind: 'cow' as const, x: -78, z: 16, radius: 2.2, color: '#ddcfac' },
     { kind: 'cow' as const, x: -80, z: 10, radius: 1.8, color: '#a88259' },
@@ -443,39 +474,28 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
   bakeStatic(laundry);
   statics.add(laundry);
 
-  const ridge = ROAD_PATHS.find((r) => r.id === 'observatory-road')!;
-  for (let i = 24; i < ridge.samples.length - 5; i += 5) {
-    for (const side of [-1, 1]) {
-      const edge = (index: number) => {
-        const p = ridge.samples[index],
-          next = ridge.samples[index + 1];
-        const yaw = Math.atan2(next.x - p.x, next.z - p.z);
-        const x = p.x + Math.cos(yaw) * side * 4.45,
-          z = p.z - Math.sin(yaw) * side * 4.45;
-        return new THREE.Vector3(x, groundHeight(x, z), z);
-      };
-      const a = edge(i),
-        b = edge(i + 5),
-        center = a.clone().add(b).multiplyScalar(0.5),
-        length = a.distanceTo(b);
-      const orientation = new THREE.Quaternion().setFromUnitVectors(
-        new THREE.Vector3(0, 0, 1),
-        b.clone().sub(a).normalize(),
-      );
-      cylinder(statics, 0.08, 0.08, 0.9, [a.x, a.y + 0.45, a.z], materials.cream, 8);
-      const rail = box(
-        statics,
-        [0.16, 0.13, length],
-        [center.x, center.y + 0.75, center.z],
-        materials.darkWood,
-      );
-      rail.quaternion.copy(orientation);
-      world.createCollider(
-        RAPIER.ColliderDesc.cuboid(0.13, 0.5, length / 2)
-          .setTranslation(center.x, center.y + 0.5, center.z)
-          .setRotation(orientation),
-      );
-    }
+  for (const segment of ridgeGuardrails()) {
+    const a = new THREE.Vector3(segment.a.x, groundHeight(segment.a.x, segment.a.z), segment.a.z),
+      b = new THREE.Vector3(segment.b.x, groundHeight(segment.b.x, segment.b.z), segment.b.z),
+      center = a.clone().add(b).multiplyScalar(0.5),
+      length = a.distanceTo(b);
+    const orientation = new THREE.Quaternion().setFromUnitVectors(
+      new THREE.Vector3(0, 0, 1),
+      b.clone().sub(a).normalize(),
+    );
+    cylinder(statics, 0.08, 0.08, 0.9, [a.x, a.y + 0.45, a.z], materials.cream, 8);
+    const rail = box(
+      statics,
+      [0.16, 0.13, length],
+      [center.x, center.y + 0.75, center.z],
+      materials.darkWood,
+    );
+    rail.quaternion.copy(orientation);
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(0.13, 0.5, length / 2)
+        .setTranslation(center.x, center.y + 0.5, center.z)
+        .setRotation(orientation),
+    );
   }
   for (const [x, z, title, sub] of [
     [6, -87, 'MALAMUKAL', 'Slow climb · 24 m ridge'],
@@ -530,6 +550,11 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
       if (
         roadClearance(px, pz) < 4.5 ||
         Math.hypot(px - 34, pz + 200) < 17 ||
+        PLACES.some(
+          (p) =>
+            Math.hypot(px - p.trigger.x, pz - p.trigger.z) < 12 ||
+            Math.hypot(px - p.position.x, pz - p.position.z) < 13,
+        ) ||
         ROAD_CLOSURES.some((c) => Math.hypot(px - c.x, pz - c.z) < 11) ||
         count >= 100
       )
@@ -600,6 +625,12 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
     residents() {
       return [
         ...residents,
+        ...shoppers.map((s) => ({
+          x: s.person.group.position.x,
+          z: s.person.group.position.z,
+          y: s.person.group.position.y,
+          radius: 0.55,
+        })),
         ...animals.map((a) => ({
           x: a.model.group.position.x,
           z: a.model.group.position.z,
@@ -609,16 +640,43 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
       ];
     },
     quality(low: boolean) {
+      lowQuality = low;
       grass.visible = !low;
       shrubs.castShadow = !low;
       ridgeCrowns.castShadow = !low;
     },
     update(t: number, _dt: number, driver?: THREE.Vector3) {
       people.forEach(({ person, base, phase, yaw, motion }) => {
+        person.group.visible =
+          !lowQuality || !driver || Math.hypot(driver.x - base.x, driver.z - base.z) < 115;
+        if (!person.group.visible) return;
         animatePerson(person, t, phase, motion);
         person.group.position.y =
           base.y + Math.max(0, Math.sin(t * 1.8 + phase)) * (motion === 'chant' ? 0.05 : 0.018);
         person.group.rotation.y = yaw + Math.sin(t * 0.55 + phase) * 0.12;
+      });
+      shoppers.forEach(({ person, from, to, z, phase }) => {
+        person.group.visible =
+          !lowQuality || !driver || Math.hypot(driver.x - (from + to) / 2, driver.z - z) < 115;
+        const cycle = ((t + phase) % 40) / 40;
+        const progress =
+          cycle < 0.45
+            ? cycle / 0.45
+            : cycle < 0.5
+              ? 1
+              : cycle < 0.95
+                ? 1 - (cycle - 0.5) / 0.45
+                : 0;
+        const x = from + (to - from) * progress,
+          walking = cycle < 0.45 || (cycle > 0.5 && cycle < 0.95);
+        if (!driver || Math.hypot(driver.x - x, driver.z - z) > 3) {
+          person.group.position.set(x, groundHeight(x, z), z);
+          person.group.rotation.y = cycle < 0.5 ? Math.PI / 2 : -Math.PI / 2;
+        }
+        animatePerson(person, t, phase);
+        person.legs.forEach((leg, i) => {
+          leg.rotation.x = walking ? Math.sin(t * 5 + i * Math.PI + phase) * 0.28 : 0;
+        });
       });
       patrols.forEach((patrol, i) => patrol.flash(t + i * 0.3));
       flags.forEach((flag, i) => {

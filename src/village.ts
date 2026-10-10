@@ -3,6 +3,7 @@ export interface Point {
   x: number;
   z: number;
 }
+export const ROAD_START: Point = { x: -56.5, z: 12 };
 export interface VillageRoad {
   id: string;
   name: string;
@@ -83,6 +84,7 @@ export const ROADS: readonly VillageRoad[] = [
     width: 7,
     points: [
       [-148, -121],
+      [-138, -109],
       [-110, -104],
       [-65, -91],
       [-31, -36],

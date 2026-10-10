@@ -253,6 +253,8 @@ async function park(page, id) {
 async function start(page) {
   await page.keyboard.press('Enter');
   await page.waitForSelector('body.started', { state: 'attached' });
+  if (await page.locator('#toast .toast-close').isVisible())
+    await page.locator('#toast .toast-close').click();
 }
 async function clean(errors) {
   assert.deepEqual(
@@ -270,18 +272,27 @@ try {
       await ready(page);
       await capture(page, 'desktop.png');
       await start(page);
-      assert.ok(Math.abs(Number(await page.locator('#world').getAttribute('data-x')) + 48) < 0.1);
-      await page.keyboard.press('Enter');
-      await page.waitForFunction(
-        () => document.getElementById('world').dataset.view === 'storefront',
-      );
+      assert.ok(Math.abs(Number(await page.locator('#world').getAttribute('data-x')) + 56.5) < 0.1);
+      assert.equal(await page.locator('#world').getAttribute('data-view'), 'drive');
+      assert.equal(await page.locator('#project-dialog').evaluate((d) => d.open), false);
+      await park(page, 'eagle-eye');
       await page.keyboard.press('ArrowRight');
       await page.keyboard.press('Enter');
       await page.waitForFunction(() => document.getElementById('world').dataset.view === 'roof');
       await page.waitForTimeout(2000);
       await capture(page, 'roof.png');
-      const yaw = await page.locator('#world').getAttribute('data-yaw');
+      assert.equal(JSON.parse(await page.locator('#world').getAttribute('data-eagles')).length, 2);
+      const yaw = Number(await page.locator('#world').getAttribute('data-look-yaw'));
       await page.keyboard.press('ArrowRight');
+      await page.waitForFunction(
+        (yaw) => Number(document.getElementById('world').dataset.lookYaw) < yaw - 0.1,
+        yaw,
+      );
+      await page.keyboard.press('ArrowLeft');
+      await page.waitForFunction(
+        (yaw) => Math.abs(Number(document.getElementById('world').dataset.lookYaw) - yaw) < 0.01,
+        yaw,
+      );
       await page.keyboard.press('Escape');
       await page.waitForFunction(() => document.getElementById('world').dataset.view === 'drive');
       const before = Number(await page.locator('#world').getAttribute('data-z'));
@@ -307,7 +318,7 @@ try {
       await page.keyboard.press('r');
       await page.waitForTimeout(500);
       await page.waitForFunction(
-        () => Math.abs(Number(document.getElementById('world').dataset.x) + 48) < 0.1,
+        () => Math.abs(Number(document.getElementById('world').dataset.x) + 56.5) < 0.1,
         undefined,
         { timeout: 15000 },
       );
@@ -409,7 +420,7 @@ try {
     },
   );
   await run(
-    '390px touch driving, independent orbit, minimal HUD and music',
+    '390px touch driving, independent orbit, analog HUD and music',
     { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 },
     async (page, context, errors) => {
       await ready(page);
@@ -469,11 +480,13 @@ try {
     { viewport: { width: 320, height: 640 }, hasTouch: true, isMobile: true },
     async (page, context, errors) => {
       await ready(page, '#rift');
-      assert.equal(await page.locator('#project-title').textContent(), 'One paisa matters.');
+      assert.equal(await page.locator('#world').getAttribute('data-view'), 'drive');
+      assert.equal(await page.locator('#project-dialog').evaluate((d) => d.open), false);
       await page.reload();
-      await page.waitForSelector('#project-dialog[open]', { timeout: 45000 });
-      await page.keyboard.press('Escape');
+      await page.waitForSelector('#world[data-rendered=true]', { timeout: 45000 });
+      assert.equal(await page.locator('#world').getAttribute('data-view'), 'drive');
       await page.locator('#start-driving').click();
+      await page.locator('#toast .toast-close').click();
       for (const size of [
         { width: 320, height: 640 },
         { width: 430, height: 932 },
@@ -715,6 +728,9 @@ try {
     async (page, context, errors) => {
       await ready(page);
       await start(page);
+      // The road-first spawn is outside the pickup radius. Reach the actual studio stop.
+      await park(page, 'eagle-eye');
+      await page.keyboard.press('Escape');
       await page.locator('#taxi-toggle').click();
       await page.locator('#fare-offers button').filter({ hasText: 'Meera' }).click();
       await page.waitForSelector('#interaction-button:not([hidden])');
@@ -793,6 +809,257 @@ try {
       await page.keyboard.press('ArrowLeft');
       await page.waitForSelector('#radio-dialog[data-phase=playing]', { state: 'attached' });
       assert.match(await page.locator('#radio-name').textContent(), /True Blues/);
+      await clean(errors);
+    },
+  );
+  await run(
+    'road-first welcome, optional company journey and saved accomplishments',
+    { viewport: { width: 1280, height: 800 } },
+    async (page, context, errors) => {
+      await ready(page, '#eagle-eye');
+      assert.equal(await page.locator('#project-dialog').evaluate((d) => d.open), false);
+      assert.equal(await page.locator('#world').getAttribute('data-view'), 'drive');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('body.started', { state: 'attached' });
+      assert.match(await page.locator('#toast').textContent(), /Welcome to Jay/);
+      const rect = await page.locator('#toast').boundingBox();
+      assert.ok(Math.abs(rect.x + rect.width / 2 - 640) < 2, 'toast is centred');
+      assert.equal(await page.locator('#toast .toast-choices button').count(), 3);
+      await capture(page, 'journey-welcome.png');
+      await page.getByRole('button', { name: 'Visit Eagle Eye', exact: true }).click();
+      assert.match(await page.locator('#navigation-destination').textContent(), /Eagle Towers/);
+      assert.equal(await page.locator('#world').getAttribute('data-view'), 'drive');
+      await park(page, 'eagle-eye');
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('#interaction-button:not([hidden])');
+      await page.waitForFunction(() =>
+        JSON.parse(document.getElementById('world').dataset.entryMarkers).some(
+          (m) => m.name === 'entry-x:eagle-eye' && m.scale > 1.65,
+        ),
+      );
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(
+        () => document.getElementById('world').dataset.view === 'storefront',
+      );
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('#project-dialog[open]');
+      assert.ok(
+        await page.evaluate(() =>
+          JSON.parse(localStorage.getItem('jaysworld-journey-v1')).earned.includes('company'),
+        ),
+      );
+      assert.match(await page.locator('#mission-route').textContent(), /OpsFlash/);
+      await page.reload();
+      await page.waitForSelector('#world[data-rendered=true]', { timeout: 45000 });
+      assert.equal(await page.locator('#world').getAttribute('data-view'), 'drive');
+      assert.equal(await page.locator('#project-dialog').evaluate((d) => d.open), false);
+      await page.locator('#places-button').click();
+      assert.equal(
+        await page.locator('[data-accomplishment=company]').getAttribute('data-earned'),
+        'true',
+      );
+      assert.equal(
+        await page.locator('[data-accomplishment=first-road]').getAttribute('data-earned'),
+        'false',
+      );
+      await clean(errors);
+    },
+  );
+  await run(
+    'radio keeps rendering every world frame and fare offer buttons stay stable',
+    { viewport: { width: 1024, height: 700 } },
+    async (page, context, errors) => {
+      await ready(page);
+      await start(page);
+      await page.keyboard.press('t');
+      await page.locator('#fare-offers button').first().focus();
+      await page.evaluate(() => {
+        window.__firstOffer = document.querySelector('#fare-offers button');
+      });
+      await page.waitForTimeout(1300);
+      assert.ok(
+        await page.evaluate(
+          () => window.__firstOffer === document.querySelector('#fare-offers button'),
+        ),
+      );
+      await page.locator('#radio-button').click();
+      await page.waitForSelector('#radio-dialog[open]');
+      const sample = () =>
+        page.locator('#world').evaluate((c) => ({
+          ticks: Number(c.dataset.frameTicks),
+          rendered: Number(c.dataset.renderFrames),
+        }));
+      const before = await sample();
+      await page.waitForTimeout(2100);
+      const after = await sample();
+      assert.ok(after.ticks > before.ticks + 3);
+      assert.ok(
+        after.rendered - before.rendered >= (after.ticks - before.ticks) * 0.95,
+        'radio must not throttle the world to three frames per second',
+      );
+      assert.equal(
+        await page
+          .locator('#radio-dialog')
+          .evaluate((d) => getComputedStyle(d, '::backdrop').backdropFilter),
+        'none',
+      );
+      await capture(page, 'radio-live-backdrop.png');
+      await clean(errors);
+    },
+  );
+  await run(
+    'phone instruments do not overlap; touch boost and rotation release controls',
+    { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true },
+    async (page, context, errors) => {
+      await ready(page);
+      await start(page);
+      for (const size of [
+        { width: 320, height: 640 },
+        { width: 430, height: 932 },
+        { width: 844, height: 390 },
+      ]) {
+        await page.setViewportSize(size);
+        await page.waitForTimeout(300);
+        const geometry = await page.evaluate(() => {
+          const rect = (id) => document.getElementById(id).getBoundingClientRect().toJSON();
+          return {
+            map: rect('minimap-button'),
+            dial: rect('speedometer'),
+            boost: rect('boost-button'),
+            fare: rect('fare-card'),
+            logo: document.querySelector('.identity').getBoundingClientRect().toJSON(),
+          };
+        });
+        const overlaps = (a, b) =>
+          Math.min(a.right, b.right) - Math.max(a.left, b.left) > 1 &&
+          Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 1;
+        assert.equal(overlaps(geometry.map, geometry.boost), false);
+        assert.equal(overlaps(geometry.dial, geometry.boost), false);
+        assert.equal(overlaps(geometry.logo, geometry.fare), false);
+        assert.ok(geometry.dial.bottom <= geometry.map.top + 1);
+        assert.ok(geometry.map.right <= size.width && geometry.map.bottom <= size.height);
+        await capture(page, 'instruments-' + size.width + '.png');
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForTimeout(300);
+      const stick = await page.locator('#joystick').boundingBox(),
+        boost = await page.locator('#boost-button').boundingBox();
+      const session = await context.newCDPSession(page);
+      const finger = { id: 1, x: stick.x + stick.width / 2, y: stick.y + stick.height / 2 - 35 };
+      await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [finger] });
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [
+          finger,
+          { id: 2, x: boost.x + boost.width / 2, y: boost.y + boost.height / 2 },
+        ],
+      });
+      await page.waitForFunction(
+        () =>
+          document.getElementById('world').dataset.boost === 'true' &&
+          Number(document.getElementById('world').dataset.wheelie) > 0.05,
+      );
+      await capture(page, 'phone-boost.png');
+      await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+      await page.waitForFunction(
+        () =>
+          document.getElementById('world').dataset.boost === 'false' &&
+          Number(document.getElementById('world').dataset.wheelie) === 0,
+      );
+      assert.equal(await page.locator('#joystick-knob').evaluate((e) => e.style.transform), '');
+      await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [finger] });
+      await page.setViewportSize({ width: 844, height: 390 });
+      assert.equal(await page.locator('#joystick-knob').evaluate((e) => e.style.transform), '');
+      await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+      await clean(errors);
+    },
+  );
+  await run(
+    'observatory driveway can be driven out and back through the actual guardrail opening',
+    { viewport: { width: 1280, height: 800 } },
+    async (page, context, errors) => {
+      await ready(page);
+      await start(page);
+      await park(page, 'space');
+      await page.keyboard.press('Escape');
+      await page.keyboard.down('w');
+      await page.keyboard.down('a');
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.yaw) > 0.46,
+        undefined,
+        { timeout: 20000 },
+      );
+      await page.keyboard.up('a');
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.z) < -212,
+        undefined,
+        { timeout: 25000 },
+      );
+      await page.keyboard.up('w');
+      await page.keyboard.down('Space');
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.speed) < 0.3,
+        undefined,
+        { timeout: 15000 },
+      );
+      await page.keyboard.up('Space');
+      assert.ok(Number(await page.locator('#world').getAttribute('data-x')) < 55);
+      assert.ok(Number(await page.locator('#world').getAttribute('data-elevation')) > 20);
+      await capture(page, 'observatory-driveway.png');
+      await page.keyboard.down('s');
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.z) > -207,
+        undefined,
+        { timeout: 25000 },
+      );
+      await page.keyboard.up('s');
+      await page.keyboard.down('Space');
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.speed) < 0.3,
+        undefined,
+        { timeout: 15000 },
+      );
+      await page.keyboard.up('Space');
+      await page.waitForSelector('#interaction-button:not([hidden])');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(
+        () => document.getElementById('world').dataset.view === 'storefront',
+      );
+      assert.match(await page.locator('#view-panel').textContent(), /Observatory/i);
+      await clean(errors);
+    },
+  );
+  await run(
+    'all traffic progresses over a minute and the market has residents',
+    { viewport: { width: 1024, height: 700 } },
+    async (page, context, errors) => {
+      await ready(page);
+      await start(page);
+      await park(page, 'eagle-eye');
+      await page.keyboard.press('Escape');
+      const before = JSON.parse(await page.locator('#world').getAttribute('data-traffic-actors'));
+      const totals = before.map(() => 0),
+        last = before.map((a) => ({ ...a }));
+      for (let i = 0; i < 6; i++) {
+        const time = Number(await page.locator('#world').getAttribute('data-signal-time'));
+        await page.waitForFunction(
+          (t) => Number(document.getElementById('world').dataset.signalTime) > t + 10,
+          time,
+          { timeout: 90000 },
+        );
+        const actors = JSON.parse(await page.locator('#world').getAttribute('data-traffic-actors'));
+        actors.forEach((a, index) => {
+          totals[index] += Math.hypot(a.x - last[index].x, a.z - last[index].z);
+          last[index] = a;
+        });
+      }
+      last.forEach((a, i) => {
+        assert.ok(totals[i] > 3, `${a.kind} ${i} never progressed`);
+        if (Math.hypot(a.x + 48, a.z + 4) > 35)
+          assert.ok(a.stopped < 22, `${a.kind} ${i} stayed stranded`);
+      });
+      assert.ok(Number(await page.locator('#world').getAttribute('data-market-residents')) >= 14);
+      await capture(page, 'traffic-after-minute.png');
       await clean(errors);
     },
   );

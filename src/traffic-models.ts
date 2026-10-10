@@ -1,25 +1,157 @@
 import * as THREE from 'three';
 import { box, cylinder, tube, materials, bakeStatic, textBoard } from './models';
 import { makePerson } from './village-life';
-export function makeCar(police = false, color = '#e1ded0') {
+export type CarStyle = 'classic' | 'hatch' | 'suv' | 'luxury';
+export function makeCar(police = false, color = '#e1ded0', style: CarStyle = 'classic') {
   const group = new THREE.Group(),
     wheels: THREE.Group[] = [],
     spinners: THREE.Group[] = [];
   const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.45 });
   const beacons: THREE.MeshStandardMaterial[] = [];
-  box(group, [1.85, 0.48, 3.7], [0, 0.15, 0], paint);
-  box(group, [1.55, 0.8, 2.1], [0, 0.72, 0.16], police ? materials.cream : paint);
-  box(group, [1.4, 0.53, 0.04], [0, 0.85, -0.91], materials.glass);
-  box(group, [1.4, 0.5, 0.04], [0, 0.85, 1.23], materials.glass);
+  group.name = 'traffic:car:' + (police ? 'police' : style);
+  const suv = style === 'suv',
+    hatch = style === 'hatch',
+    classic = style === 'classic';
+  const roof = suv ? 1.45 : classic ? 1.18 : 1.12;
+  const shell = (outline: [number, number][], width: number, material: THREE.Material) => {
+    const shape = new THREE.Shape(outline.map(([z, y]) => new THREE.Vector2(-z, y)));
+    const geometry = new THREE.ExtrudeGeometry(shape, {
+      depth: width,
+      bevelEnabled: true,
+      bevelSegments: 2,
+      steps: 1,
+      bevelSize: classic ? 0.09 : 0.045,
+      bevelThickness: 0.045,
+    });
+    geometry.translate(0, 0, -width / 2);
+    geometry.rotateY(Math.PI / 2);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    group.add(mesh);
+  };
+  // An Ambassador-like rounded saloon, compact hatch, tall SUV and long luxury sedan.
+  shell(
+    [
+      [-1.78, -0.13],
+      [-1.86, 0.19],
+      [-1.58, 0.4],
+      [-0.68, 0.43],
+      [0.86, 0.43],
+      [1.76, hatch ? 0.37 : 0.31],
+      [1.82, -0.13],
+    ],
+    1.77,
+    paint,
+  );
+  const frontLow = -0.8,
+    frontHigh = suv ? -0.55 : -0.25,
+    rearHigh = hatch || suv ? 0.99 : 0.63,
+    rearLow = hatch || suv ? 1.42 : 1.13;
+  shell(
+    [
+      [frontLow, 0.42],
+      [frontHigh, roof],
+      [rearHigh, roof],
+      [rearLow, 0.42],
+    ],
+    1.49,
+    police ? materials.cream : paint,
+  );
+  const window = (vertices: number[]) => {
+    const g = new THREE.BufferGeometry().setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(vertices, 3),
+    );
+    g.setIndex([0, 1, 2, 0, 2, 3]);
+    g.computeVertexNormals();
+    const glass = materials.glass.clone();
+    glass.side = THREE.DoubleSide;
+    group.add(new THREE.Mesh(g, glass));
+  };
+  window([
+    -0.65,
+    0.55,
+    frontLow - 0.052,
+    0.65,
+    0.55,
+    frontLow - 0.052,
+    0.65,
+    roof - 0.1,
+    frontHigh - 0.052,
+    -0.65,
+    roof - 0.1,
+    frontHigh - 0.052,
+  ]);
+  window([
+    -0.65,
+    0.55,
+    rearLow + 0.052,
+    0.65,
+    0.55,
+    rearLow + 0.052,
+    0.65,
+    roof - 0.1,
+    rearHigh + 0.052,
+    -0.65,
+    roof - 0.1,
+    rearHigh + 0.052,
+  ]);
   for (const side of [-1, 1]) {
-    box(group, [0.04, 0.47, 1.67], [side * 0.8, 0.88, 0.17], materials.glass);
-    for (const z of [-0.75, 0.17, 1.05])
-      box(group, [0.045, 0.57, 0.06], [side * 0.82, 0.84, z], paint);
-    box(group, [0.28, 0.18, 0.04], [side * 0.61, 0.24, -1.87], materials.lamp);
-    box(group, [0.26, 0.15, 0.04], [side * 0.62, 0.3, 1.87], materials.red);
+    const x = side * 0.797;
+    window([x, 0.58, -0.59, x, roof - 0.11, frontHigh + 0.13, x, roof - 0.11, 0.22, x, 0.58, 0.22]);
+    window([
+      x,
+      0.58,
+      0.32,
+      x,
+      roof - 0.11,
+      0.32,
+      x,
+      roof - 0.11,
+      rearHigh - 0.13,
+      x,
+      0.58,
+      rearLow - 0.15,
+    ]);
+    box(group, [0.065, 0.08, 0.19], [side * 0.91, 0.39, -0.14], materials.chrome);
+    box(group, [0.065, 0.08, 0.19], [side * 0.91, 0.39, 0.91], materials.chrome);
+    box(group, [0.18, 0.11, 0.26], [side * 0.96, 0.69, -0.6], paint);
+    if (classic) {
+      const headlight = cylinder(
+        group,
+        0.15,
+        0.15,
+        0.06,
+        [side * 0.61, 0.25, -1.85],
+        materials.lamp,
+        16,
+      );
+      headlight.rotation.x = Math.PI / 2;
+    } else box(group, [suv ? 0.42 : 0.38, 0.12, 0.065], [side * 0.62, 0.29, -1.87], materials.lamp);
+    box(
+      group,
+      [hatch ? 0.15 : 0.34, hatch ? 0.32 : 0.12, 0.06],
+      [side * 0.67, 0.26, 1.86],
+      materials.red,
+    );
+    box(
+      group,
+      [0.05, 0.045, 2.7],
+      [side * 0.94, 0.03, 0],
+      suv ? materials.black : materials.chrome,
+    );
+    if (suv) box(group, [0.08, 0.08, 1.7], [side * 0.61, roof + 0.12, 0.25], materials.chrome);
   }
-  box(group, [1.7, 0.11, 0.08], [0, -0.04, -1.9], materials.chrome);
+  box(group, [0.92, 0.23, 0.05], [0, 0.22, -1.905], materials.black);
+  for (let i = 0; i < (style === 'luxury' ? 7 : 3); i++) {
+    if (style === 'luxury')
+      box(group, [0.025, 0.22, 0.035], [-0.36 + i * 0.12, 0.22, -1.94], materials.chrome);
+    else box(group, [0.85, 0.025, 0.025], [0, 0.14 + i * 0.075, -1.94], materials.chrome);
+  }
+  box(group, [1.7, 0.11, 0.08], [0, -0.04, -1.9], classic ? materials.chrome : materials.black);
   box(group, [1.7, 0.11, 0.08], [0, -0.04, 1.9], materials.chrome);
+  box(group, [0.38, 0.12, 0.026], [0, 0.01, -1.95], materials.cream);
+  box(group, [0.38, 0.12, 0.026], [0, 0.05, 1.95], materials.cream);
   if (police) {
     box(group, [1.16, 0.1, 0.12], [0, 1.19, 0.1], materials.black);
     for (const [i, color] of ['#ff493a', '#397dff'].entries()) {

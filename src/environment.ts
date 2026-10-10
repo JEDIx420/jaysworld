@@ -340,7 +340,17 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       }
     }
     const marker = new THREE.Mesh(
-      new THREE.RingGeometry(1.64, 1.79, 48),
+      new THREE.BufferGeometry().setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(
+          [
+            -1.05, -0.89, 0, -0.89, -1.05, 0, 1.05, 0.89, 0, -1.05, -0.89, 0, 1.05, 0.89, 0, 0.89,
+            1.05, 0, -1.05, 0.89, 0, -0.89, 1.05, 0, 1.05, -0.89, 0, -1.05, 0.89, 0, 1.05, -0.89, 0,
+            0.89, -1.05, 0,
+          ],
+          3,
+        ),
+      ),
       new THREE.MeshBasicMaterial({
         color: '#efc477',
         side: THREE.DoubleSide,
@@ -350,6 +360,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       }),
     );
     marker.rotation.x = -Math.PI / 2;
+    marker.name = 'entry-x:' + place.id;
     marker.position.set(
       place.trigger.x,
       groundHeight(place.trigger.x, place.trigger.z) + 0.19,
@@ -357,7 +368,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     );
     scene.add(marker);
     markers.push({ mesh: marker, x: place.trigger.x, z: place.trigger.z });
-    // Marker columns stay small; buildings and their signs do the visual storytelling.
+    // Compact X marks expand only when a visitor approaches.
     const post = new THREE.Group();
     post.position.set(
       place.trigger.x + 2.7,
@@ -512,8 +523,8 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
   shelter.position.set(-5, 0, 39);
   statics.add(shelter);
   for (const [x, z] of [
-    [-59, 18],
-    [-59, -15],
+    [-63, 18],
+    [-63, -15],
     [-39, -41],
   ]) {
     cylinder(statics, 0.105, 0.14, 5.8, [x, 2.9, z], materials.darkWood);
@@ -523,9 +534,9 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     tube(
       statics,
       [
-        [-59 + xOffset, 5.4, 18],
-        [-59 + xOffset, 4.6, 1.5],
-        [-59 + xOffset, 5.4, -15],
+        [-63 + xOffset, 5.4, 18],
+        [-63 + xOffset, 4.6, 1.5],
+        [-63 + xOffset, 5.4, -15],
       ],
       0.012,
       materials.black,
@@ -534,8 +545,8 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     tube(
       statics,
       [
-        [-59 + xOffset, 5.4, -15],
-        [-49 + xOffset, 4.6, -28],
+        [-63 + xOffset, 5.4, -15],
+        [-51 + xOffset, 4.6, -28],
         [-39 + xOffset, 5.4, -41],
       ],
       0.012,
@@ -729,9 +740,14 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       canoe.position.y = 0.035 + Math.sin(elapsed * 0.76) * 0.025;
       egrets.forEach((e, i) => (e.rotation.z = Math.sin(elapsed * 0.75 + i * 2) * 0.027));
       if (dome) dome.rotation.y = elapsed * 0.045;
-      for (const marker of markers)
-        (marker.mesh.material as THREE.MeshBasicMaterial).opacity =
-          0.65 + Math.sin(elapsed * 1.7) * 0.1;
+      for (const marker of markers) {
+        const near = driver ? Math.hypot(driver.x - marker.x, driver.z - marker.z) : Infinity;
+        const scale = 1 + Math.max(0, 1 - near / 10) * 0.8;
+        marker.mesh.scale.setScalar(
+          THREE.MathUtils.lerp(marker.mesh.scale.x, scale, 1 - Math.exp(-dt * 8)),
+        );
+        (marker.mesh.material as THREE.MeshBasicMaterial).opacity = near < 6.5 ? 1 : 0.7;
+      }
       if (night > 0.05) materials.glass.emissive.set('#ddae68').multiplyScalar(night * 0.08);
       else materials.glass.emissive.set(0);
     },
