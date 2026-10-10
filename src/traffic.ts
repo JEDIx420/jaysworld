@@ -1,28 +1,22 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { AutoVehicle } from './vehicle';
 import { makeAuto, box, cylinder, materials, bakeStatic } from './models';
 import { makeCar, makeTwoWheeler } from './traffic-models';
 import { signalPhase, signalStops } from './signals';
 import { signalApproaches } from './road-fixtures';
-import { routeBetween, distance2, TAXI_STOPS, waterAt, type Point } from './village';
+import { distance2, waterAt, type Point } from './village';
+import { lanePath, TRAFFIC_CIRCUITS, hillCircuit, advanceLane } from './traffic-lanes';
+import { JUNCTIONS } from './signals';
+export { lanePath } from './traffic-lanes';
 import { groundHeight } from './terrain';
 import { closureTravel, inClosedRegion } from './placement';
 import { PLACES } from './projects';
 import { safeTravel, shouldYield, type Resident } from './safety';
 export type RivalJob = { id: number; target: Point; onboard: boolean };
-export function lanePath(from: Point, to: Point) {
-  const route = routeBetween(from, to).points;
-  return route.map((p, i) => {
-    const a = route[Math.max(0, i - 2)],
-      b = route[Math.min(route.length - 1, i + 2)],
-      len = distance2(a, b) || 1;
-    const blend = Math.min(1, i / 3, (route.length - 1 - i) / 3);
-    return {
-      x: p.x + ((b.z - a.z) / len) * 1.6 * blend,
-      z: p.z - ((b.x - a.x) / len) * 1.6 * blend,
-    };
-  });
+/** Road triangles and shallow bridge decks are ground, not a traffic barrier. */
+export function trafficObstacle(c: RAPIER.Collider) {
+  if (c.shapeType() === RAPIER.ShapeType.TriMesh) return false;
+  return !(c.shape instanceof RAPIER.Cuboid && c.shape.halfExtents.y < 0.16);
 }
 export function trafficSpawn(
   path: readonly Point[],
@@ -58,7 +52,7 @@ export function clearTrafficSpace(
     undefined,
     undefined,
     body,
-    (c) => c.shapeType() !== RAPIER.ShapeType.TriMesh,
+    trafficObstacle,
   );
 }
 
@@ -87,7 +81,7 @@ export function twoWheelerTravel(
     undefined,
     undefined,
     body,
-    (collider) => collider.shapeType() !== RAPIER.ShapeType.TriMesh,
+    trafficObstacle,
   );
   return Math.min(
     safeTravel(pos, to, pos.y, blockers),
@@ -111,11 +105,7 @@ export function createTraffic(
     cylinder(g, 0.07, 0.09, 3.5, [0, 1.75, 0], materials.darkWood, 8);
     box(g, [0.49, 1.22, 0.3], [0, 3.1, 0], materials.black);
     const lamps = ['#b4473b', '#d8a547', '#79a364'].map((color, i) => {
-      const mat = new THREE.MeshStandardMaterial({
-        color,
-        emissive: color,
-        emissiveIntensity: 0,
-      });
+      const mat = new THREE.MeshStandardMaterial({ color, emissive: color, emissiveIntensity: 0 });
       const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), mat);
       lamp.scale.z = 0.35;
       lamp.position.set(0, 3.5 - i * 0.37, 0.17);
@@ -126,9 +116,9 @@ export function createTraffic(
     bakeStatic(g);
     scene.add(g);
   });
-  const count = small ? 8 : 12;
-  const occupied: Point[] = [];
-  const actors = Array.from({ length: count }, (_, i) => {
+  const occupied: Point[] = [],
+    ridge = hillCircuit();
+  const actors = Array.from({ length: small ? 8 : 12 }, (_, i) => {
     const kind = [
       'rival',
       'car',
@@ -143,7 +133,6 @@ export function createTraffic(
       'car',
       'bike',
     ][i];
-    const dynamic = kind === 'rival' || kind === 'auto' || kind === 'car';
     const model =
       kind === 'rival' || kind === 'auto'
         ? makeAuto()
@@ -156,310 +145,467 @@ export function createTraffic(
               ] as import('./traffic-models').CarStyle,
             )
           : makeTwoWheeler(kind === 'cycle');
-    const vehicle = dynamic
-      ? new AutoVehicle(world, kind === 'car' ? 'car' : 'auto', false)
-      : undefined;
-    const body =
-      vehicle?.body ?? world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
-    if (!dynamic)
-      world.createCollider(
-        RAPIER.ColliderDesc.cuboid(0.24, 0.62, 0.83)
-          .setTranslation(0, -0.08, 0)
-          .setFriction(0.2)
-          .setRestitution(0),
-        body,
-      );
-    const start = TAXI_STOPS[[5, 1, 9, 4, 8, 10, 0, 2, 6, 3, 7, 9][i]];
-    let end = TAXI_STOPS[(i * 2 + 2) % TAXI_STOPS.length];
-    if (end.id === start.id) end = TAXI_STOPS[(i * 2 + 5) % TAXI_STOPS.length];
-    const path = lanePath(start, end),
-      spawn = trafficSpawn(path, occupied, (p, n) => {
-        const next = path[Math.min(n + 1, path.length - 1)];
-        return clearTrafficSpace(
-          world,
-          p,
-          Math.atan2(p.x - next.x, p.z - next.z),
-          kind === 'car',
-          body,
-        );
-      }),
-      startPoint = spawn.point,
-      first = path[spawn.index + 1] ?? end;
-    occupied.push(startPoint);
-    const yaw = Math.atan2(startPoint.x - first.x, startPoint.z - first.z);
-    if (vehicle) vehicle.reset(startPoint.x, startPoint.z, yaw);
-    else {
-      body.setTranslation(
-        { x: startPoint.x, y: groundHeight(startPoint.x, startPoint.z) + 0.75, z: startPoint.z },
-        true,
-      );
-      body.setRotation(
-        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw),
-        true,
-      );
+    // NPCs follow a constrained lane; free suspension steering cannot throw them off the road.
+    const body = world.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
+    const shape = new RAPIER.Cuboid(
+      kind === 'car' ? 0.96 : kind === 'bike' || kind === 'cycle' ? 0.3 : 0.75,
+      0.7,
+      kind === 'car' ? 1.9 : kind === 'bike' || kind === 'cycle' ? 0.9 : 1.3,
+    );
+    world.createCollider(
+      RAPIER.ColliderDesc.cuboid(shape.halfExtents.x, shape.halfExtents.y, shape.halfExtents.z)
+        .setFriction(0.25)
+        .setRestitution(0),
+      body,
+    );
+    const path = i === 2 || i === 11 ? ridge : TRAFFIC_CIRCUITS[i % TRAFFIC_CIRCUITS.length];
+    const desired = Math.floor(((i * 0.137 + 0.08) % 1) * (path.length - 1));
+    let index = -1;
+    for (let n = 0; n < path.length - 1; n++) {
+      const k = (desired + n) % (path.length - 1),
+        p = path[k],
+        next = path[k + 1];
+      if (
+        occupied.every((o) => distance2(p, o) > 8) &&
+        PLACES.every((v) => distance2(v.trigger, p) > 10) &&
+        clearTrafficSpace(world, p, Math.atan2(p.x - next.x, p.z - next.z), kind === 'car', body)
+      ) {
+        index = k;
+        break;
+      }
     }
+    if (index < 0) throw new Error('No safe traffic lane spawn');
+    const p = path[index],
+      next = path[index + 1];
+    occupied.push(p);
+    const yaw = Math.atan2(p.x - next.x, p.z - next.z);
+    body.setTranslation({ ...p, y: groundHeight(p.x, p.z) + 0.85 }, true);
+    body.setRotation(
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw),
+      true,
+    );
     model.group.position.copy(body.translation());
     model.group.quaternion.copy(body.rotation());
     scene.add(model.group);
     return {
       kind,
       model,
-      vehicle,
       body,
+      shape,
       path,
-      index: spawn.index,
-      target: { x: end.x, z: end.z } as Point,
-      trip: i,
+      home: path,
+      loop: true,
+      index,
+      offset: 0,
+      target: p as Point,
       stopped: 0,
-      reverse: 0,
       recoveries: 0,
       wait: 0,
       jobId: -1,
       jobOnboard: false,
       previous: new THREE.Vector3().copy(body.translation()),
+      previousQ: new THREE.Quaternion().copy(body.rotation()),
       wheel: 0,
       speed: 0,
+      odometer: 0,
+      yaw,
+      turn: 0,
+      state: 'driving',
     };
   });
   let time = 0;
+  const owners = new Map<string, number>();
+  const junctionQueues = new Map<string, Map<number, number>>();
+  const rotation = (point: Point, yaw: number) => {
+    const forward = { x: -Math.sin(yaw), z: -Math.cos(yaw) },
+      span = 1.3;
+    const grade =
+      (groundHeight(point.x + forward.x * span, point.z + forward.z * span) -
+        groundHeight(point.x - forward.x * span, point.z - forward.z * span)) /
+      (span * 2);
+    return new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.atan(grade), yaw, 0, 'YXZ'));
+  };
+  const travel = (
+    a: (typeof actors)[number],
+    from: Point,
+    to: Point,
+    residents: readonly Resident[],
+    yaw = a.yaw,
+  ) => {
+    const pos = { ...from, y: groundHeight(from.x, from.z) + 0.85 };
+    const hit = world.castShape(
+      pos,
+      rotation(from, yaw),
+      {
+        x: to.x - from.x,
+        y: groundHeight(to.x, to.z) - groundHeight(from.x, from.z),
+        z: to.z - from.z,
+      },
+      a.shape,
+      0.08,
+      1,
+      true,
+      RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC,
+      undefined,
+      undefined,
+      a.body,
+      trafficObstacle,
+    );
+    return Math.min(
+      safeTravel(from, to, pos.y, residents),
+      closureTravel(from, to, a.shape.halfExtents.x),
+      hit ? Math.max(0, hit.time_of_impact - 0.03) : 1,
+    );
+  };
+  const reroute = (a: (typeof actors)[number], target: Point) => {
+    const pos = a.body.translation();
+    let prefix: Point[] = [{ x: pos.x, z: pos.z }];
+    let direction = { x: -Math.sin(a.yaw), z: -Math.cos(a.yaw) };
+    // Carry the current forward lane into a route change instead of snapping to the
+    // nearest graph sample. Finish junction turns before planning a different approach.
+    {
+      for (let distance = 0.5; distance <= 34; distance += 0.5) {
+        const next = advanceLane(a.path, a, distance, a.loop).point;
+        if (distance2(next, prefix.at(-1)!) < 0.05) break;
+        prefix.push(next);
+        if (distance >= 12 && JUNCTIONS.every((j) => distance2(next, j) > 18)) break;
+      }
+      if (prefix.length > 1) {
+        const end = prefix.at(-1)!,
+          previous = prefix.at(-2)!;
+        const length = distance2(previous, end);
+        direction = { x: (end.x - previous.x) / length, z: (end.z - previous.z) / length };
+      }
+    }
+    const anchor = prefix.at(-1)!,
+      path = lanePath(anchor, target, true);
+    if (path.length < 2) return false;
+    const endPoint = path.at(-1)!,
+      curbDistance = distance2(endPoint, target);
+    if (curbDistance > 6.5) {
+      // Stay in the carriageway, but pull toward the curb enough for a real seven-metre pickup.
+      const move = Math.min(1.2, curbDistance - 6.5);
+      for (let n = Math.max(0, path.length - 8); n < path.length; n++) {
+        const blend = Math.max(0, (n - path.length + 8) / 7);
+        path[n] = {
+          x: path[n].x + ((target.x - endPoint.x) / curbDistance) * move * blend,
+          z: path[n].z + ((target.z - endPoint.z) / curbDistance) * move * blend,
+        };
+      }
+    }
+    const tangent = { x: path[1].x - path[0].x, z: path[1].z - path[0].z };
+    if (tangent.x * direction.x + tangent.z * direction.z < 0) {
+      // A deliberate paved U-turn, with forward-only movement, before taking the other lane.
+      const left = { x: direction.z, z: -direction.x },
+        radius = 1.45;
+      const turn = Array.from({ length: 25 }, (_, i) => {
+        const angle = (i / 24) * Math.PI;
+        return {
+          x:
+            anchor.x -
+            left.x * radius +
+            (left.x * Math.cos(angle) + direction.x * Math.sin(angle)) * radius,
+          z:
+            anchor.z -
+            left.z * radius +
+            (left.z * Math.cos(angle) + direction.z * Math.sin(angle)) * radius,
+        };
+      });
+      prefix.push(...turn.slice(1));
+    }
+    const end = prefix.at(-1)!;
+    while (path.length > 2 && distance2(end, path[1]) < distance2(end, path[0])) path.shift();
+    const reversed = tangent.x * direction.x + tangent.z * direction.z < 0;
+    const departure = reversed ? { x: -direction.x, z: -direction.z } : direction;
+    while (
+      path.length > 2 &&
+      distance2(end, path[0]) < 6 &&
+      (path[0].x - end.x) * departure.x + (path[0].z - end.z) * departure.z < 0.1
+    )
+      path.shift();
+    // Lane offsets close to the graph's start can fold around a short first segment.
+    // Join to a stable forward tangent beyond those samples with a smooth cubic curve.
+    while (path.length > 2 && distance2(end, path[0]) < 3.2) path.shift();
+    const start = path[0],
+      next = path[1],
+      span = distance2(end, start);
+    const nextLength = distance2(start, next) || 1;
+    const tangentOut = { x: (next.x - start.x) / nextLength, z: (next.z - start.z) / nextLength };
+    const control = Math.min(2, span / 3);
+    const join = Array.from({ length: 16 }, (_unused, i) => {
+      const t = (i + 1) / 16,
+        u = 1 - t;
+      return {
+        x:
+          u * u * u * end.x +
+          3 * u * u * t * (end.x + departure.x * control) +
+          3 * u * t * t * (start.x - tangentOut.x * control) +
+          t * t * t * start.x,
+        z:
+          u * u * u * end.z +
+          3 * u * u * t * (end.z + departure.z * control) +
+          3 * u * t * t * (start.z - tangentOut.z * control) +
+          t * t * t * start.z,
+      };
+    });
+    a.path = [...prefix, ...join, ...path].filter(
+      (p, i, all) => !i || distance2(p, all[i - 1]) > 0.03,
+    );
+    a.index = a.offset = 0;
+    a.loop = false;
+    a.target = { ...target };
+    return true;
+  };
   return {
     actors,
     clearBay(point: Point) {
-      for (const a of actors)
-        if (distance2(a.body.translation(), point) < 5) {
-          const other = actors.filter((b) => a !== b).map((b) => b.body.translation());
-          const sample = a.path.findIndex(
-            (p, i) =>
-              i > a.index + 3 &&
-              distance2(p, point) > 10 &&
-              other.every((o) => distance2(p, o) > 6) &&
-              !waterAt(p.x, p.z) &&
-              !inClosedRegion(p) &&
-              clearTrafficSpace(
-                world,
-                p,
-                Math.atan2(p.x - (a.path[i + 1]?.x ?? p.x), p.z - (a.path[i + 1]?.z ?? p.z)),
-                a.kind === 'car',
-                a.body,
-              ),
-          );
-          if (sample < 0) continue;
-          const p = a.path[sample],
-            next = a.path[Math.min(sample + 1, a.path.length - 1)],
-            yaw = Math.atan2(p.x - next.x, p.z - next.z);
-          if (a.vehicle) a.vehicle.reset(p.x, p.z, yaw);
-          else {
-            const target = { x: p.x, y: groundHeight(p.x, p.z) + 0.75, z: p.z },
-              rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-            a.body.setTranslation(target, true);
-            a.body.setNextKinematicTranslation(target);
-            a.body.setRotation(rot, true);
-            a.body.setNextKinematicRotation(rot);
-          }
-          a.index = sample;
-          a.speed = 0;
-          a.previous.copy(a.body.translation());
-        }
+      for (const a of actors) {
+        if (distance2(a.body.translation(), point) >= 5) continue;
+        const index = a.path.findIndex(
+          (p, n) =>
+            n > a.index + 3 &&
+            n < a.path.length - 1 &&
+            distance2(p, point) > 12 &&
+            actors.every((b) => a === b || distance2(p, b.body.translation()) > 8) &&
+            clearTrafficSpace(
+              world,
+              p,
+              Math.atan2(p.x - a.path[n + 1].x, p.z - a.path[n + 1].z),
+              a.kind === 'car',
+              a.body,
+            ),
+        );
+        if (index < 0) continue;
+        const p = a.path[index],
+          next = a.path[index + 1];
+        a.index = index;
+        a.offset = a.speed = 0;
+        a.yaw = Math.atan2(p.x - next.x, p.z - next.z);
+        const target = { ...p, y: groundHeight(p.x, p.z) + 0.85 },
+          q = rotation(p, a.yaw);
+        a.body.setTranslation(target, true);
+        a.body.setNextKinematicTranslation(target);
+        a.body.setRotation(q, true);
+        a.body.setNextKinematicRotation(q);
+        a.previous.copy(target);
+        a.previousQ.copy(q);
+      }
     },
     beforeStep(dt: number, residents: readonly Resident[], competition: boolean) {
       time += dt;
-      for (const a of actors) {
+      // One driver reserves a junction until it has cleared the box. Waiting traffic stays behind it.
+      JUNCTIONS.forEach((j, n) => {
+        const owner = owners.get(j.id);
+        if (owner !== undefined) {
+          const a = actors[owner],
+            p = a.body.translation();
+          const approaching = (j.x - p.x) * -Math.sin(a.yaw) + (j.z - p.z) * -Math.cos(a.yaw) > 0;
+          if (
+            distance2(p, j) > 17 ||
+            (!approaching && distance2(p, j) > 8) ||
+            (distance2(p, j) > 8 &&
+              signalStops(p, { x: -Math.sin(a.yaw), z: -Math.cos(a.yaw) }, time))
+          )
+            owners.delete(j.id);
+        }
+        const queue = junctionQueues.get(j.id) ?? new Map<number, number>();
+        junctionQueues.set(j.id, queue);
+        const approaching = actors
+          .map((a, index) => ({ a, index, distance: distance2(a.body.translation(), j) }))
+          .filter(
+            ({ a, distance }) =>
+              distance < 16 &&
+              ((j.x - a.body.translation().x) * -Math.sin(a.yaw) +
+                (j.z - a.body.translation().z) * -Math.cos(a.yaw) >
+                0 ||
+                distance < 6) &&
+              a.wait <= 0,
+          );
+        for (const id of queue.keys())
+          if (!approaching.some((a) => a.index === id)) queue.delete(id);
+        for (const a of approaching) if (!queue.has(a.index)) queue.set(a.index, time);
+        if (!owners.has(j.id)) {
+          const candidates = approaching.filter(
+            ({ a }) =>
+              !signalStops(
+                a.body.translation(),
+                { x: -Math.sin(a.yaw), z: -Math.cos(a.yaw) },
+                time,
+              ) &&
+              !actors.some((b) => {
+                if (a === b) return false;
+                const p = a.body.translation(),
+                  other = b.body.translation();
+                const dx = other.x - p.x,
+                  dz = other.z - p.z;
+                const forward = dx * -Math.sin(a.yaw) + dz * -Math.cos(a.yaw);
+                const side = Math.abs(dx * -Math.cos(a.yaw) - dz * -Math.sin(a.yaw));
+                return forward > 0.5 && forward < 7 && side < 2 && Math.cos(a.yaw - b.yaw) > 0.5;
+              }),
+          );
+          candidates.sort(
+            (a, b) =>
+              queue.get(a.index)! - queue.get(b.index)! ||
+              a.distance - b.distance ||
+              a.index - b.index,
+          );
+          if (candidates[0]) owners.set(j.id, candidates[0].index);
+        }
+      });
+      for (const [id, a] of actors.entries()) {
         const pos = a.body.translation();
         a.previous.copy(pos);
+        a.previousQ.copy(a.body.rotation());
+        a.wait = Math.max(0, a.wait - dt);
         let rivalJob: RivalJob | undefined;
         if (a.kind === 'rival' && competition) rivalJob = job(pos);
-        if (a.kind === 'rival' && !competition) {
-          a.jobOnboard = false;
-          a.jobId = -1;
-        }
         if (rivalJob && (rivalJob.id !== a.jobId || rivalJob.onboard !== a.jobOnboard)) {
-          a.target = { ...rivalJob.target };
-          a.path = lanePath(pos, a.target);
-          a.index = 0;
-          a.jobId = rivalJob.id;
-          a.jobOnboard = rivalJob.onboard;
-          a.stopped = 0;
+          if (reroute(a, rivalJob.target)) {
+            a.jobId = rivalJob.id;
+            a.jobOnboard = rivalJob.onboard;
+          }
         }
-        if (a.wait > 0) a.wait = Math.max(0, a.wait - dt);
-        while (a.index < a.path.length - 2 && distance2(pos, a.path[a.index]) < 4) a.index++;
-        // Closest forward sample prevents drift from making a driver orbit a missed waypoint.
-        for (let n = a.index; n < Math.min(a.path.length, a.index + 10); n++)
-          if (distance2(pos, a.path[n]) < distance2(pos, a.path[a.index])) a.index = n;
-        const next = a.path[Math.min(a.path.length - 1, a.index + 2)] ?? a.target;
-        const dx = next.x - pos.x,
-          dz = next.z - pos.z,
-          length = Math.hypot(dx, dz) || 1,
-          direction = { x: dx / length, z: dz / length };
-        const others: Resident[] = actors
-          .filter((b) => a !== b)
-          .map((b) => ({ ...b.body.translation(), radius: b.kind === 'car' ? 1.2 : 0.65 }));
-        const blockers = [...residents, ...others];
-        const nearby = distance2(pos, a.target) < 6;
+        if (a.kind === 'rival' && !competition && a.jobId >= 0) {
+          a.jobId = -1;
+          a.jobOnboard = false;
+          // Rejoin a forward point on the usual circuit, then resume the loop.
+          const nearest = a.home.reduce(
+            (best, p, i) => (distance2(p, pos) < distance2(a.home[best], pos) ? i : best),
+            0,
+          );
+          reroute(a, a.home[(nearest + 25) % (a.home.length - 1)]);
+        }
+        const here = advanceLane(a.path, a, 0, a.loop),
+          ahead = advanceLane(a.path, a, 1.5, a.loop);
+        const length = distance2(here.point, ahead.point) || 1;
+        const direction = {
+          x: (ahead.point.x - here.point.x) / length,
+          z: (ahead.point.z - here.point.z) / length,
+        };
+        const yaw = Math.atan2(-direction.x, -direction.z);
+        const bend = Math.abs(Math.atan2(Math.sin(yaw - a.yaw), Math.cos(yaw - a.yaw)));
+        const red = signalStops(pos, direction, time);
+        const reserved = JUNCTIONS.some((j) => {
+          const forward = (j.x - pos.x) * direction.x + (j.z - pos.z) * direction.z;
+          return (
+            distance2(pos, j) < 13 && forward > 6 && owners.has(j.id) && owners.get(j.id) !== id
+          );
+        });
+        const arrived =
+          !a.loop &&
+          (distance2(pos, a.path.at(-1)!) < 1.2 || (rivalJob && distance2(pos, a.target) < 6.6));
+        let wanted = a.kind === 'car' ? 6.2 : a.kind === 'cycle' ? 3 : 5;
+        wanted = Math.min(wanted, 1.5 / Math.max(0.24, bend / 0.65));
+        let clearance = 0;
+        const horizon = Math.max(2, (a.speed * a.speed) / 6 + 1.5);
+        for (let n = 1; n <= 4; n++) {
+          const distance = (horizon * n) / 4,
+            next = advanceLane(a.path, a, distance, a.loop).point;
+          if (travel(a, pos, next, residents, yaw) < 1) break;
+          clearance = distance;
+        }
+        wanted = Math.min(wanted, Math.sqrt(Math.max(0, clearance - 0.4) * 6));
         const blocked = shouldYield(
           pos,
-          { x: direction.x * Math.max(a.speed, 3), z: direction.z * Math.max(a.speed, 3) },
+          { x: direction.x * a.speed, z: direction.z * a.speed },
           pos.y,
-          blockers,
+          residents,
         );
-        const red = signalStops(pos, direction, time);
-        const stop = blocked || red || nearby || a.wait > 0;
-        const turningBack = a.reverse > 0;
-        a.reverse = Math.max(0, a.reverse - dt);
-        if (a.vehicle) {
-          const angle = Math.atan2(-direction.x, -direction.z),
-            yaw = new THREE.Euler().setFromQuaternion(
-              new THREE.Quaternion().copy(a.body.rotation()),
-              'YXZ',
-            ).y;
-          const error = Math.atan2(Math.sin(angle - yaw), Math.cos(angle - yaw));
-          const wanted =
-            (a.kind === 'car' ? 6.5 : 5.5) * Math.max(0.35, 1 - Math.abs(error) * 0.45);
-          a.vehicle.beforeStep(
-            {
-              throttle: turningBack ? -0.45 : stop ? 0 : a.speed > wanted ? 0 : 0.85,
-              steer: THREE.MathUtils.clamp(-error * (turningBack ? -2.6 : 2.6), -1, 1),
-              brake: turningBack ? false : stop || a.speed > wanted + 0.8,
-              boost: false,
-            },
-            dt,
-          );
-        } else {
-          const wanted = stop ? 0 : a.kind === 'cycle' ? 3 : 5;
-          a.speed += (wanted - a.speed) * Math.min(1, dt * (stop ? 7 : 2));
-          const proposed = {
-            x: pos.x + direction.x * a.speed * dt,
-            z: pos.z + direction.z * a.speed * dt,
-          };
-          const safe = twoWheelerTravel(world, a.body, proposed, blockers);
-          const nx = pos.x + (proposed.x - pos.x) * safe,
-            nz = pos.z + (proposed.z - pos.z) * safe;
-          if (!waterAt(nx, nz))
-            a.body.setNextKinematicTranslation({ x: nx, y: groundHeight(nx, nz) + 0.75, z: nz });
-          a.body.setNextKinematicRotation(
-            new THREE.Quaternion().setFromAxisAngle(
-              new THREE.Vector3(0, 1, 0),
-              Math.atan2(-direction.x, -direction.z),
-            ),
-          );
+        if (red || reserved || blocked || arrived || a.wait > 0) wanted = 0;
+        a.state =
+          a.wait > 0 || arrived
+            ? 'loading'
+            : red
+              ? 'signal'
+              : reserved
+                ? 'junction'
+                : blocked || clearance < 0.5
+                  ? 'yielding'
+                  : 'driving';
+        a.speed = Math.max(0, a.speed + THREE.MathUtils.clamp(wanted - a.speed, -4 * dt, 1.3 * dt));
+        const proposed = advanceLane(a.path, a, a.speed * dt, a.loop);
+        const fraction = travel(a, pos, proposed.point, residents, yaw);
+        const final = advanceLane(a.path, a, a.speed * dt * fraction, a.loop);
+        if (fraction < 1) a.speed = 0;
+        a.index = final.index;
+        a.offset = final.offset;
+        if (distance2(pos, final.point) > 0.00001) {
+          a.yaw = Math.atan2(pos.x - final.point.x, pos.z - final.point.z);
+          a.turn +=
+            (THREE.MathUtils.clamp(
+              Math.atan2(Math.sin(yaw - a.yaw), Math.cos(yaw - a.yaw)) * 2,
+              -0.4,
+              0.4,
+            ) -
+              a.turn) *
+            Math.min(1, dt * 8);
         }
-        if (nearby && a.speed < 1.2) {
-          if (a.kind === 'rival' && rivalJob && competition) {
+        a.body.setNextKinematicTranslation({
+          ...final.point,
+          y: groundHeight(final.point.x, final.point.z) + 0.85,
+        });
+        a.body.setNextKinematicRotation(rotation(final.point, a.yaw));
+        a.stopped = a.state === 'driving' && a.speed < 0.2 ? a.stopped + dt : 0;
+        if (arrived && a.speed < 0.4 && a.wait <= 0) {
+          if (rivalJob && competition) {
             if (arrive(rivalJob.id, pos, a.speed)) {
               a.jobId = -1;
               a.wait = 2;
             }
-          } else if (a.kind !== 'rival' || !competition || !rivalJob) {
-            a.trip++;
-            const target = TAXI_STOPS[(a.trip * 3 + 5) % TAXI_STOPS.length];
-            a.target = { x: target.x, z: target.z };
-            a.path = lanePath(pos, target);
-            a.index = 0;
-            a.wait = 2;
-          }
-        }
-        // Count real motion, including collision-blocked kinematic bikes. Lights and loading are intentional stops.
-        a.stopped = red || nearby || a.wait > 0 ? 0 : a.speed < 0.3 ? a.stopped + dt : 0;
-        if (a.vehicle && a.stopped > 4 && a.stopped < 4 + dt * 2 && !red) a.reverse = 1.8;
-        // A prolonged jam is recovered on an unoccupied forward lane sample, away from the visitor.
-        if (
-          a.vehicle?.isOverturned() ||
-          a.stopped > 18 ||
-          pos.y < groundHeight(pos.x, pos.z) - 0.8
-        ) {
-          const candidate = a.path.findIndex(
-            (p, i) =>
-              i > a.index + 2 &&
-              !waterAt(p.x, p.z) &&
-              !inClosedRegion(p) &&
-              residents.every(
-                (r) => distance2(p, r) > (r === residents[residents.length - 1] ? 28 : 5),
-              ) &&
-              others.every((o) => distance2(p, o) > 7) &&
-              clearTrafficSpace(
-                world,
-                p,
-                Math.atan2(p.x - (a.path[i + 1]?.x ?? p.x), p.z - (a.path[i + 1]?.z ?? p.z)),
-                a.kind === 'car',
-                a.body,
-              ),
-          );
-          if (candidate >= 0 && distance2(pos, residents[residents.length - 1] ?? pos) > 20) {
-            const p = a.path[candidate],
-              next = a.path[Math.min(candidate + 1, a.path.length - 1)];
-            const yaw = Math.atan2(p.x - next.x, p.z - next.z);
-            if (a.vehicle) a.vehicle.reset(p.x, p.z, yaw);
-            else {
-              const target = { x: p.x, y: groundHeight(p.x, p.z) + 0.75, z: p.z };
-              const rotation = new THREE.Quaternion().setFromAxisAngle(
-                new THREE.Vector3(0, 1, 0),
-                yaw,
-              );
-              a.body.setTranslation(target, true);
-              a.body.setNextKinematicTranslation(target);
-              a.body.setRotation(rotation, true);
-              a.body.setNextKinematicRotation(rotation);
-            }
-            a.index = candidate;
-            a.speed = 0;
-            a.stopped = 0;
-            a.reverse = 0;
-            a.recoveries++;
-            a.previous.copy(a.body.translation());
-          }
-        }
-      }
-    },
-    afterStep(residents: readonly Resident[]) {
-      for (const a of actors) {
-        const p = a.body.translation();
-        if (a.vehicle) {
-          const safe = Math.min(
-            safeTravel(a.previous, p, p.y, residents),
-            closureTravel(a.previous, p, a.kind === 'car' ? 1.8 : 1.4),
-          );
-          if (safe < 1) {
-            a.body.setTranslation(
-              {
-                x: a.previous.x + (p.x - a.previous.x) * safe,
-                y: p.y,
-                z: a.previous.z + (p.z - a.previous.z) * safe,
-              },
-              true,
+          } else {
+            const closest = a.home.reduce(
+              (best, p, i) => (distance2(p, pos) < distance2(a.home[best], pos) ? i : best),
+              0,
             );
-            a.body.setLinvel({ x: 0, y: a.body.linvel().y, z: 0 }, true);
+            a.path = a.home;
+            a.index = Math.min(closest, a.path.length - 2);
+            a.offset = 0;
+            a.loop = true;
           }
-          a.speed = a.vehicle.speed;
-        } else a.speed = distance2(a.previous, p) / world.timestep;
+        }
       }
     },
-    update(dt: number, driver?: Point, visibleDistance = Infinity) {
-      signalHeads.forEach((h) => {
-        const phase = signalPhase(time, h.axis, h.index * 3);
-        h.lamps.forEach(
-          (m, i) =>
-            (m.emissiveIntensity = i === { red: 0, amber: 1, green: 2 }[phase] ? 1.8 : 0.03),
-        );
-      });
+    afterStep(_residents: readonly Resident[]) {
       for (const a of actors) {
-        a.model.group.position.copy(a.body.translation());
-        if (!a.vehicle) a.model.group.position.y -= 0.75;
-        a.model.group.quaternion.copy(a.body.rotation());
+        const moved = distance2(a.previous, a.body.translation());
+        a.speed = moved / world.timestep;
+        a.odometer += moved;
+      }
+    },
+    update(dt: number, driver?: Point, visibleDistance = Infinity, alpha = 1) {
+      signalHeads.forEach((h) =>
+        h.lamps.forEach((m, i) => {
+          m.emissiveIntensity =
+            i === { red: 0, amber: 1, green: 2 }[signalPhase(time, h.axis, h.index * 3)]
+              ? 1.8
+              : 0.03;
+        }),
+      );
+      for (const a of actors) {
+        a.model.group.position.lerpVectors(
+          a.previous,
+          new THREE.Vector3().copy(a.body.translation()),
+          alpha,
+        );
+        if (a.kind === 'bike' || a.kind === 'cycle') a.model.group.position.y -= 0.85;
+        a.model.group.quaternion.slerpQuaternions(
+          a.previousQ,
+          new THREE.Quaternion().copy(a.body.rotation()),
+          alpha,
+        );
         a.model.group.visible =
           !driver || distance2(a.model.group.position, driver) < visibleDistance;
         if (!a.model.group.visible) continue;
+        a.wheel += (a.speed * dt) / 0.32;
         const model = a.model;
-        if (a.vehicle && 'spinners' in model) {
-          a.model.wheels.forEach((w, i) => {
-            const p = a.vehicle!.wheelPoints[i];
-            w.position.set(p.x, p.y - (a.vehicle!.controller.wheelSuspensionLength(i) ?? 0.3), p.z);
-            w.rotation.y =
-              i < (a.kind === 'car' ? 2 : 1) ? (a.vehicle!.controller.wheelSteering(i) ?? 0) : 0;
-            model.spinners[i].rotation.x = a.vehicle!.controller.wheelRotation(i) ?? 0;
+        if ('spinners' in model) {
+          model.wheels.forEach((w, i) => {
+            w.rotation.y = i < (a.kind === 'car' ? 2 : 1) ? a.turn : 0;
+            model.spinners[i].rotation.x = a.wheel;
           });
         } else {
-          a.wheel += (a.speed * dt) / 0.33;
           a.model.wheels.forEach((w) => (w.rotation.x = a.wheel));
-          if ('animate' in model) model.animate(a.wheel, a.speed);
+          if ('animate' in a.model) a.model.animate(a.wheel, a.speed);
         }
       }
     },

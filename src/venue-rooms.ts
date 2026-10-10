@@ -3,6 +3,7 @@ import { box, cylinder, tube, bakeStatic } from './models';
 import { makePerson, animatePerson } from './village-life';
 import type { PlaceId } from './projects';
 import { VENUE_PAGES } from './venue-content';
+import { drawBankDisplay, drawCommandDisplay } from './venue-display';
 
 type Room = {
   scene: THREE.Scene;
@@ -23,7 +24,15 @@ export function createVenueRooms() {
     progress = 0;
   function build(id: PlaceId): Room {
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(id === 'space' ? '#101e2e' : '#313c35');
+    scene.background = new THREE.Color(
+      id === 'opsflash'
+        ? '#081923'
+        : id === 'rift'
+          ? '#2a3e46'
+          : id === 'space'
+            ? '#101e2e'
+            : '#313c35',
+    );
     const camera = new THREE.PerspectiveCamera(48, innerWidth / innerHeight, 0.1, 100);
     const wood = paint('#6c492f'),
       dark = paint('#263836'),
@@ -31,31 +40,58 @@ export function createVenueRooms() {
       steel = paint('#899d99', 0.65),
       green = paint('#467451'),
       amber = paint('#dbad64');
-    const office = id === 'eagle-eye' || id === 'opsflash',
+    const command = id === 'opsflash',
+      computer = id === 'rift',
+      office = id === 'eagle-eye',
       studio = id === 'music',
       tea = id === 'about',
       wetland = id === 'saltwater';
     const floor = paint(
-      id === 'space' ? '#263b48' : office ? '#56675e' : studio ? '#584538' : '#906846',
+      command
+        ? '#102b33'
+        : computer
+          ? '#456069'
+          : id === 'space'
+            ? '#263b48'
+            : office
+              ? '#56675e'
+              : studio
+                ? '#584538'
+                : '#906846',
     );
     box(scene, [18, 0.16, 20], [0, -0.1, 0], floor);
     box(
       scene,
       [18, 7, 0.2],
       [0, 3.4, -6.6],
-      office
-        ? paint('#becbc5')
-        : studio
-          ? paint('#343c3d')
-          : id === 'space'
-            ? paint('#293e4a')
-            : paint('#bcb08b'),
+      command
+        ? paint('#16333e')
+        : computer
+          ? paint('#6d8a91')
+          : office
+            ? paint('#becbc5')
+            : studio
+              ? paint('#343c3d')
+              : id === 'space'
+                ? paint('#293e4a')
+                : paint('#bcb08b'),
     );
-    box(scene, [0.2, 7, 14], [-8.5, 3.4, 0], tea || wetland ? wood : cream);
-    scene.add(new THREE.HemisphereLight(id === 'space' ? '#98b8d1' : '#fff0d8', '#334b46', 2.1));
+    box(
+      scene,
+      [0.2, 7, 14],
+      [-8.5, 3.4, 0],
+      command ? paint('#122d37') : computer ? paint('#748b93') : tea || wetland ? wood : cream,
+    );
+    scene.add(
+      new THREE.HemisphereLight(
+        id === 'space' ? '#98b8d1' : '#fff0d8',
+        '#334b46',
+        command ? 0.85 : 2.1,
+      ),
+    );
     const key = new THREE.DirectionalLight(
       id === 'space' ? '#aecbe7' : office ? '#edf6ee' : '#ffdca1',
-      3,
+      command ? 1.3 : 3,
     );
     key.position.set(3, 6, 5);
     key.castShadow = true;
@@ -70,7 +106,12 @@ export function createVenueRooms() {
     });
     key.shadow.normalBias = 0.045;
     scene.add(key);
-    const warm = new THREE.PointLight('#ffc071', id === 'space' ? 6 : 22, 16, 2);
+    const warm = new THREE.PointLight(
+      command ? '#61d6d2' : computer ? '#a6e5e0' : '#ffc071',
+      command ? 12 : id === 'space' ? 6 : 22,
+      16,
+      2,
+    );
     warm.position.set(-3, 4.8, 0);
     scene.add(warm);
     // An open window looks out over Kerala: paddy, palms, cloud bands and ridge silhouettes.
@@ -97,7 +138,53 @@ export function createVenueRooms() {
       box(scene, [0.14, 0.14, 4], [8.1, 1.1, z + 1], office ? steel : wood);
       box(scene, [0.14, 0.14, 4], [8.1, 5.5, z + 1], office ? steel : wood);
     }
-    if (office) {
+    if (command) {
+      const consoleMaterial = paint('#152e39'),
+        glow = new THREE.MeshBasicMaterial({ color: '#74dacf' });
+      const table = box(scene, [7.8, 0.3, 4.3], [0, 0.95, 0.6], consoleMaterial);
+      table.name = 'holographic-command-table';
+      cylinder(scene, 2.6, 2.9, 0.2, [0, 1.2, 0.4], dark, 40);
+      cylinder(scene, 2.45, 2.45, 0.03, [0, 1.32, 0.4], glow, 40);
+      cylinder(scene, 0.8, 1.25, 0.9, [0, 0.45, 0.4], consoleMaterial, 24);
+      for (const x of [-6.3, 6.3]) {
+        box(scene, [2.3, 1.1, 3.8], [x, 0.55, -1.7], consoleMaterial);
+        for (let n = 0; n < 3; n++) {
+          box(scene, [1.9, 1.25, 0.16], [x, 2.1, -3.2 + n * 1.35], dark);
+          box(scene, [1.65, 1, 0.02], [x, 2.1, -3.1 + n * 1.35], glow);
+          for (let j = 0; j < 4; j++)
+            box(scene, [0.06, 0.025, 0.13], [x - 0.3 + j * 0.2, 1.13, -3 + n * 1.35], amber);
+        }
+      }
+      for (let i = 0; i < 8; i++) {
+        box(scene, [0.05, 0.03, 6], [-5.6 + i * 1.6, 0.02, -0.2], paint('#4e7c83'));
+      }
+      for (const x of [-7, 7]) box(scene, [0.05, 4.2, 0.05], [x, 2.5, -6.35], glow);
+    } else if (computer) {
+      const workstation = paint('#20363d'),
+        glow = new THREE.MeshBasicMaterial({ color: '#91cfc8' });
+      const desk = box(scene, [6.2, 0.17, 3.2], [0, 1.05, 0.1], cream);
+      desk.name = 'bank-reconciliation-desk';
+      for (const x of [-2.7, 2.7]) box(scene, [0.15, 1.05, 0.15], [x, 0.52, 0.1], steel);
+      box(scene, [2.8, 0.08, 0.6], [0, 1.2, 1.25], workstation);
+      for (let r = 0; r < 3; r++)
+        for (let n = 0; n < 16; n++)
+          box(scene, [0.11, 0.03, 0.1], [-1.2 + n * 0.16, 1.26, 1.06 + r * 0.15], steel);
+      box(scene, [0.22, 0.07, 0.32], [1.85, 1.2, 1.15], workstation);
+      for (const x of [-6.2, 6.2]) {
+        box(scene, [2.2, 0.15, 3.5], [x, 1, -2.6], cream);
+        box(scene, [1.8, 1.2, 0.17], [x, 1.85, -3.2], workstation);
+        box(scene, [1.5, 0.93, 0.03], [x, 1.85, -3.1], glow);
+        box(scene, [1.2, 0.07, 0.5], [x, 1.15, -2.2], workstation);
+      }
+      for (const x of [-6.4, 6.4]) {
+        const rack = box(scene, [1.5, 3.8, 1.1], [x, 1.9, -5.6], workstation);
+        rack.name = 'computer-server-rack';
+        for (let n = 0; n < 7; n++) {
+          box(scene, [1.3, 0.35, 0.04], [x, 0.4 + n * 0.45, -5.02], dark);
+          box(scene, [0.07, 0.07, 0.04], [x + 0.47, 0.4 + n * 0.45, -4.98], glow);
+        }
+      }
+    } else if (office) {
       // Glass and steel briefing room; OpsFlash gets a more domestic timber office.
       for (const x of [-7, -4, 0, 4, 7])
         box(scene, [0.06, 6, 0.1], [x, 3, -6.4], id === 'eagle-eye' ? steel : wood);
@@ -134,10 +221,6 @@ export function createVenueRooms() {
       box(scene, [1, 0.14, 0.65], [-0.8, 1.4, 1], steel);
       box(scene, [0.65, 0.02, 0.38], [-0.8, 1.48, 1], dark);
       table.name = 'conference-table';
-      if (id === 'opsflash')
-        for (const x of [-6, 5.6])
-          for (let n = 0; n < 3; n++)
-            box(scene, [1.1, 0.25, 0.8], [x, 0.5 + n * 0.45, -5.4], steel);
     } else if (studio) {
       for (let i = 0; i < 10; i++)
         for (let n = 0; n < 5; n++)
@@ -278,6 +361,24 @@ export function createVenueRooms() {
     );
     screen.position.set(-0.4, 3.4, -6.11);
     scene.add(screen);
+    if (computer || command) {
+      const scale = computer ? 0.72 : 1.05;
+      board.scale.set(scale, scale, 1);
+      screen.scale.set(scale, scale, 1);
+      board.position.set(-0.4, computer ? 2.75 : 3.65, computer ? -1.1 : -1.3);
+      screen.position.copy(board.position);
+      screen.position.z += 0.11;
+      if (command) {
+        (screen.material as THREE.MeshBasicMaterial).transparent = true;
+        (screen.material as THREE.MeshBasicMaterial).opacity = 0.82;
+        board.visible = false;
+        screen.name = 'holographic-world-map';
+      }
+      if (computer) {
+        box(scene, [0.25, 0.9, 0.3], [-0.4, 1.5, -1.1], steel);
+        box(scene, [1.8, 0.06, 0.8], [-0.4, 1.11, -1.1], dark);
+      }
+    }
     if (tea) {
       board.position.set(0, 1.14, 1);
       board.rotation.x = -1.04;
@@ -304,7 +405,7 @@ export function createVenueRooms() {
       }
     }
     const fan = new THREE.Group();
-    fan.visible = id !== 'space' && !wetland;
+    fan.visible = id !== 'space' && !wetland && !command;
     fan.position.set(0, 5.9, 0);
     scene.add(fan);
     cylinder(fan, 0.16, 0.16, 0.2, [0, 0, 0], dark, 12);
@@ -332,8 +433,15 @@ export function createVenueRooms() {
         );
         steam.add(puff);
       }
-    const host = makePerson(tea ? '#d9c5a0' : office ? '#547779' : '#a36c54');
-    host.group.position.set(tea ? -4.8 : studio ? -5.4 : 5.5, 0, tea ? -4.5 : -3.4);
+    const host = makePerson(
+      command ? '#344c59' : computer ? '#739aab' : tea ? '#d9c5a0' : office ? '#547779' : '#a36c54',
+      command || computer,
+    );
+    host.group.position.set(
+      command ? -6.2 : computer ? -6.2 : tea ? -4.8 : studio ? -5.4 : 5.5,
+      0,
+      command || computer ? -1.4 : tea ? -4.5 : -3.4,
+    );
     host.group.rotation.y = -0.3;
     scene.add(host.group);
     const staticRoom = new THREE.Group();
@@ -354,7 +462,11 @@ export function createVenueRooms() {
       texture,
       animate(t) {
         fan.rotation.y = t * 1.6;
-        animatePerson(host, t, 1, tea ? 'chat' : 'police');
+        animatePerson(host, t, 1, 'chat');
+        if (command || computer) {
+          host.arm.rotation.x = host.rightArm.rotation.x = -0.85;
+          host.legs.forEach((leg) => (leg.rotation.x = 0));
+        }
         steam.children.forEach((p, n) => {
           const a = (t * 0.55 + n * 0.14) % 1;
           p.position.set(-4 + Math.sin(t + n) * 0.13, 1.6 + a * 1.5, -4.3 + Math.cos(t + n) * 0.1);
@@ -368,9 +480,15 @@ export function createVenueRooms() {
     const room = rooms.get(active)!,
       card = VENUE_PAGES[active][page],
       c = room.canvas.getContext('2d')!;
+    if (active === 'rift' || active === 'opsflash') {
+      if (active === 'rift') drawBankDisplay(c, page, progress > 0);
+      else drawCommandDisplay(c, page);
+      room.texture.needsUpdate = true;
+      return;
+    }
     const newspaper = active === 'about',
       ink = newspaper ? '#2e473c' : '#f3ead7',
-      accent = newspaper ? '#9c6437' : active === 'opsflash' ? '#8cdcc1' : '#e7bd76';
+      accent = newspaper ? '#9c6437' : '#e7bd76';
     c.fillStyle = newspaper ? '#eee2bb' : active === 'space' ? '#182c44' : '#163b36';
     c.fillRect(0, 0, 1600, 900);
     c.fillStyle = accent;
@@ -425,21 +543,11 @@ export function createVenueRooms() {
     c.fillStyle = accent;
     c.font = '28px monospace';
     c.fillText(
-      active === 'rift' && progress
-        ? 'Δ 0.01 · 3 DIFFERENCES'
-        : `${String(page + 1).padStart(2, '0')} / ${String(VENUE_PAGES[active].length).padStart(2, '0')}`,
+      `${String(page + 1).padStart(2, '0')} / ${String(VENUE_PAGES[active].length).padStart(2, '0')}`,
       85,
       820,
     );
-    c.fillText(
-      newspaper
-        ? 'JAY’S WORLD · KERALA'
-        : active === 'opsflash'
-          ? 'ILLUSTRATIVE WORKFLOW'
-          : 'JAY’S WORLD',
-      1080,
-      820,
-    );
+    c.fillText(newspaper ? 'JAY’S WORLD · KERALA' : 'JAY’S WORLD', 1080, 820);
     room.texture.needsUpdate = true;
   }
   return {
@@ -468,7 +576,13 @@ export function createVenueRooms() {
         portrait ? 13 : 8.5,
       );
       room.camera.lookAt(
-        active === 'about' ? new THREE.Vector3(0, 1.1, 1) : new THREE.Vector3(-0.4, 2.75, -4),
+        active === 'about'
+          ? new THREE.Vector3(0, 1.1, 1)
+          : active === 'rift'
+            ? new THREE.Vector3(-0.4, 2, -1)
+            : active === 'opsflash'
+              ? new THREE.Vector3(-0.4, 2.8, -1)
+              : new THREE.Vector3(-0.4, 2.75, -4),
       );
       room.camera.updateProjectionMatrix();
       room.scene.updateMatrixWorld();

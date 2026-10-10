@@ -3,22 +3,21 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      full_browser_validation:
+        description: Run every desktop, touch, media and fallback journey
+        type: boolean
+        default: false
 permissions:
   contents: read
 concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
-  build:
-    name: Build and visitor checks (${{ matrix.shard }}/3)
+  check:
+    name: Build, physics and release smoke checks
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-    env:
-      JAYSWORLD_QA_SHARD: ${{ matrix.shard }}/3
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -31,24 +30,34 @@ jobs:
       - run: npm run format:check
       - run: npm test
       - run: npm run build
-      - name: Install browser for visitor checks
+      - name: Cache Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-playwright-
+      - name: Install Chromium and system libraries
         run: npx playwright install --with-deps chromium
-      - name: Check the production visitor journey
+      - name: Check driving, every room, phone screens and traffic
+        if: ${{ !inputs.full_browser_validation }}
+        env:
+          JAYSWORLD_QA_FILTER: desktop keyboard driving|seven short exhibits|computer centre|traffic lane motion
+        run: npm run test:browser
+      - name: Run the complete visitor suite
+        if: ${{ inputs.full_browser_validation }}
         run: npm run test:browser
       - name: Keep browser diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: visitor-checks-${{ matrix.shard }}
+          name: visitor-checks
           path: qa/
           retention-days: 7
       - uses: actions/upload-pages-artifact@v3
-        if: matrix.shard == 1
         with:
           path: dist
   deploy:
-    # Publish only after all three build and browser-check workers succeed.
-    needs: build
+    needs: check
     runs-on: ubuntu-latest
     permissions:
       pages: write

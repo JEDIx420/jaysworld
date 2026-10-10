@@ -689,3 +689,844 @@ body[data-scene='fallback'] [data-venue='rift'] .room-fallback-screen {
     display: none;
   }
 }
+
+/* Readable screens remain part of a computer desk and a holographic command table. */
+.room-experience[data-venue='rift'] .room-stage,
+.room-experience[data-venue='opsflash'] .room-stage {
+  inset: 11% 0 24%;
+}
+.bank-terminal,
+.command-console {
+  width: min(880px, 86vw);
+  color: #d9ede6;
+  font-family: monospace;
+  border: 1px solid #6c979582;
+  border-radius: 9px;
+  overflow: hidden;
+  max-height: 100%;
+  box-shadow: 0 25px 60px #0717189c;
+}
+.bank-terminal {
+  background: #122d31;
+  border: 10px solid #24383e;
+  box-shadow:
+    0 25px 60px #0717189c,
+    inset 0 0 0 1px #709e9b;
+}
+.terminal-bar {
+  padding: 15px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #214147;
+}
+.terminal-bar > strong {
+  font: 600 21px sans-serif;
+  letter-spacing: 0.04em;
+}
+.terminal-bar > strong span {
+  font: 11px monospace;
+  margin-left: 12px;
+  color: #aacbc2;
+}
+.terminal-bar small {
+  font-size: 9px;
+}
+.terminal-bar i,
+.command-console footer i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #90d8b4;
+  margin-left: 5px;
+}
+.terminal-tabs {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 20px;
+  gap: 8px;
+  font-size: 10px;
+  border-bottom: 1px solid #5f929045;
+  color: #839fa2;
+}
+.terminal-tabs [aria-current] {
+  color: #edca88;
+}
+.terminal-workspace {
+  padding: 20px;
+  overflow-y: auto;
+  max-height: min(430px, 45dvh);
+}
+.bank-desk-note {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #a6bdb8;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.bank-books {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.bank-book {
+  border: 1px solid #658c8840;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.bank-book header {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 15px;
+  background: #1c3a3e;
+}
+.bank-book header strong {
+  font-size: 11px;
+  color: #b8d6cf;
+}
+.bank-book header span {
+  color: #edca88;
+  font-size: 13px;
+}
+.bank-book table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.bank-book th,
+.bank-book td {
+  padding: 11px 13px;
+  border-bottom: 1px solid #59827e28;
+  text-align: left;
+  font-weight: 400;
+}
+.bank-book td {
+  text-align: right;
+  white-space: nowrap;
+}
+.bank-book thead {
+  font-size: 9px;
+  color: #8dabaa;
+}
+.bank-book [data-state='changed'],
+.bank-book [data-state='missing'],
+.bank-book [data-state='new'] {
+  background: #e2b67817;
+  color: #f4ca8d;
+}
+.bank-result {
+  display: block;
+  padding: 13px 15px;
+  border-left: 2px solid #e8c888;
+  background: #214448;
+  color: #f1d396;
+  font-size: 12px;
+  margin-top: 17px;
+  line-height: 1.4;
+}
+.bank-result.success {
+  border-color: #94d2a7;
+  color: #a0e0b5;
+}
+.bank-terminal > footer,
+.command-console > footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 20px;
+  color: #8badaa;
+  font-size: 9px;
+  border-top: 1px solid #5f929045;
+}
+.bank-differences {
+  display: grid;
+  gap: 12px;
+}
+.bank-differences section {
+  border: 1px solid #b494603d;
+  border-radius: 4px;
+  padding: 14px 16px;
+  background: #17353b;
+}
+.bank-differences header,
+.bank-differences section > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.bank-differences header {
+  margin-bottom: 13px;
+  color: #edca88;
+  font-size: 11px;
+}
+.bank-differences header span {
+  font-size: 9px;
+}
+.bank-differences section > div {
+  font-size: 11px;
+  color: #9ab9b5;
+}
+.bank-differences b {
+  color: #e4e8d4;
+  font-weight: 400;
+  margin-left: 10px;
+}
+.bank-explanations {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.bank-explanations section {
+  padding: 16px;
+  border: 1px solid #9fbd9f36;
+  background: #1b383c;
+}
+.bank-explanations small {
+  font-size: 10px;
+  color: #eaca8a;
+}
+.bank-explanations h2 {
+  font:
+    500 21px/1.2 Georgia,
+    serif;
+  margin: 14px 0;
+}
+.bank-explanations p {
+  font: 12px/1.6 sans-serif;
+  color: #b0c9c2;
+}
+.bank-explanations code {
+  font-size: 10px;
+  line-height: 1.6;
+  color: #eaca8a;
+  display: block;
+  border-top: 1px solid #8aadab33;
+  padding-top: 13px;
+  margin-top: 15px;
+}
+.balance-equations {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+.balance-equations section {
+  padding: 18px;
+  background: #1b383c;
+}
+.balance-equations section > small {
+  color: #8bb7b1;
+  font-size: 10px;
+}
+.balance-equations section > div {
+  display: grid;
+  gap: 12px;
+  margin: 18px 0;
+}
+.balance-equations section > div > span {
+  font-size: 17px;
+}
+.balance-equations small {
+  font-size: 10px;
+  color: #9dbeb6;
+}
+.balance-equations strong {
+  display: block;
+  font-size: 21px;
+  color: #c6e0b6;
+  border-top: 1px solid #8aadab33;
+  padding-top: 15px;
+}
+.bank-review {
+  display: grid;
+  gap: 15px;
+}
+.bank-review > div {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+.bank-review > div > span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border: 1px solid #86b5a8;
+  color: #d8cc90;
+  border-radius: 50%;
+}
+.bank-review p {
+  font: 13px/1.55 sans-serif;
+  margin: 0;
+  color: #a8c5bd;
+}
+.bank-review strong {
+  display: block;
+  color: #e8e8d4;
+}
+.command-console {
+  background: linear-gradient(150deg, #102d36e6, #06191fea);
+  border-color: #81ded66b;
+}
+.command-console > header {
+  padding: 19px 23px 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+.command-console header small {
+  font-size: 9px;
+  color: #8dadad;
+  letter-spacing: 0.16em;
+}
+.command-console h2 {
+  font: 500 17px monospace;
+  color: var(--signal);
+  letter-spacing: 0.06em;
+  margin: 9px 0;
+}
+.command-total {
+  text-align: right;
+  flex-shrink: 0;
+}
+.command-total strong {
+  display: block;
+  font: 500 30px monospace;
+  color: var(--signal);
+}
+.command-total span {
+  font-size: 9px;
+  color: #9cb6b4;
+}
+.hologram-projector {
+  position: relative;
+  padding: 0 24px;
+}
+.hologram-map {
+  width: 100%;
+  height: auto;
+  max-height: 34dvh;
+  display: block;
+  overflow: visible;
+}
+.map-grid {
+  fill: none;
+  stroke: #8fd1c21c;
+  stroke-width: 1;
+}
+.map-land {
+  fill: #79cabe13;
+  stroke: #81cabc88;
+  stroke-width: 1.3;
+}
+.map-links {
+  fill: none;
+  stroke: var(--signal);
+  stroke-width: 1;
+  opacity: 0.35;
+  stroke-dasharray: 5 6;
+}
+.map-signal {
+  fill: var(--signal);
+  stroke: var(--signal);
+  stroke-width: 1;
+}
+.signal-halo {
+  fill: var(--signal);
+  opacity: 0.08;
+  stroke-width: 1.5;
+}
+.map-signal ellipse {
+  fill-opacity: 0.14;
+}
+.signal-column {
+  fill-opacity: 0.28;
+}
+.map-signal text {
+  font: 600 18px monospace;
+  stroke: none;
+}
+.map-signal .region-label {
+  font: 9px monospace;
+  opacity: 0.8;
+}
+.projection-base {
+  width: 58%;
+  height: 10px;
+  margin: -5px auto 0;
+  border-radius: 50%;
+  background: #79d5c815;
+  border: 1px solid #83dcce44;
+  box-shadow: 0 0 35px #62d6ce45;
+}
+.command-regions {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin: 13px 23px;
+}
+.command-regions > div {
+  padding: 9px 12px;
+  border-top: 1px solid #7acebb50;
+  background: #09232c;
+}
+.command-regions small {
+  display: block;
+  font-size: 9px;
+  color: #9dc4b8;
+}
+.command-regions strong {
+  display: block;
+  color: var(--signal);
+  font-size: 18px;
+  margin-top: 6px;
+  font-weight: 400;
+}
+.command-console nav {
+  display: flex;
+  gap: 8px;
+  margin: 13px 23px;
+}
+.command-console nav button {
+  flex: 1;
+  min-height: 38px;
+  font: 10px monospace;
+  background: #18363d;
+  color: #99bbb5;
+}
+.command-console nav button[aria-pressed='true'] {
+  border-color: var(--signal);
+  color: var(--signal);
+  background: #23454b;
+}
+.command-console > footer {
+  display: block;
+  color: #8dadad;
+}
+.command-console > footer span {
+  float: right;
+}
+.command-console footer i {
+  margin: 0 5px 0 0;
+  background: var(--signal);
+}
+body[data-scene='fallback'] [data-venue='opsflash'] .room-fallback-screen {
+  display: none;
+}
+@media (max-width: 640px) {
+  .room-experience[data-venue='rift'] .room-stage,
+  .room-experience[data-venue='opsflash'] .room-stage {
+    inset: 10% 0 31%;
+  }
+  .bank-terminal,
+  .command-console {
+    width: calc(100vw - 26px);
+    border-radius: 5px;
+  }
+  .bank-terminal {
+    border-width: 5px;
+  }
+  .terminal-bar {
+    padding: 11px 12px;
+  }
+  .terminal-bar > strong {
+    font-size: 17px;
+  }
+  .terminal-bar > strong span {
+    font-size: 7px;
+    margin-left: 5px;
+  }
+  .terminal-bar > small {
+    display: none;
+  }
+  .terminal-tabs {
+    padding: 10px 12px;
+    gap: 4px;
+    font-size: 7px;
+  }
+  .terminal-workspace {
+    padding: 12px;
+    max-height: 40dvh;
+  }
+  .bank-desk-note {
+    font-size: 7px;
+    margin-bottom: 10px;
+  }
+  .bank-books {
+    gap: 8px;
+  }
+  .bank-book header {
+    padding: 10px 7px;
+  }
+  .bank-book header strong {
+    font-size: 8px;
+  }
+  .bank-book header span {
+    font-size: 9px;
+  }
+  .bank-book table {
+    font-size: 8px;
+  }
+  .bank-book th,
+  .bank-book td {
+    padding: 10px 5px;
+  }
+  .bank-book thead {
+    font-size: 6px;
+  }
+  .bank-result {
+    font-size: 10px;
+    margin-top: 12px;
+    padding: 10px;
+  }
+  .bank-terminal > footer,
+  .command-console > footer {
+    font-size: 7px;
+    padding: 10px 12px;
+  }
+  .bank-differences section {
+    padding: 11px;
+  }
+  .bank-differences header {
+    font-size: 10px;
+  }
+  .bank-differences header span {
+    font-size: 7px;
+  }
+  .bank-differences section > div {
+    font-size: 9px;
+  }
+  .bank-differences b {
+    margin-left: 3px;
+  }
+  .bank-explanations {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .bank-explanations section {
+    padding: 13px;
+  }
+  .bank-explanations h2 {
+    margin: 10px 0;
+  }
+  .bank-explanations p {
+    font-size: 12px;
+  }
+  .balance-equations {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .balance-equations section {
+    padding: 13px;
+  }
+  .balance-equations section > div {
+    gap: 8px;
+    margin: 12px 0;
+  }
+  .balance-equations section > div > span {
+    font-size: 15px;
+  }
+  .balance-equations strong {
+    font-size: 19px;
+    padding-top: 10px;
+  }
+  .bank-review {
+    gap: 12px;
+  }
+  .bank-review > div {
+    gap: 12px;
+  }
+  .bank-review p {
+    font-size: 12px;
+  }
+  .command-console > header {
+    padding: 13px 13px 5px;
+  }
+  .command-console header small {
+    font-size: 7px;
+  }
+  .command-console h2 {
+    font-size: 10px;
+    line-height: 1.5;
+    max-width: 150px;
+  }
+  .command-total strong {
+    font-size: 23px;
+  }
+  .command-total span {
+    font-size: 7px;
+  }
+  .hologram-projector {
+    padding: 0 10px;
+  }
+  .hologram-map {
+    max-height: 22dvh;
+  }
+  .map-signal text {
+    display: none;
+  }
+  .command-regions {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin: 10px 12px;
+  }
+  .command-regions > div {
+    padding: 7px;
+  }
+  .command-regions small {
+    font-size: 7px;
+  }
+  .command-regions strong {
+    font-size: 14px;
+    margin-top: 4px;
+  }
+  .command-console nav {
+    margin: 10px 12px;
+    gap: 5px;
+  }
+  .command-console nav button {
+    min-height: 44px;
+    padding: 6px;
+    font-size: 8px;
+  }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .room-experience[data-venue='rift'] .room-stage,
+  .room-experience[data-venue='opsflash'] .room-stage {
+    inset: 15% 12px 23% 31%;
+  }
+  .room-experience[data-venue='rift'] .room-story,
+  .room-experience[data-venue='opsflash'] .room-story {
+    top: 24%;
+    bottom: auto;
+    width: 27%;
+  }
+  .bank-terminal,
+  .command-console {
+    width: 100%;
+  }
+  .terminal-bar {
+    padding: 8px 12px;
+  }
+  .terminal-bar > strong {
+    font-size: 15px;
+  }
+  .terminal-tabs {
+    padding: 8px 12px;
+    font-size: 8px;
+  }
+  .terminal-workspace {
+    padding: 10px 12px;
+    max-height: 35dvh;
+  }
+  .bank-book header {
+    padding: 8px;
+  }
+  .bank-book header strong {
+    font-size: 8px;
+  }
+  .bank-book header span {
+    font-size: 10px;
+  }
+  .bank-book table {
+    font-size: 8px;
+  }
+  .bank-book th,
+  .bank-book td {
+    padding: 7px;
+  }
+  .bank-desk-note {
+    font-size: 7px;
+    margin-bottom: 8px;
+  }
+  .bank-result {
+    margin-top: 10px;
+    font-size: 10px;
+    padding: 8px;
+  }
+  .bank-terminal > footer {
+    font-size: 7px;
+    padding: 8px 12px;
+  }
+  .command-console > header {
+    padding: 9px 14px 0;
+  }
+  .command-console h2 {
+    font-size: 11px;
+    margin: 5px 0;
+  }
+  .command-console header small {
+    font-size: 7px;
+  }
+  .command-total strong {
+    font-size: 20px;
+  }
+  .hologram-map {
+    max-height: 23dvh;
+  }
+  .command-regions {
+    margin: 5px 12px;
+    gap: 5px;
+  }
+  .command-regions > div {
+    padding: 4px;
+  }
+  .command-regions small {
+    font-size: 6px;
+  }
+  .command-regions strong {
+    font-size: 11px;
+    margin-top: 3px;
+  }
+  .command-console nav {
+    margin: 6px 12px;
+  }
+  .command-console nav button {
+    min-height: 32px;
+    padding: 5px;
+    font-size: 8px;
+  }
+  .command-console > footer {
+    padding: 7px 12px;
+    font-size: 7px;
+  }
+  .bank-explanations {
+    grid-template-columns: 1fr;
+  }
+  .bank-explanations h2 {
+    font-size: 17px;
+    margin: 8px 0;
+  }
+  .balance-equations strong {
+    font-size: 17px;
+  }
+  .balance-equations section > div > span {
+    font-size: 13px;
+  }
+}
+.bank-terminal,
+.command-console {
+  display: flex;
+  flex-direction: column;
+}
+.terminal-bar,
+.terminal-tabs,
+.bank-terminal > footer,
+.command-console > header,
+.command-console > footer,
+.command-console > nav,
+.command-regions {
+  flex-shrink: 0;
+}
+.terminal-workspace {
+  flex: 1;
+  min-height: 0;
+}
+.hologram-projector {
+  flex: 1;
+  min-height: 70px;
+  overflow: hidden;
+}
+.hologram-map {
+  height: min(31dvh, 260px);
+  min-height: 70px;
+  max-height: 100%;
+}
+@media (max-width: 640px) {
+  .hologram-map {
+    height: min(22dvh, 200px);
+  }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .hologram-map {
+    height: min(23dvh, 100px);
+  }
+}
+.command-console {
+  background: linear-gradient(150deg, #102d36, #06191f);
+}
+@media (max-width: 640px) {
+  .room-experience[data-venue='rift'] .room-location,
+  .room-experience[data-venue='opsflash'] .room-location {
+    left: 68px;
+    right: 125px;
+    max-width: none;
+    text-align: left;
+    font-size: 7px;
+    line-height: 1.4;
+  }
+}
+@media (max-width: 640px) and (max-height: 650px) and (orientation: portrait) {
+  .command-regions {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  .room-experience[data-venue='rift'] .room-stage,
+  .room-experience[data-venue='opsflash'] .room-stage {
+    inset: 63px 0 238px;
+  }
+  .room-experience[data-venue='rift'] .room-story,
+  .room-experience[data-venue='opsflash'] .room-story {
+    bottom: 126px;
+  }
+  .room-experience[data-venue='rift'] .room-story h1,
+  .room-experience[data-venue='opsflash'] .room-story h1 {
+    font-size: 22px;
+  }
+  .room-experience[data-venue='rift'] .room-story p,
+  .room-experience[data-venue='opsflash'] .room-story p {
+    font-size: 11px;
+  }
+  .command-console > header {
+    padding: 8px 12px 0;
+  }
+  .command-console h2 {
+    margin: 5px 0;
+  }
+  .command-regions {
+    margin: 6px 12px;
+    gap: 4px;
+  }
+  .command-regions > div {
+    padding: 4px 6px;
+  }
+  .command-regions strong {
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .command-console nav {
+    margin: 6px 12px;
+  }
+}
+.terminal-touch-hint {
+  display: none;
+}
+@media (max-width: 640px) {
+  .terminal-input-hint {
+    display: none;
+  }
+  .terminal-touch-hint {
+    display: inline;
+  }
+}
+@media (max-width: 640px) and (max-height: 650px) and (orientation: portrait) {
+  .command-regions > div {
+    padding-top: 3px;
+    padding-bottom: 3px;
+  }
+  .command-regions small {
+    font-size: 6px;
+    line-height: 1;
+  }
+  .command-regions strong {
+    line-height: 1;
+  }
+  .command-console > footer {
+    padding: 7px 12px;
+    font-size: 7px;
+    line-height: 1;
+  }
+}

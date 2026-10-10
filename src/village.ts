@@ -279,7 +279,7 @@ export const TAXI_STOPS = [
   { id: 'ferry', label: 'Ferry landing', x: -245, z: 10, npcX: -249, npcZ: 15 },
   { id: 'clinic', label: 'Clinic road', x: -148, z: -121, npcX: -154, npcZ: -124 },
   { id: 'studio', label: 'Eagle Towers', x: -48, z: -4, npcX: -45, npcZ: 1 },
-  { id: 'workshop', label: 'RIFT workshop', x: -139, z: 132, npcX: -144, npcZ: 135 },
+  { id: 'workshop', label: 'RIFT computer centre', x: -139, z: 132, npcX: -144, npcZ: 135 },
   { id: 'records', label: 'The record shop', x: -235, z: 168, npcX: -231, npcZ: 173 },
   { id: 'jetty', label: 'Wetland jetty', x: 55, z: 8, npcX: 62, npcZ: 17 },
   { id: 'paddy', label: 'Paddy shelter', x: -68, z: 113, npcX: -72, npcZ: 118 },
@@ -327,7 +327,7 @@ export const PASSENGERS = [
     name: 'Binu',
     from: 'clinic',
     to: 'workshop',
-    line: 'Back to the workshop. The machines won’t fix themselves.',
+    line: 'The computer centre, please. I have bank records to reconcile.',
     color: '#607580',
   },
   {
@@ -417,8 +417,16 @@ export function sampleRoad(road: VillageRoad, spacing = 2): Point[] {
   return points;
 }
 export const ROAD_PATHS = ROADS.map((road) => ({ ...road, samples: sampleRoad(road) }));
+// The two acute road joins need a paved turning apron on the dry side of the junction.
+export const ROAD_APRONS = [
+  { x: -185, z: 205, radius: 10.5, side: 1 },
+  { x: 43, z: 41, radius: 10.5, side: -1 },
+] as const;
 export function roadClearance(x: number, z: number) {
   let closest = Infinity;
+  for (const apron of ROAD_APRONS)
+    if ((x - apron.x) * apron.side >= 0)
+      closest = Math.min(closest, Math.hypot(x - apron.x, z - apron.z) - apron.radius);
   for (const road of ROAD_PATHS)
     for (const p of road.samples)
       closest = Math.min(closest, Math.hypot(p.x - x, p.z - z) - road.width / 2);
@@ -454,9 +462,19 @@ for (const road of ROAD_PATHS) {
   }
 }
 /** Routes stay on the connected road graph instead of drawing a straight line across water. */
-export function routeBetween(start: Point, end: Point): { points: Point[]; distance: number } {
+export function routeBetween(
+  start: Point,
+  end: Point,
+  options: { roadOnly?: boolean; access?: boolean } = {},
+): { points: Point[]; distance: number } {
+  const mainNodes =
+    options.roadOnly && !options.access
+      ? ROAD_PATHS.filter((r) => !['eagle-forecourt', 'observatory-drive'].includes(r.id)).flatMap(
+          (r) => r.samples,
+        )
+      : [...nodes.values()];
   const closest = (p: Point) =>
-    [...nodes.values()].reduce((a, b) => (distance2(p, a) < distance2(p, b) ? a : b));
+    mainNodes.reduce((a, b) => (distance2(p, a) < distance2(p, b) ? a : b));
   const a = closest(start),
     b = closest(end),
     source = key(a),
@@ -508,9 +526,11 @@ export function routeBetween(start: Point, end: Point): { points: Point[]; dista
   if (!cost.has(target)) throw new Error('Village road graph is disconnected.');
   const ids = [target];
   while (ids[0] !== source) ids.unshift(previous.get(ids[0])!);
-  const points = [start, ...ids.map((id) => nodes.get(id)!), end].filter(
-    (p, i, arr) => i === 0 || distance2(p, arr[i - 1]) > 0.1,
-  );
+  const points = (
+    options.roadOnly
+      ? ids.map((id) => nodes.get(id)!)
+      : [start, ...ids.map((id) => nodes.get(id)!), end]
+  ).filter((p, i, arr) => i === 0 || distance2(p, arr[i - 1]) > 0.1);
   return {
     points,
     distance: points.slice(1).reduce((sum, p, i) => sum + distance2(p, points[i]), 0),

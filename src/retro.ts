@@ -1,7 +1,7 @@
 import { PLACES, type Place } from './projects';
 import { VENUE_PAGES } from './venue-content';
 import { createBeatMachine } from './beats';
-import { compareDemoRecords } from './demos';
+import { bankScreen, commandScreen } from './venue-screens';
 import type { ViewMode } from './engine';
 
 type Actions = {
@@ -59,8 +59,8 @@ export class VenueControls {
       title: {
         about: 'Step into the tea shop',
         'eagle-eye': 'Enter the briefing room',
-        opsflash: 'Enter the OpsFlash office',
-        rift: 'Enter the workshop',
+        opsflash: 'Enter high command',
+        rift: 'Enter the computer centre',
         music: 'Enter the recording studio',
         space: 'Look through the telescope',
         saltwater: 'Watch from the jetty',
@@ -148,7 +148,7 @@ export class RetroExhibit {
       pages = VENUE_PAGES[place.id],
       card = pages[this.page];
     this.dialog.className = 'room-experience';
-    this.dialog.innerHTML = `<button type="button" data-close aria-label="Close project" class="room-exit">↩ <span>ESC</span></button><div class="room-location">${place.location.toUpperCase()}</div><div id="project-stage" class="room-stage"></div><article class="room-story"><small>${card.label}</small><h1 id="project-title">${card.title}</h1><p>${card.copy}</p></article><footer class="room-navigation"><button type="button" data-retro="prev" aria-label="Previous slide">←</button><output>${String(this.page + 1).padStart(2, '0')} / ${String(pages.length).padStart(2, '0')}</output><button type="button" data-retro="next" aria-label="Next slide">→</button><button type="button" data-retro="action">${place.id === 'saltwater' ? 'Watch ↵' : place.id === 'space' ? 'Telescope ↵' : place.id === 'rift' ? 'Compare ↵' : 'Next ↵'}</button></footer><div class="room-activities"></div><div class="retro-links"></div>`;
+    this.dialog.innerHTML = `<button type="button" data-close aria-label="Close project" class="room-exit">↩ <span>ESC</span></button><div class="room-location">${place.location.toUpperCase()}</div><div id="project-stage" class="room-stage"></div><article class="room-story"><small>${card.label}</small><h1 id="project-title">${card.title}</h1><p>${card.copy}</p></article><footer class="room-navigation"><button type="button" data-retro="prev" aria-label="Previous slide">←</button><output>${String(this.page + 1).padStart(2, '0')} / ${String(pages.length).padStart(2, '0')}</output><button type="button" data-retro="next" aria-label="Next slide">→</button><button type="button" data-retro="action">${place.id === 'saltwater' ? 'Watch ↵' : place.id === 'space' ? 'Telescope ↵' : place.id === 'rift' && this.page === 0 ? 'Compare ↵' : 'Next ↵'}</button></footer><div class="room-activities"></div><div class="retro-links"></div>`;
     const stage = this.dialog.querySelector<HTMLElement>('#project-stage')!,
       activities = this.dialog.querySelector('.room-activities')!;
     this.dialog.querySelector('[data-close]')!.addEventListener('click', this.actions.close);
@@ -182,17 +182,14 @@ export class RetroExhibit {
       activity('Pazhampori ₹15 · P', () => this.actions.buy('pazhampori'));
       activity('Samosa ₹12 · S', () => this.actions.buy('samosa'));
     } else if (place.id === 'rift') {
-      const rows = compareDemoRecords(
-        [
-          { id: '01', amount: '4500.75', status: 'settled' },
-          { id: '02', amount: '1200.00', status: 'settled' },
-        ],
-        [
-          { id: '01', amount: '4500.76', status: 'settled' },
-          { id: '03', amount: '1200.00', status: 'settled' },
-        ],
-      );
-      stage.innerHTML = `<div class="reconciliation-tray"><small>ILLUSTRATIVE RECORDS</small><div class="rift-readouts"><div><small>SOURCE ₹</small><strong>4500.75</strong></div><div><small>TARGET ₹</small><strong>4500.76</strong></div></div><output>${this.progress ? 'Δ 0.01 · ' + rows.filter((r) => r.state !== 'equal').length + ' DIFFERENCES' : 'ENTER TO COMPARE'}</output></div>`;
+      stage.innerHTML = bankScreen(this.page, this.progress > 0);
+    } else if (place.id === 'opsflash') {
+      stage.innerHTML = commandScreen(this.page);
+      stage.querySelectorAll<HTMLButtonElement>('[data-layer]').forEach((button) => {
+        button.addEventListener('click', () =>
+          this.change(Number(button.dataset.layer) - this.page),
+        );
+      });
     }
     if (place.id === 'eagle-eye')
       activity('Roof lift ↑7 · L', () => {
@@ -234,8 +231,12 @@ export class RetroExhibit {
     } else if (this.place.id === 'space') {
       this.actions.close();
       this.actions.stars();
-    } else if (this.place.id === 'rift') {
-      this.progress = 1 - this.progress;
+    } else if (this.place.id === 'rift' && this.page === 0) {
+      if (this.progress) {
+        this.change(1);
+        return;
+      }
+      this.progress = 1;
       this.actions.cue();
       this.render();
     } else this.change(1);

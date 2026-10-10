@@ -1,4 +1,5 @@
 import type { PlaceId } from './projects';
+import { COMMAND_LAYERS, COMMAND_REGIONS, signalValue } from './command-map';
 
 export interface VenuePage {
   title: string;
@@ -48,50 +49,48 @@ export const VENUE_PAGES: Record<PlaceId, readonly VenuePage[]> = {
       nodes: ['Find useful signals', 'Choose a next action', 'Put the system to work'],
     },
   ],
-  opsflash: [
-    {
-      title: 'Your tools. One workspace.',
-      copy: 'Connect multiple SaaS tools to OpsFlash.',
-      label: 'OPSFLASH · CONNECT',
-      nodes: ['CRM', 'Sheets', 'Support', 'Finance'],
-    },
-    {
-      title: 'Bring the data together.',
-      copy: 'A central view across your connected software.',
-      label: 'OPSFLASH · CENTRALIZE',
-      nodes: ['Customers', 'Conversations', 'Tasks', 'One connected view'],
-    },
-    {
-      title: 'Just ask.',
-      copy: 'Ask questions in plain language.',
-      label: 'OPSFLASH · ASK',
-      nodes: ['“Which customers need a follow-up?”', 'Connected context', 'A useful answer'],
-    },
-    {
-      title: 'Then take action.',
-      copy: 'Use the answer to move work forward.',
-      label: 'OPSFLASH · ACT',
-      nodes: ['Choose an action', 'Review the change', 'Update the connected tool'],
-    },
-  ],
+  opsflash: COMMAND_LAYERS.map((layer, i) => ({
+    title: layer.title,
+    copy: layer.copy,
+    label: `OPSFLASH · COMMAND ${String(i + 1).padStart(2, '0')}`,
+    nodes: COMMAND_REGIONS.map(
+      (r) => `${r.name} · ${signalValue(r[layer.key], layer.key === 'revenue')}`,
+    ),
+  })),
   rift: [
     {
-      title: 'One paisa matters.',
-      copy: 'Exact reconciliation, built in Rust.',
-      label: 'RIFT · PRECISION WORKSHOP',
-      nodes: ['SOURCE · ₹4500.75', 'TARGET · ₹4500.76', 'ENTER · compare records'],
+      title: 'Close the books.',
+      copy: 'Help the analyst reconcile a bank statement with the cash ledger.',
+      label: 'RIFT · COMPUTER CENTRE',
+      nodes: ['Bank statement', 'Cash ledger', 'ENTER · find differences'],
     },
     {
-      title: 'What moved?',
-      copy: 'Missing, new and changed records.',
-      label: 'RIFT · COMPARE',
-      nodes: ['Missing · record 02', 'New · record 03', 'Changed · record 01'],
+      title: 'Find the three differences.',
+      copy: 'Match record keys. Keep every paisa. Separate timing from errors.',
+      label: 'RIFT · DETECT',
+      nodes: ['Receipt · ₹0.01 out', 'Deposit · ₹1,200 in transit', 'Fee · ₹125 unrecorded'],
     },
     {
-      title: 'Keep every decimal.',
-      copy: 'Small differences. Clear answers.',
-      label: 'RIFT · EXACT',
-      nodes: ['Exact amounts', 'Stable record keys', 'Explore the source'],
+      title: 'Explain every difference.',
+      copy: 'Follow each difference back to the records that explain it.',
+      label: 'RIFT · EXPLAIN',
+      nodes: ['Check the receipt', 'Track the deposit', 'Review the bank fee'],
+    },
+    {
+      title: 'Balance both sides.',
+      copy: 'Work through the adjustments. The two balances should agree exactly.',
+      label: 'RIFT · SOLVE',
+      nodes: ['Adjust the ledger', 'Adjust the bank balance', 'Residual · ₹0.00'],
+    },
+    {
+      title: 'Review. Then reconcile.',
+      copy: 'Approve the evidence, post the corrections, and keep the timing item open.',
+      label: 'RIFT · REVIEW',
+      nodes: [
+        'Confirm ₹0.01 receipt correction',
+        'Record ₹125 bank fee',
+        'Watch for ₹1,200 deposit clearance',
+      ],
     },
   ],
   music: [

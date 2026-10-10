@@ -20,22 +20,27 @@ test('a new visit spawns on dry asphalt outside every entry trigger', () => {
   assert.equal(waterAt(SPAWN.x, SPAWN.z), false);
   assert.ok(ROAD_PATHS.some((r) => r.samples.some((p) => distance2(SPAWN, p) < 2)));
 });
-test('five gears upshift with a rev drop and do not hunt at a boundary', () => {
+test('five gears each require three powered seconds, with a rev drop and no boundary hunting', () => {
   const drive = { ...REST_INPUT, throttle: 1 },
     engine = new AutoPowertrain();
-  for (let i = 0; i < 60; i++) engine.update(FIXED_STEP, 13.9 / 3.6, drive);
+  for (let i = 0; i < 179; i++) engine.update(FIXED_STEP, 13.9 / 3.6, drive);
+  assert.equal(engine.gear, 1);
   const before = engine.rpm;
   for (let i = 0; i < 10; i++) engine.update(FIXED_STEP, 15.1 / 3.6, drive);
   assert.equal(engine.gear, 2);
   assert.ok(engine.rpm < before * 0.6);
   engine.update(FIXED_STEP, 14 / 3.6, drive);
   assert.equal(engine.gear, 2);
-  engine.update(FIXED_STEP, ROAD_SPEED, drive);
-  assert.equal(engine.gear, 5);
-  engine.update(FIXED_STEP, BOOST_SPEED, { ...drive, boost: true });
+  for (let gear = 2; gear < 5; gear++) {
+    // A large jump in road speed cannot skip a gear or its minimum time.
+    while (engine.gearSeconds < 3 - FIXED_STEP * 1.1) engine.update(FIXED_STEP, BOOST_SPEED, drive);
+    assert.equal(engine.gear, gear);
+    engine.update(FIXED_STEP * 2, BOOST_SPEED, drive);
+    assert.equal(engine.gear, gear + 1);
+  }
   assert.equal(engine.gear, 5);
 });
-test('only the player boosts; a held boost has one two-second wheelie and release cancels it', () => {
+test('player wheelies last two seconds with a gentle landing, including early release and braking', () => {
   const player = new AutoPowertrain(),
     npc = new AutoPowertrain(false),
     drive = { ...REST_INPUT, throttle: 1, boost: true };
@@ -46,14 +51,20 @@ test('only the player boosts; a held boost has one two-second wheelie and releas
   assert.ok(player.wheelie > 0.2);
   assert.equal(npc.wheelie, 0);
   assert.equal(npc.boosted, false);
-  for (let i = 0; i < 100; i++) player.update(FIXED_STEP, 10, drive);
-  assert.equal(player.wheelie, 0);
-  assert.equal(player.boosted, true);
+  let previous = player.wheelie;
+  for (let i = 0; i < 60; i++) {
+    player.update(FIXED_STEP, 10, drive);
+    assert.ok(Math.abs(player.wheelie - previous) < 0.009, 'no hard snap during landing');
+    previous = player.wheelie;
+  }
+  assert.ok(player.wheelie < 0.00001);
   player.update(FIXED_STEP, 10, { ...drive, boost: false });
-  assert.equal(player.boosted, false);
-  player.update(FIXED_STEP, 10, drive);
-  assert.ok(player.wheelie > 0);
+  for (let i = 0; i < 45; i++) player.update(FIXED_STEP, 10, drive);
+  const lifted = player.wheelie;
   player.update(FIXED_STEP, 10, { ...drive, brake: true });
+  assert.equal(player.boosted, false);
+  assert.ok(player.wheelie > lifted * 0.98, 'brake release starts a controlled descent');
+  for (let i = 0; i < 40; i++) player.update(FIXED_STEP, 10, { ...drive, brake: true });
   assert.equal(player.wheelie, 0);
 });
 test('real player physics reaches 70/120 km/h, settles after boost, and NPC boost is ignored', () => {

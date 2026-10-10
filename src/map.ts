@@ -1,4 +1,11 @@
-import { ROAD_PATHS, ROAD_CLOSURES, WORLD_BOUNDS, DISTRICTS, type Point } from './village';
+import {
+  ROAD_PATHS,
+  ROAD_APRONS,
+  ROAD_CLOSURES,
+  WORLD_BOUNDS,
+  DISTRICTS,
+  type Point,
+} from './village';
 import { PLACES } from './projects';
 import { groundHeight } from './terrain';
 
@@ -89,6 +96,19 @@ export function drawVillageMap(
     ctx.strokeStyle = full ? '#ede6ca' : '#8d9b7c';
     ctx.lineWidth = Math.max(2, road.width * scale);
     ctx.stroke();
+  }
+  ctx.fillStyle = full ? '#ede6ca' : '#8d9b7c';
+  for (const apron of ROAD_APRONS) {
+    ctx.beginPath();
+    ctx.arc(
+      x(apron.x),
+      z(apron.z),
+      apron.radius * scale,
+      apron.side > 0 ? -Math.PI / 2 : Math.PI / 2,
+      apron.side > 0 ? Math.PI / 2 : Math.PI * 1.5,
+    );
+    ctx.closePath();
+    ctx.fill();
   }
   if (route.length) {
     ctx.beginPath();

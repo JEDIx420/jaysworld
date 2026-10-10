@@ -1,3 +1,29 @@
+# v0.8 validation
+
+This release extends v0.7 at `a4c1003d6ea761b7b021b3299ddaf8807f8ff18a`. All changes use the existing Three.js, Rapier, browser UI and static GitHub Pages deployment. No remote art or backend is added.
+
+## Candidate checks
+
+The local release gate is formatting, 54 unit/physics checks, the TypeScript/Vite build and all nineteen production-browser journeys. Publish one reviewed commit after these checks pass. CI builds once, repeats the physics suite and four focused browser journeys (desktop driving/roof, all seven rooms/audio, traffic/police and portrait/landscape computer/command screens), then deploys Pages. Manual workflow dispatch can run the full browser suite. Chromium is cached by dependency lockfile.
+
+New physics checks build the actual village colliders, check every car circuit’s footprint against buildings/fences, traverse both hill turns, simulate all twelve actors for four minutes and the working rival for six minutes each in a fresh game and later progress toward RIFT/the observatory, including a competition pause. They check lane containment, forward travel, progress during every minute, speed continuity, clear footprints, real curb pickup/dropoff, no recovery teleports and the player wallet. All fifteen officers have unique dry verge positions. This replaces the old minute-long browser displacement check, which could pass even when a driver was travelling into scenery.
+
+Transmission checks verify a three-second driving interval before each upshift, no skipped gears, RPM drops, actual 70/120 km/h physics, hill climbing, controlled wheelie release/braking and zero-speed touchdown. Bank checks use integer paisa and verify that ₹12,950.75 − ₹125.00 + ₹0.01 and ₹11,625.76 + ₹1,200.00 both equal ₹12,825.76. Map checks verify consistent regions and labelled demo values across four layers.
+
+The browser suite retains onboarding, optional office entry, saved progress/fare accounting, roof controls, observatory access, radio timing/failures, beat/audio independence, weather/wildlife, WebGL fallback and touch controls. New phone coverage uses 320×568, 430×932 and 852×393 viewports, visits all five bank slides and four map layers, checks keyboard/touch navigation, labels, instrument/story separation and page overflow. Screen captures are reviewed visually.
+
+## Evidence and limits
+
+On 10 October 2026, formatting, all 54 unit/physics checks, the TypeScript/Vite production build and the complete nineteen-scenario production-browser suite passed. The full browser run was sequential and finished with nineteen passes, zero failures and no omitted scenarios. The earlier parallel browser crashes and timing failures did not recur in this run.
+
+The browser results cover all seven rooms and keyboard slides, the bank comparison and exact balancing equations, all four OpsFlash map layers, 320px/430px portrait and 852px landscape exhibit layouts, phone boost/cancellation/rotation, continuous traffic motion, spacing for all fifteen officers, observatory driveway re-entry, saved wallet/progress, passenger pickup, radio playback/failure/recovery, beat independence, weather, wildlife and WebGL fallback. Desktop and phone captures of both new exhibits were inspected.
+
+The Chromium renderer is SwiftShader. These checks validate software behavior and touch emulation; physical iOS Safari and hardware frame-time/memory measurements remain unverified.
+
+The immediate rollback point is `a4c1003d6ea761b7b021b3299ddaf8807f8ff18a`. Live verification checks the exact deployed commit/run and referenced JS/CSS/engine asset hashes, followed by focused production-browser checks.
+
+---
+
 # v0.7 validation
 
 The release extends v0.6 at `446a746b6515e848f292e4e0b18b8a5f1bf17d5f`. The implementation plan is in GUIDED_ROADS_PLAN.md. This document distinguishes local automated evidence from physical-device validation.

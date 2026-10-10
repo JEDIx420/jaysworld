@@ -106,19 +106,27 @@ export class AutoVehicle {
     this.powertrain.update(dt, signed, input);
     const boost = this.powertrain.boosted;
     const limit = input.throttle < 0 ? 4 : this.player ? (boost ? BOOST_SPEED : ROAD_SPEED) : 12;
+    const gearLimit = this.player && input.throttle > 0 ? this.powertrain.speedLimit : limit;
     const steeringRange = 0.56 / (1 + this.speed * 0.1);
     this.steering += (-input.steer * steeringRange - this.steering) * (1 - Math.exp(-9 * dt));
     this.controller.setWheelSteering(0, this.steering);
     if (this.kind === 'car') this.controller.setWheelSteering(1, this.steering);
     const reversing = input.throttle * signed < -0.6;
     this.throttle += (input.throttle - this.throttle) * (1 - Math.exp(-5.5 * dt));
-    const softLimit = Math.max(0, Math.min(1, (limit + 0.05 - Math.abs(signed)) / 0.4));
+    const softLimit = Math.max(0, Math.min(1, (gearLimit + 0.05 - Math.abs(signed)) / 0.4));
+    const hillLoad = Math.max(0, this.forward.y * Math.sign(input.throttle) * 9.81);
+    const torque =
+      this.kind === 'car'
+        ? 1550
+        : this.player
+          ? (this.body.mass() / 2) *
+            ((boost ? 2.4 : 1.75) + Math.abs(signed) * 0.13 + hillLoad) *
+            (this.powertrain.shift ? 0.55 : 1)
+          : 265;
     const force =
       input.brake || reversing || input.throttle * signed > limit
         ? 0
-        : this.throttle *
-          (this.kind === 'car' ? 1550 : this.player ? (boost ? 720 : 430) : 265) *
-          softLimit;
+        : this.throttle * torque * softLimit;
     this.braking +=
       ((input.brake ? 9 : reversing ? 5 : input.throttle === 0 ? 0.065 : 0) - this.braking) *
       (1 - Math.exp(-14 * dt));

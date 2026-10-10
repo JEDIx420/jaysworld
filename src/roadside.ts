@@ -178,7 +178,7 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
     closed = false,
   ) => {
     if (!closed) {
-      const safe = vergePosition({ x, z });
+      const safe = vergePosition({ x, z }, 0.55, residents);
       x = safe.x;
       z = safe.z;
     }
@@ -218,11 +218,12 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
     );
     for (let n = 0; n < 3; n++) {
       const p = local(-7 + n * 2.1, 1.8),
-        safe = vergePosition(p),
+        safe = vergePosition(p, 0.55, residents),
         cop = makePolice(n === 0);
       cop.group.position.set(safe.x, groundHeight(safe.x, safe.z), safe.z);
       cop.group.rotation.y = closure.yaw;
       scene.add(cop.group);
+      cop.group.name = 'resident:police';
       people.push({
         person: cop,
         base: cop.group.position.clone(),
@@ -638,6 +639,15 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
           radius: a.kind === 'cow' ? 1.25 : 0.75,
         })),
       ];
+    },
+    officers() {
+      return people
+        .filter((p) => p.person.group.name === 'resident:police')
+        .map((p) => ({
+          x: p.base.x,
+          z: p.base.z,
+          y: p.base.y,
+        }));
     },
     quality(low: boolean) {
       lowQuality = low;

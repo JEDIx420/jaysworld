@@ -436,7 +436,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       paused ? 1 : accumulator / FIXED_STEP,
     );
     const powertrain = vehicle.powertrain;
-    const lift = paused || reducedMotion ? 0 : powertrain.wheelie;
+    const lift = reducedMotion ? 0 : powertrain.wheelie;
     // Rotate the visual chassis around the rear axle; the stable physics body stays on the road.
     if (lift > 0) {
       rearPivot.set(0, -0.5, 0.85).applyQuaternion(auto.group.quaternion).add(auto.group.position);
@@ -476,7 +476,12 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       item.mesh.position.copy(item.body.translation());
       item.mesh.quaternion.copy(item.body.rotation());
     }
-    traffic.update(dt, current, mode === 'roof' ? 250 : performanceMode ? 115 : 280);
+    traffic.update(
+      dt,
+      current,
+      mode === 'roof' ? 250 : performanceMode ? 115 : 280,
+      accumulator / FIXED_STEP,
+    );
     environment.update(reducedMotion && mode !== 'croc' ? 0 : elapsed, dt, current);
     const climate = weather.update(document.hidden || !options.isStarted() ? 0 : visualDt, camera);
     nightAmount += (climate.night - nightAmount) * (1 - Math.exp(-visualDt * 0.65));
@@ -629,8 +634,12 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
           speed: a.speed,
           stopped: a.stopped,
           recoveries: a.recoveries,
+          odometer: a.odometer,
+          yaw: a.yaw,
+          state: a.state,
         })),
       );
+      canvas.dataset.police = JSON.stringify(environment.roadside.officers());
       canvas.dataset.drawCalls = String(renderer.info.render.calls);
       canvas.dataset.triangles = String(renderer.info.render.triangles);
       canvas.dataset.marketResidents = String(

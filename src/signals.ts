@@ -9,6 +9,7 @@ export const JUNCTIONS = [
   { id: 'ridge', x: 9, z: -48 },
   { id: 'paddy', x: -139, z: 132 },
   { id: 'south', x: -185, z: 205 },
+  { id: 'studio', x: -53, z: -4 },
 ] as const;
 export function signalPhase(time: number, axis: 'ns' | 'ew', offset = 0): SignalPhase {
   const t = (((time + offset) % 30) + 30) % 30;

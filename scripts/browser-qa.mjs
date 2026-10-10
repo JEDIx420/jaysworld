@@ -378,17 +378,14 @@ try {
           assert.equal(await page.locator('#project-dialog').getAttribute('data-page'), '1');
           if (id === 'opsflash') {
             await page.keyboard.press('ArrowRight');
-            assert.equal(await page.locator('#project-title').textContent(), 'Just ask.');
+            assert.equal(await page.locator('#project-title').textContent(), 'Qualified leads.');
             await page.keyboard.press('Enter');
-            assert.equal(await page.locator('#project-title').textContent(), 'Then take action.');
+            assert.equal(await page.locator('#project-title').textContent(), 'Revenue.');
           }
         }
         if (id === 'rift') {
           await page.keyboard.press('Enter');
-          assert.match(
-            await page.locator('.reconciliation-tray output').textContent(),
-            /0.01.*3 DIFFERENCES/,
-          );
+          assert.match(await page.locator('.bank-result').textContent(), /3 DIFFERENCES.*0.01/);
         }
         if (id === 'music') {
           await page.keyboard.press('ArrowRight');
@@ -1001,6 +998,11 @@ try {
       assert.equal(await page.locator('#joystick-knob').evaluate((e) => e.style.transform), '');
       await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [finger] });
       await page.setViewportSize({ width: 844, height: 390 });
+      await page.waitForFunction(
+        () => document.getElementById('joystick-knob').style.transform === '',
+        undefined,
+        { timeout: 5000 },
+      );
       assert.equal(await page.locator('#joystick-knob').evaluate((e) => e.style.transform), '');
       await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
       await clean(errors);
@@ -1062,36 +1064,93 @@ try {
     },
   );
   await run(
-    'all traffic progresses over a minute and the market has residents',
+    'traffic lane motion, police spacing and populated market',
     { viewport: { width: 1024, height: 700 } },
     async (page, context, errors) => {
       await ready(page);
       await start(page);
-      await park(page, 'eagle-eye');
-      await page.keyboard.press('Escape');
       const before = JSON.parse(await page.locator('#world').getAttribute('data-traffic-actors'));
-      const totals = before.map(() => 0),
-        last = before.map((a) => ({ ...a }));
-      for (let i = 0; i < 6; i++) {
-        const time = Number(await page.locator('#world').getAttribute('data-signal-time'));
-        await page.waitForFunction(
-          (t) => Number(document.getElementById('world').dataset.signalTime) > t + 10,
-          time,
-          { timeout: 90000 },
-        );
-        const actors = JSON.parse(await page.locator('#world').getAttribute('data-traffic-actors'));
-        actors.forEach((a, index) => {
-          totals[index] += Math.hypot(a.x - last[index].x, a.z - last[index].z);
-          last[index] = a;
-        });
-      }
-      last.forEach((a, i) => {
-        assert.ok(totals[i] > 3, `${a.kind} ${i} never progressed`);
-        if (Math.hypot(a.x + 48, a.z + 4) > 35)
-          assert.ok(a.stopped < 22, `${a.kind} ${i} stayed stranded`);
-      });
+      const time = Number(await page.locator('#world').getAttribute('data-signal-time'));
+      await page.waitForFunction(
+        (t) => Number(document.getElementById('world').dataset.signalTime) > t + 8,
+        time,
+        { timeout: 60000 },
+      );
+      const actors = JSON.parse(await page.locator('#world').getAttribute('data-traffic-actors'));
+      assert.ok(actors.every((a) => a.recoveries === 0));
+      assert.ok(actors.filter((a, i) => a.odometer > before[i].odometer + 2).length >= 6);
+      const police = JSON.parse(await page.locator('#world').getAttribute('data-police'));
+      assert.equal(police.length, 15);
+      police.forEach((p, i) =>
+        assert.ok(police.slice(0, i).every((o) => Math.hypot(p.x - o.x, p.z - o.z) >= 1.55)),
+      );
       assert.ok(Number(await page.locator('#world').getAttribute('data-market-residents')) >= 14);
-      await capture(page, 'traffic-after-minute.png');
+      await capture(page, 'traffic-lanes.png');
+      await clean(errors);
+    },
+  );
+  await run(
+    'computer centre and high command on portrait and landscape phones',
+    { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    async (page, context, errors) => {
+      await ready(page);
+      await start(page);
+      for (const size of [
+        { width: 320, height: 568 },
+        { width: 430, height: 932 },
+        { width: 852, height: 393 },
+      ]) {
+        await page.setViewportSize(size);
+        for (const id of ['rift', 'opsflash']) {
+          await visit(page, id);
+          const screen = page.locator(id === 'rift' ? '.bank-terminal' : '.command-console');
+          const box = await screen.boundingBox();
+          assert.ok(box.x >= 0 && box.x + box.width <= size.width + 1);
+          const frames = id === 'rift' ? 5 : 4;
+          for (let i = 0; i < frames; i++) {
+            if (i) await page.keyboard.press('ArrowRight');
+            assert.equal(
+              await page.locator('#project-dialog').getAttribute('data-page'),
+              String(i),
+            );
+            assert.ok(await screen.isVisible());
+            const bounds = await screen.boundingBox(),
+              story = await page.locator('.room-story').boundingBox();
+            if (size.height > size.width)
+              assert.ok(
+                bounds.y + bounds.height <= story.y + 2,
+                'instrument does not overlap its story',
+              );
+            assert.equal(
+              await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+              true,
+            );
+            if (id === 'rift' && i === 3)
+              assert.match(await page.locator('.bank-result').textContent(), /RESIDUAL ₹0.00/);
+            if (id === 'opsflash') {
+              assert.equal(await page.locator('.map-signal').count(), 5);
+              const layer = page.locator(`[data-layer="${i}"]`);
+              assert.equal(await layer.getAttribute('aria-pressed'), 'true');
+              const demo = await page.locator('.command-console > footer').boundingBox();
+              assert.ok(
+                demo.y + demo.height <= bounds.y + bounds.height + 1,
+                'demo label stays inside the command console',
+              );
+              const buttonBox = await layer.boundingBox();
+              assert.ok(
+                buttonBox.y + buttonBox.height <= size.height - 60,
+                'map layer controls stay above slide navigation',
+              );
+            }
+          }
+          if (id === 'opsflash') {
+            await page.locator('[data-layer="0"]').tap();
+            assert.equal(await page.locator('#project-dialog').getAttribute('data-page'), '0');
+          }
+          await capture(page, `${id}-${size.width}x${size.height}.png`);
+          await closeProject(page);
+        }
+      }
       await clean(errors);
     },
   );

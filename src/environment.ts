@@ -15,7 +15,7 @@ import {
   clearCameraFoliage,
 } from './models';
 import { PLACES } from './projects';
-import { ROADS } from './village';
+import { ROADS, ROAD_APRONS } from './village';
 import { groundHeight } from './terrain';
 import { createGround, addField } from './surfaces';
 import { createRoadside } from './roadside';
@@ -130,6 +130,30 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
   );
   const shoulderMaterial = new THREE.MeshStandardMaterial({ color: '#9a7250', roughness: 1 });
   const asphaltMaterial = new THREE.MeshStandardMaterial({ color: '#48514b', roughness: 1 });
+  for (const apron of ROAD_APRONS) {
+    const patch = new THREE.Mesh(
+      new THREE.CircleGeometry(
+        apron.radius,
+        40,
+        apron.side > 0 ? -Math.PI / 2 : Math.PI / 2,
+        Math.PI,
+      ),
+      asphaltMaterial,
+    );
+    patch.rotation.x = -Math.PI / 2;
+    patch.position.set(apron.x, groundHeight(apron.x, apron.z) + 0.065, apron.z);
+    patch.receiveShadow = true;
+    patch.updateMatrix();
+    const surface = patch.geometry.clone().applyMatrix4(patch.matrix);
+    world.createCollider(
+      RAPIER.ColliderDesc.trimesh(
+        new Float32Array(surface.attributes.position.array),
+        new Uint32Array(surface.index!.array),
+      ).setFriction(0.95),
+    );
+    surface.dispose();
+    statics.add(patch);
+  }
   for (const [i, curve] of curves.entries()) {
     const shoulder = strip(curve, ROADS[i].width + 2.6, shoulderMaterial, 0.025);
     const road = strip(curve, ROADS[i].width, asphaltMaterial, 0.06 + i * 0.0008);

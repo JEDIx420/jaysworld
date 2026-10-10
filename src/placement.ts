@@ -1,9 +1,12 @@
 import { ROAD_CLOSURES, ROAD_PATHS, roadClearance, waterAt, type Point } from './village';
 
 /** All positions include the object's radius, not just its centre. */
-export function vergePosition(point: Point, radius = 0.55): Point {
-  if (!waterAt(point.x, point.z) && roadClearance(point.x, point.z) >= radius + 1.4)
-    return { ...point };
+export function vergePosition(point: Point, radius = 0.55, occupied: readonly Point[] = []): Point {
+  const clear = (p: Point) =>
+    !waterAt(p.x, p.z) &&
+    roadClearance(p.x, p.z) >= radius + 1.4 &&
+    occupied.every((o) => Math.hypot(p.x - o.x, p.z - o.z) >= radius * 2 + 0.45);
+  if (clear(point)) return { ...point };
   for (let distance = 2; distance <= 26; distance += 2)
     for (let n = 0; n < 16; n++) {
       const angle = (n / 16) * Math.PI * 2;
@@ -11,11 +14,7 @@ export function vergePosition(point: Point, radius = 0.55): Point {
         x: point.x + Math.cos(angle) * distance,
         z: point.z + Math.sin(angle) * distance,
       };
-      if (
-        !waterAt(candidate.x, candidate.z) &&
-        roadClearance(candidate.x, candidate.z) >= radius + 1.4
-      )
-        return candidate;
+      if (clear(candidate)) return candidate;
     }
   throw new Error('No safe verge near ' + JSON.stringify(point));
 }

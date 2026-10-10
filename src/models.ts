@@ -559,12 +559,21 @@ export function makeBuilding(kind: string, color?: string) {
   const wall = color ? mat(color) : materials.plaster;
   box(group, [width + 1.5, 0.32, depth + 2.6], [0, 0.16, 0.4], materials.laterite);
   box(group, [width + 0.9, 0.1, depth + 2.1], [0, 0.37, 0.4], materials.cream);
-  if (kind === 'about' || kind === 'rift') {
+  if (kind === 'about') {
     box(group, [width, 2.8, 0.2], [0, 1.82, -depth / 2], wall);
     for (const x of [-width / 2, width / 2]) box(group, [0.2, 2.8, depth], [x, 1.82, 0], wall);
     box(group, [width, 2.8, 0.2], [0, 1.82, 0], materials.darkWood);
   } else box(group, [width, 2.8, depth], [0, 1.82, 0], wall);
-  tiledRoof(group, width + 2.3, depth + 2.5, 1.85, 3.28);
+  if (kind === 'rift' || kind === 'opsflash') {
+    box(
+      group,
+      [width + 1.2, 0.24, depth + 1.4],
+      [0, 3.4, 0],
+      kind === 'opsflash' ? materials.navy : materials.plaster,
+    );
+    for (const x of [-width / 2 - 0.1, width / 2 + 0.1])
+      box(group, [0.12, 0.6, depth + 0.8], [x, 3.75, 0], materials.chrome);
+  } else tiledRoof(group, width + 2.3, depth + 2.5, 1.85, 3.28);
   const porchZ = depth / 2 + 0.8;
   box(group, [width + 0.5, 0.13, 1.9], [0, 0.46, porchZ], materials.wood);
   for (const x of [-width * 0.43, 0, width * 0.43]) {
@@ -579,7 +588,7 @@ export function makeBuilding(kind: string, color?: string) {
       [0, 0.065 * (3 - step), depth / 2 + 1.7 + step * 0.43],
       materials.plaster,
     );
-  if (kind !== 'about' && kind !== 'rift') {
+  if (kind !== 'about') {
     box(group, [1.18, 2.15, 0.1], [0, 1.5, depth / 2 + 0.06], materials.darkWood);
     box(group, [0.05, 0.09, 0.07], [0.35, 1.53, depth / 2 + 0.14], materials.chrome);
     for (const x of [-width * 0.29, width * 0.29]) windowFrame(group, x, 1.99, depth / 2 + 0.1);
@@ -672,7 +681,7 @@ export function makeBuilding(kind: string, color?: string) {
       [0, 2.84, depth / 2 + 1.4],
       '#274252',
       '#eed39c',
-      'INTELLIGENCE · OPERATIONS',
+      'HIGH COMMAND · GTM OPERATIONS',
     );
     const dish = new THREE.Group();
     const bowl = new THREE.Mesh(
@@ -693,18 +702,18 @@ export function makeBuilding(kind: string, color?: string) {
       3.4,
       0.75,
       [0, 2.85, depth / 2 + 1.42],
-      '#773d29',
-      '#f4d8ad',
-      'EXACT DATA · RUST',
+      '#254956',
+      '#cbe8df',
+      'COMPUTER CENTRE · RECONCILIATION',
     );
     for (const x of [-2.8, 2.8]) {
       box(group, [2.2, 0.13, 1.0], [x, 1.2, depth / 2 + 0.4], materials.wood);
       for (const px of [x - 0.8, x + 0.8])
         box(group, [0.11, 0.72, 0.11], [px, 0.81, depth / 2 + 0.4], materials.black);
-      box(group, [0.65, 0.34, 0.35], [x, 1.43, depth / 2 + 0.4], materials.red);
+      box(group, [0.85, 0.6, 0.08], [x, 1.7, depth / 2 + 0.4], materials.black);
+      box(group, [0.73, 0.47, 0.02], [x, 1.7, depth / 2 + 0.45], materials.glass);
+      box(group, [0.7, 0.04, 0.28], [x, 1.29, depth / 2 + 0.7], materials.chrome);
     }
-    for (let i = 0; i < 4; i++)
-      box(group, [0.45, 0.45, 0.45], [-3.2 + i * 0.7, 0.66, 1.9], materials.wood);
   } else if (kind === 'music') {
     textBoard(
       group,

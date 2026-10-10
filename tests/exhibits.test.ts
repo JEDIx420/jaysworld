@@ -46,3 +46,38 @@ test('station discovery accepts supported Malayalam streams and filters unusable
   assert.equal(publicHttps('https://192.168.1.3/live'), false);
   assert.ok(CURATED_STATIONS.every((s) => publicHttps(s.url) && publicHttps(s.homepage)));
 });
+
+test('the bank case explains three differences and balances both sides exactly in paisa', async () => {
+  const { BANK_CASE, ADJUSTED_BANK, ADJUSTED_LEDGER } = await import('../src/bank-reconciliation');
+  assert.equal(BANK_CASE.ledger, 1295075n);
+  assert.equal(BANK_CASE.bank, 1162576n);
+  assert.deepEqual(
+    BANK_CASE.rows.filter((r) => r.state !== 'equal').map((r) => r.state),
+    ['changed', 'missing', 'new'],
+  );
+  assert.equal(BANK_CASE.correction, 1n);
+  assert.equal(ADJUSTED_BANK, 1282576n);
+  assert.equal(ADJUSTED_BANK, ADJUSTED_LEDGER);
+  const { bankScreen } = await import('../src/venue-screens');
+  assert.match(bankScreen(3, true), /RESIDUAL ₹0.00/);
+  assert.match(bankScreen(2, true), /deposit in transit|Deposit in transit/i);
+});
+test('each command-map layer uses the same regions and exposes fictional metrics accessibly', async () => {
+  const { COMMAND_LAYERS, COMMAND_REGIONS, commandMapSvg } = await import('../src/command-map');
+  const { commandScreen } = await import('../src/venue-screens');
+  assert.deepEqual(
+    COMMAND_LAYERS.map((l) => l.key),
+    ['search', 'social', 'leads', 'revenue'],
+  );
+  COMMAND_LAYERS.forEach((layer, i) => {
+    const svg = commandMapSvg(i),
+      html = commandScreen(i);
+    assert.match(html, /DEMO DATA/);
+    assert.equal((svg.match(/data-region=/g) ?? []).length, 5);
+    COMMAND_REGIONS.forEach((r) => {
+      assert.ok(r[layer.key] > 0);
+      assert.ok(html.includes(r.name));
+    });
+    assert.ok(svg.includes(layer.label));
+  });
+});
