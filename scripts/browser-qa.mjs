@@ -84,10 +84,10 @@ const args = process.env.JAYSWORLD_CHROMIUM_PATH
   : ['--enable-unsafe-swiftshader'];
 const results = [];
 // A real PCM fixture verifies the browser's media lifecycle without broadcaster outages.
-function testAudio() {
+function testAudio(seconds = 600) {
   const rate = 8000,
     // Longer than a full room tour on software-rendered CI.
-    samples = rate * 600,
+    samples = rate * seconds,
     body = Buffer.alloc(44 + samples * 2);
   body.write('RIFF', 0);
   body.writeUInt32LE(body.length - 8, 4);
@@ -182,6 +182,18 @@ async function run(name, contextOptions, check) {
                 rect: d.getBoundingClientRect().toJSON(),
               })),
               view: document.getElementById('world')?.dataset.view,
+              radio: {
+                phase: document.getElementById('radio-dialog')?.dataset.phase,
+                status: document.getElementById('radio-status')?.textContent,
+                media: [...document.querySelectorAll('audio')].map((a) => ({
+                  station: a.dataset.station,
+                  paused: a.paused,
+                  time: a.currentTime,
+                  ready: a.readyState,
+                  network: a.networkState,
+                  error: a.error?.code,
+                })),
+              },
             }))
             .catch(() => ({})),
           null,
@@ -679,6 +691,10 @@ try {
     'slow radio keeps static until playback and times out a missing signal',
     { viewport: { width: 1000, height: 700 } },
     async (page, context, errors) => {
+      // Start this deliberate signal delay after the unrelated welcome interaction has settled.
+      // First-gesture autoplay is covered separately by the radio lifecycle journey.
+      await context.addInitScript(() => localStorage.setItem('jaysworld-radio-off', 'true'));
+      const signalAudio = testAudio(60);
       let releaseSignal;
       const signalGate = new Promise((resolve) => {
         releaseSignal = resolve;
@@ -686,19 +702,21 @@ try {
       await page.route('https://cast1.my-control-panel.com/**', async (route) => {
         await signalGate;
         await route
-          .fulfill({ status: 200, contentType: 'audio/wav', body: testAudio() })
+          .fulfill({ status: 200, contentType: 'audio/wav', body: signalAudio })
           .catch(() => {});
       });
       await ready(page);
       await start(page);
+      await page.keyboard.press('q');
+      await page.keyboard.press('Enter');
       await page.waitForSelector('#radio-dialog[data-phase=tuning]', { state: 'attached' });
       await page.waitForTimeout(300);
+      assert.match(await page.locator('#radio-status').textContent(), /SEEKING SIGNAL/);
       releaseSignal();
       await page.waitForSelector('#radio-dialog[data-phase=playing]', {
         state: 'attached',
         timeout: 20000,
       });
-      await page.keyboard.press('q');
       await page.route('https://radio.digitalmalayali.in/**', async (route) => {
         await new Promise((r) => setTimeout(r, 18000));
         await route.abort('failed').catch(() => {});
