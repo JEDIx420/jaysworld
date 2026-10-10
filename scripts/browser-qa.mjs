@@ -790,8 +790,14 @@ try {
         await capture(page, 'mobile-room-' + id + '.png');
         await page.keyboard.press('Escape');
         await page.waitForSelector('#project-dialog:not([open])', { state: 'attached' });
+        // Native dialog close dispatches asynchronously; wait for its resulting world view.
+        await page.waitForFunction(
+          () => document.getElementById('world').dataset.view !== 'interior',
+        );
         if ((await page.locator('#world').getAttribute('data-view')) !== 'drive')
           await page.keyboard.press('Escape');
+        await page.waitForFunction(() => document.getElementById('world').dataset.view === 'drive');
+        assert.equal(await page.locator('#settings-dialog').evaluate((d) => d.open), false);
       }
       await clean(errors);
     },
