@@ -21,6 +21,8 @@ import { createGround, addField } from './surfaces';
 import { createRoadside } from './roadside';
 import { createVillageLife } from './village-life';
 import { createWildlife } from './wildlife';
+import { streetlightPositions } from './road-fixtures';
+import { createVenueLife } from './venue-life';
 
 export interface Environment {
   update: (elapsed: number, dt: number, driver?: THREE.Vector3) => void;
@@ -589,24 +591,30 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     night = 0;
   // Street lamps use emissive materials; only a few cast light, and none cast extra shadows.
   const lamps: THREE.PointLight[] = [];
-  for (let n = 0; n < 14; n++) {
-    const t = (n + 0.4) / 14,
-      p = ROAD.getPointAt(t),
-      tangent = ROAD.getTangentAt(t),
-      side = n % 2 ? 1 : -1;
-    const x = p.x - tangent.z * side * 5.1,
-      z = p.z + tangent.x * side * 5.1;
-    if (PLACES.some((place) => Math.hypot(x - place.trigger.x, z - place.trigger.z) < 5.5))
-      continue;
-    cylinder(statics, 0.06, 0.1, 3.1, [x, 1.55, z], materials.darkWood, 8);
-    box(statics, [0.45, 0.48, 0.45], [x, 3.2, z], materials.lamp);
-    const cap = new THREE.Mesh(new THREE.ConeGeometry(0.42, 0.27, 4), materials.darkWood);
-    cap.position.set(x, 3.58, z);
-    cap.rotation.y = Math.PI / 4;
-    statics.add(cap);
-    if (n % 2 === 0) {
+  for (const [n, { x, z, yaw }] of streetlightPositions().entries()) {
+    const y = groundHeight(x, z),
+      pole = new THREE.Group();
+    pole.position.set(x, y, z);
+    pole.rotation.y = yaw;
+    cylinder(pole, 0.075, 0.11, 4, [0, 2, 0], materials.chrome, 8);
+    tube(
+      pole,
+      [
+        [0, 3.9, 0],
+        [0, 4.12, -0.5],
+        [0, 4.12, -1.3],
+      ],
+      0.06,
+      materials.chrome,
+    );
+    box(pole, [0.48, 0.12, 0.75], [0, 4.06, -1.3], materials.black);
+    box(pole, [0.37, 0.025, 0.58], [0, 3.99, -1.3], materials.lamp);
+    bakeStatic(pole);
+    statics.add(pole);
+    fixedBox(world, 0.2, 3.9, 0.2, x, y + 1.95, z);
+    if (n % 6 === 0) {
       const light = new THREE.PointLight('#ffc77d', 0, 17, 2);
-      light.position.set(x, 3.2, z);
+      light.position.set(x - Math.sin(yaw) * 1.3, y + 3.9, z - Math.cos(yaw) * 1.3);
       scene.add(light);
       lamps.push(light);
     }
@@ -667,6 +675,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     statics.add(hill);
   }
   const life = createVillageLife(scene, world, statics);
+  const venueLife = createVenueLife(scene);
   const roadside = createRoadside(scene, world, statics);
   bakeStatic(statics);
   const towerWindows = new Set<THREE.MeshStandardMaterial>();
@@ -711,6 +720,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       feed = Math.max(0, feed - dt);
       wildlife.update(elapsed);
       life.update(elapsed);
+      venueLife.update(elapsed);
       roadside.update(elapsed, dt, driver);
       waterMaterial.uniforms.croc.value.set(crocPosition.x, crocPosition.z);
       waterMaterial.uniforms.feed.value = feed > 0 ? 1 : 0;

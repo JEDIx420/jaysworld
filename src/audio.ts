@@ -1,5 +1,7 @@
 /** Original procedural sound design. No third-party engine recordings. */
 export class JourneyAudio {
+  private studioBeatAt = 0;
+  private studioBeat = 0;
   private context?: AudioContext;
   private master?: GainNode;
   private exhaust?: OscillatorNode;
@@ -168,6 +170,20 @@ export class JourneyAudio {
         night > 0.7 ? 490 : 2600,
       );
     }
+  }
+  studio(distance: number, audible: boolean) {
+    if (!this.context || !this.enabled || !audible || document.hidden || distance > 24) return;
+    const t = this.context.currentTime;
+    if (t < this.studioBeatAt) return;
+    this.studioBeatAt = t + 60 / 108 / 2;
+    const level = Math.max(0, 1 - distance / 24) * 0.024;
+    this.tone(
+      this.studioBeat % 4 === 0 ? 85 : this.studioBeat % 4 === 2 ? 170 : 3600,
+      0.05,
+      level,
+      'triangle',
+    );
+    this.studioBeat = (this.studioBeat + 1) % 8;
   }
   private tone(
     frequency: number,

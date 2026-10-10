@@ -15,6 +15,7 @@ import { PLACES, nearestPlace, type Place } from './projects';
 import { closureTravel, nearestRoad } from './placement';
 import { createTraffic, type RivalJob } from './traffic';
 import { createWeather } from './weather';
+import { createVenueRooms } from './venue-rooms';
 
 export interface JourneyOptions {
   canvas: HTMLCanvasElement;
@@ -46,7 +47,7 @@ export interface JourneyOptions {
   places: () => void;
   honk: () => void;
 }
-export type ViewMode = 'drive' | 'storefront' | 'croc' | 'stars' | 'roof';
+export type ViewMode = 'drive' | 'storefront' | 'interior' | 'croc' | 'stars' | 'roof';
 export interface Journey {
   reset: (place?: Place) => void;
   pause: () => void;
@@ -60,6 +61,8 @@ export interface Journey {
   roof: () => void;
   look: (x: number, y: number) => void;
   visit: (place: Place) => void;
+  interior: (place: Place) => void;
+  slide: (page: number, progress?: number) => void;
   leaveView: () => void;
   zoom: (delta: number) => void;
   selectCroc: (index: number) => void;
@@ -93,6 +96,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
   const scene = new THREE.Scene(),
     dayColor = new THREE.Color('#c4d1aa'),
     nightColor = new THREE.Color('#12283c');
+  const rooms = createVenueRooms();
   scene.background = dayColor.clone();
   scene.fog = new THREE.Fog(dayColor, 95, 245);
   const hemi = new THREE.HemisphereLight('#fff0c5', '#526d3b', 2.2);
@@ -536,10 +540,15 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       canvas.dataset.drawCalls = String(renderer.info.render.calls);
       canvas.dataset.triangles = String(renderer.info.render.triangles);
     }
-    const reading = !!document.querySelector('dialog[open]');
+    const reading = mode !== 'interior' && !!document.querySelector('dialog[open]');
     if (!contextLost && !document.hidden && (!reading || now - lastRendered > 350)) {
       lastRendered = now;
-      renderer.render(scene, camera);
+      if (mode === 'interior') {
+        const exposure = renderer.toneMappingExposure;
+        renderer.toneMappingExposure = 1.05;
+        rooms.render(renderer, reducedMotion ? 0 : elapsed);
+        renderer.toneMappingExposure = exposure;
+      } else renderer.render(scene, camera);
       canvas.dataset.rendered = 'true';
     }
     // Read-only diagnostics make meaningful end-to-end driving assertions possible.
@@ -611,6 +620,14 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       orbitYaw = Math.atan2(place.trigger.x - place.position.x, place.trigger.z - place.position.z);
       elevation = 0.35;
       distance = 15;
+    },
+    interior(place) {
+      viewPlace = place;
+      rooms.enter(place.id);
+      view('interior', place.location, '');
+    },
+    slide(page, progress) {
+      rooms.page(page, progress);
     },
     leaveView() {
       view('drive');
@@ -687,6 +704,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       disposed = true;
       cancelAnimationFrame(frame);
       input.dispose();
+      rooms.dispose();
       window.removeEventListener('resize', resize);
       canvas.removeEventListener('webglcontextlost', loseContext);
       world.free();

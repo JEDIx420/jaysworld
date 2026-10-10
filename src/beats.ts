@@ -79,6 +79,8 @@ export function createBeatMachine(root: HTMLElement, onPlayback: (playing: boole
   let context: AudioContext | undefined,
     noise: AudioBuffer | undefined,
     playing = false,
+    starting = false,
+    intent = 0,
     disposed = false,
     timer = 0,
     next = 0,
@@ -145,6 +147,8 @@ export function createBeatMachine(root: HTMLElement, onPlayback: (playing: boole
     }
   };
   const stop = () => {
+    intent++;
+    starting = false;
     playing = false;
     clearInterval(timer);
     visualTimers.forEach(clearTimeout);
@@ -156,10 +160,12 @@ export function createBeatMachine(root: HTMLElement, onPlayback: (playing: boole
     onPlayback(false);
   };
   const toggle = async () => {
-    if (playing) {
+    if (playing || starting) {
       stop();
       return;
     }
+    const request = ++intent;
+    starting = true;
     try {
       if (!context) {
         context = new AudioContext();
@@ -168,7 +174,8 @@ export function createBeatMachine(root: HTMLElement, onPlayback: (playing: boole
         for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
       }
       await context.resume();
-      if (disposed) return;
+      if (disposed || request !== intent) return;
+      starting = false;
       playing = true;
       onPlayback(true);
       step = 0;
@@ -179,6 +186,8 @@ export function createBeatMachine(root: HTMLElement, onPlayback: (playing: boole
       schedule();
       timer = window.setInterval(schedule, 25);
     } catch {
+      if (request !== intent || disposed) return;
+      starting = false;
       play.textContent = 'TAP TO PLAY';
     }
   };

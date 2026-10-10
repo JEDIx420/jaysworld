@@ -9,7 +9,7 @@ import {
   materials,
   clearCameraFoliage,
 } from './models';
-import { makePerson } from './village-life';
+import { makePerson, animatePerson } from './village-life';
 import { makeCar, makePolice } from './traffic-models';
 import { ROAD_CLOSURES, ROAD_PATHS, roadClearance, waterAt } from './village';
 import { groundHeight } from './terrain';
@@ -148,11 +148,17 @@ function excavator() {
 }
 
 export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics: THREE.Group) {
-  const people: { person: ReturnType<typeof makePerson>; base: THREE.Vector3; phase: number }[] =
-    [];
+  const people: {
+    person: ReturnType<typeof makePerson>;
+    base: THREE.Vector3;
+    phase: number;
+    yaw: number;
+    motion: string;
+  }[] = [];
   const flags: THREE.Mesh[] = [],
     machines: ReturnType<typeof excavator>[] = [];
   const residents: Resident[] = [];
+  const patrols: ReturnType<typeof makeCar>[] = [];
   const personAt = (
     x: number,
     z: number,
@@ -170,7 +176,13 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
     person.group.position.set(x, groundHeight(x, z), z);
     person.group.rotation.y = yaw;
     scene.add(person.group);
-    people.push({ person, base: person.group.position.clone(), phase });
+    people.push({
+      person,
+      base: person.group.position.clone(),
+      phase,
+      yaw,
+      motion: closed ? (phase % 3 < 1 ? 'clap' : 'chant') : 'chat',
+    });
     residents.push({ x, z, y: groundHeight(x, z), radius: 0.55 });
     return person;
   };
@@ -184,6 +196,7 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
         .applyAxisAngle(new THREE.Vector3(0, 1, 0), closure.yaw)
         .add(g.position);
     const patrol = makeCar(true);
+    patrols.push(patrol);
     const parked = local(8, -4);
     patrol.group.position.set(parked.x, groundHeight(parked.x, parked.z) + 0.8, parked.z);
     patrol.group.rotation.y = closure.yaw + 0.3;
@@ -200,7 +213,13 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
       cop.group.position.set(safe.x, groundHeight(safe.x, safe.z), safe.z);
       cop.group.rotation.y = closure.yaw;
       scene.add(cop.group);
-      people.push({ person: cop, base: cop.group.position.clone(), phase: n });
+      people.push({
+        person: cop,
+        base: cop.group.position.clone(),
+        phase: n,
+        yaw: closure.yaw,
+        motion: 'police',
+      });
       residents.push({ x: safe.x, z: safe.z, y: cop.group.position.y, radius: 0.55 });
     }
     // Continuous visible perimeter, matching placement.ts's swept closed volume.
@@ -595,10 +614,13 @@ export function createRoadside(scene: THREE.Scene, world: RAPIER.World, statics:
       ridgeCrowns.castShadow = !low;
     },
     update(t: number, _dt: number, driver?: THREE.Vector3) {
-      people.forEach(({ person, base, phase }) => {
-        person.arm.rotation.z = -0.3 + Math.sin(t * 1.7 + phase) * 0.3;
-        person.group.position.y = base.y + Math.sin(t * 1.6 + phase) * 0.012;
+      people.forEach(({ person, base, phase, yaw, motion }) => {
+        animatePerson(person, t, phase, motion);
+        person.group.position.y =
+          base.y + Math.max(0, Math.sin(t * 1.8 + phase)) * (motion === 'chant' ? 0.05 : 0.018);
+        person.group.rotation.y = yaw + Math.sin(t * 0.55 + phase) * 0.12;
       });
+      patrols.forEach((patrol, i) => patrol.flash(t + i * 0.3));
       flags.forEach((flag, i) => {
         flag.rotation.y = Math.sin(t * 2 + i) * 0.18;
       });

@@ -1,4 +1,5 @@
-import { PASSENGERS, stopById, routeBetween, distance2, type Point } from './village';
+import { PASSENGERS, routeBetween, distance2, type Point } from './village';
+import { passengerStop } from './passenger-stops';
 export type Snack = 'tea' | 'pazhampori' | 'samosa';
 export const MENU: Record<Snack, { name: string; price: number }> = {
   tea: { name: 'Chaya', price: 10 },
@@ -88,12 +89,12 @@ export class FareGame {
     if (this.rivalIndex !== undefined)
       return {
         id: this.rivalIndex,
-        target: stopById(PASSENGERS[this.rivalIndex].to),
+        target: passengerStop(PASSENGERS[this.rivalIndex].to),
         onboard: true,
       };
     const choices = this.offers.map((id) => ({
       id,
-      target: stopById(PASSENGERS[id].from),
+      target: passengerStop(PASSENGERS[id].from),
       onboard: false,
     }));
     return choices.sort((a, b) => distance2(point, a.target) - distance2(point, b.target))[0];
@@ -113,10 +114,10 @@ export class FareGame {
     return true;
   }
   get pickup() {
-    return stopById(this.passenger.from);
+    return passengerStop(this.passenger.from);
   }
   get destination() {
-    return stopById(this.passenger.to);
+    return passengerStop(this.passenger.to);
   }
   get fare() {
     return 20 + Math.round(routeBetween(this.pickup, this.destination).distance * 0.18);
@@ -147,7 +148,9 @@ export class FareGame {
   }
   actionAt(point: Point, speed: number): 'pickup' | 'dropoff' | undefined {
     if (!this.onboard) {
-      const near = this.offers.find((id) => distance2(point, stopById(PASSENGERS[id].from)) <= 7);
+      const near = this.offers.find(
+        (id) => distance2(point, passengerStop(PASSENGERS[id].from)) <= 7,
+      );
       if (near !== undefined && speed <= 1.2) return 'pickup';
       return undefined;
     }
@@ -164,7 +167,7 @@ export class FareGame {
     if (!action) return;
     if (action === 'pickup') {
       this.selected = this.offers.find(
-        (id) => distance2(point, stopById(PASSENGERS[id].from)) <= 7,
+        (id) => distance2(point, passengerStop(PASSENGERS[id].from)) <= 7,
       )!;
       this.onboard = true;
       this.travelled = 0;

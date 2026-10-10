@@ -86,7 +86,8 @@ const results = [];
 // A real PCM fixture verifies the browser's media lifecycle without broadcaster outages.
 function testAudio() {
   const rate = 8000,
-    samples = rate * 120,
+    // Longer than a full room tour on software-rendered CI.
+    samples = rate * 600,
     body = Buffer.alloc(44 + samples * 2);
   body.write('RIFF', 0);
   body.writeUInt32LE(body.length - 8, 4);
@@ -124,7 +125,7 @@ async function run(name, contextOptions, check) {
   if (scenarioNumber++ % shardCount !== shardNumber - 1) return;
   if (process.env.JAYSWORLD_QA_FILTER && !new RegExp(process.env.JAYSWORLD_QA_FILTER).test(name))
     return;
-  let browser;
+  let browser, page;
   try {
     browser = await chromium.launch({
       headless: true,
@@ -132,9 +133,9 @@ async function run(name, contextOptions, check) {
       args,
       proxy,
     });
-    const context = await browser.newContext({ ...contextOptions, ignoreHTTPSErrors: !!proxy }),
-      page = await context.newPage(),
-      errors = [];
+    const context = await browser.newContext({ ...contextOptions, ignoreHTTPSErrors: !!proxy });
+    page = await context.newPage();
+    const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     page.on('console', (m) => {
       if (m.type() === 'error') errors.push(m.text());
@@ -167,6 +168,28 @@ async function run(name, contextOptions, check) {
     results.push({ test: name, status: 'pass', diagnostics });
     console.log('PASS ' + name);
   } catch (error) {
+    if (page) {
+      const namePart = name.replace(/[^a-z0-9]+/gi, '-').slice(0, 80);
+      await writeFile(
+        resolve(output, 'failure-' + namePart + '.json'),
+        JSON.stringify(
+          await page
+            .evaluate(() => ({
+              focus: document.activeElement?.outerHTML,
+              dialogs: [...document.querySelectorAll('dialog')].map((d) => ({
+                id: d.id,
+                open: d.open,
+                rect: d.getBoundingClientRect().toJSON(),
+              })),
+              view: document.getElementById('world')?.dataset.view,
+            }))
+            .catch(() => ({})),
+          null,
+          2,
+        ),
+      );
+      await capture(page, 'failure-' + namePart + '.png').catch(() => {});
+    }
     results.push({ test: name, status: 'fail', error: String(error) });
     console.error('FAIL ' + name + ': ' + error.stack);
     process.exitCode = 1;
@@ -207,7 +230,7 @@ async function ready(page, hash = '') {
   await page.waitForTimeout(300);
 }
 async function places(page) {
-  await page.getByRole('button', { name: /^Places/ }).click();
+  await page.locator('#places-button').click();
   await page.waitForSelector('#places-dialog[open]');
 }
 async function visit(page, id) {
@@ -311,16 +334,28 @@ try {
           await page.keyboard.press('Enter');
         }
         await page.waitForSelector('#project-dialog[open]');
+        await page.waitForFunction(
+          () => document.getElementById('world').dataset.view === 'interior',
+        );
         assert.equal(await page.locator('#project-dialog').getAttribute('data-venue'), id);
-        assert.ok((await page.locator('.retro-copy').textContent()).split(/\s+/).length < 20);
+        assert.ok((await page.locator('.room-story p').textContent()).split(/\s+/).length < 20);
+        assert.equal(await page.locator('#world').getAttribute('data-view'), 'interior');
+        await page.waitForTimeout(600);
+        await capture(page, 'room-' + id + '.png');
         if (id === 'eagle-eye' || id === 'opsflash') {
-          for (let i = 0; i < 4; i++) await page.keyboard.press('Enter');
-          assert.equal(await page.locator('#project-dialog').getAttribute('data-progress'), '4');
+          await page.keyboard.press('ArrowRight');
+          assert.equal(await page.locator('#project-dialog').getAttribute('data-page'), '1');
+          if (id === 'opsflash') {
+            await page.keyboard.press('ArrowRight');
+            assert.equal(await page.locator('#project-title').textContent(), 'Just ask.');
+            await page.keyboard.press('Enter');
+            assert.equal(await page.locator('#project-title').textContent(), 'Then take action.');
+          }
         }
         if (id === 'rift') {
           await page.keyboard.press('Enter');
           assert.match(
-            await page.locator('.rift-instrument output').textContent(),
+            await page.locator('.reconciliation-tray output').textContent(),
             /0.01.*3 DIFFERENCES/,
           );
         }
@@ -335,6 +370,32 @@ try {
           );
           await page.keyboard.press('Space');
           await page.waitForSelector('.drum-machine[data-playing=true]');
+          assert.equal(await page.locator('#radio-dialog').getAttribute('data-phase'), 'playing');
+          const radioBefore = await page.evaluate(() => {
+            const a = document.querySelector('audio');
+            return { time: a.currentTime, volume: a.volume, ended: a.ended, duration: a.duration };
+          });
+          await page.waitForFunction(
+            (time) => document.querySelector('audio')?.currentTime > time + 0.1,
+            radioBefore.time,
+            { timeout: 10000 },
+          );
+          const radioAfter = await page.evaluate(() => {
+            const a = document.querySelector('audio');
+            return { time: a.currentTime, volume: a.volume, ended: a.ended, duration: a.duration };
+          });
+          assert.ok(
+            radioAfter.time > radioBefore.time,
+            'radio keeps playing alongside beats: ' + JSON.stringify({ radioBefore, radioAfter }),
+          );
+          assert.equal(radioAfter.volume, radioBefore.volume, 'the studio does not duck the radio');
+          await page.keyboard.press('q');
+          await page.waitForSelector('#radio-dialog[open]');
+          await page.keyboard.press('ArrowUp');
+          assert.equal(await page.locator('.drum-machine').getAttribute('data-playing'), 'true');
+          await page.keyboard.press('Escape');
+          await page.waitForSelector('#radio-dialog:not([open])', { state: 'attached' });
+          assert.equal(await page.locator('#project-dialog').getAttribute('open'), '');
           await capture(page, 'music.png');
           await page.keyboard.press('Space');
           await page.waitForSelector('.drum-machine[data-playing=false]');
@@ -408,7 +469,7 @@ try {
     { viewport: { width: 320, height: 640 }, hasTouch: true, isMobile: true },
     async (page, context, errors) => {
       await ready(page, '#rift');
-      assert.equal(await page.locator('#project-title').textContent(), 'One paisa.');
+      assert.equal(await page.locator('#project-title').textContent(), 'One paisa matters.');
       await page.reload();
       await page.waitForSelector('#project-dialog[open]', { timeout: 45000 });
       await page.keyboard.press('Escape');
@@ -642,10 +703,97 @@ try {
       await page.waitForSelector('#places-dialog[open]', { timeout: 30000 });
       assert.equal(await page.locator('.place-row').count(), 7);
       await page.locator('[data-place=eagle-eye]').click();
-      assert.equal(await page.locator('#project-title').textContent(), 'Useful AI.');
+      assert.equal(await page.locator('#project-title').textContent(), 'Useful AI. Real work.');
       await page.keyboard.press('ArrowRight');
       await page.keyboard.press('ArrowRight');
       assert.ok((await page.locator('.retro-links a').count()) > 0);
+    },
+  );
+  await run(
+    'passenger pickup after clicking a fare offer and mobile pickup control',
+    { viewport: { width: 1280, height: 800 } },
+    async (page, context, errors) => {
+      await ready(page);
+      await start(page);
+      await page.locator('#taxi-toggle').click();
+      await page.locator('#fare-offers button').filter({ hasText: 'Meera' }).click();
+      await page.waitForSelector('#interaction-button:not([hidden])');
+      assert.match(await page.locator('#interaction-label').textContent(), /Pick up Meera/);
+      // Enter after a pointer-selected offer must board, not re-activate the HUD button.
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('#fare-card[data-onboard=true]');
+      assert.match(await page.locator('#fare-title').textContent(), /Meera →/);
+      assert.equal(await page.locator('#wallet').textContent(), '₹0');
+      await capture(page, 'passenger-boarded.png');
+      await page.keyboard.press('t');
+      await page.keyboard.press('t');
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.locator('#interaction-button').click();
+      await page.waitForSelector('#fare-card[data-onboard=true]');
+      assert.match(await page.locator('#fare-title').textContent(), /Meera →/);
+      await clean(errors);
+    },
+  );
+  await run(
+    'map arrow previews, phone office slides and observable return to the auto',
+    { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true },
+    async (page, context, errors) => {
+      await ready(page);
+      await start(page);
+      await page.keyboard.press('m');
+      await page.keyboard.press('Home');
+      assert.equal(await page.locator('#map-preview').getAttribute('data-venue'), 'about');
+      await page.keyboard.press('ArrowRight');
+      assert.equal(await page.locator('#map-preview').getAttribute('data-venue'), 'eagle-eye');
+      assert.match(await page.locator('#map-preview-copy').textContent(), /rooftop/);
+      await capture(page, 'mobile-map-preview.png');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('#places-dialog:not([open])', { state: 'attached' });
+      assert.equal(await page.locator('#navigation-destination').textContent(), 'Eagle Towers');
+      for (const id of ['eagle-eye', 'opsflash', 'about', 'space', 'saltwater']) {
+        await visit(page, id);
+        await page.waitForFunction(
+          () => document.getElementById('world').dataset.view === 'interior',
+        );
+        await page.keyboard.press('ArrowRight');
+        await page.waitForTimeout(250);
+        assert.equal(
+          await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
+          false,
+        );
+        const exit = await page.locator('.room-exit').boundingBox();
+        assert.ok(exit.x >= 0 && exit.y >= 0 && exit.width >= 44);
+        await capture(page, 'mobile-room-' + id + '.png');
+        await page.keyboard.press('Escape');
+        await page.waitForSelector('#project-dialog:not([open])', { state: 'attached' });
+        if ((await page.locator('#world').getAttribute('data-view')) !== 'drive')
+          await page.keyboard.press('Escape');
+      }
+      await clean(errors);
+    },
+  );
+  await run(
+    'classic blues and rock seeking cancel stale stations without duplicate media',
+    { viewport: { width: 960, height: 700 } },
+    async (page, context, errors) => {
+      await page.route('https://listen.181fm.com/**', (route) =>
+        route.fulfill({ status: 200, contentType: 'audio/wav', body: testAudio() }),
+      );
+      await ready(page);
+      await start(page);
+      await page.keyboard.press('q');
+      await page.keyboard.press('ArrowLeft');
+      await page.waitForSelector('#radio-dialog[data-phase=playing]', { state: 'attached' });
+      assert.match(await page.locator('#radio-name').textContent(), /The Eagle/);
+      await page.keyboard.press('ArrowLeft');
+      await page.waitForSelector('#radio-dialog[data-phase=playing]', { state: 'attached' });
+      assert.match(await page.locator('#radio-name').textContent(), /True Blues/);
+      assert.equal(await page.locator('audio').count(), 1);
+      await page.keyboard.press('ArrowRight');
+      await page.keyboard.press('ArrowLeft');
+      await page.waitForSelector('#radio-dialog[data-phase=playing]', { state: 'attached' });
+      assert.match(await page.locator('#radio-name').textContent(), /True Blues/);
+      await clean(errors);
     },
   );
 } finally {

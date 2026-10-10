@@ -3,7 +3,8 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { AutoVehicle } from './vehicle';
 import { makeAuto, box, cylinder, materials, bakeStatic } from './models';
 import { makeCar, makeTwoWheeler } from './traffic-models';
-import { JUNCTIONS, signalPhase, signalStops } from './signals';
+import { signalPhase, signalStops } from './signals';
+import { signalApproaches } from './road-fixtures';
 import { routeBetween, distance2, TAXI_STOPS, waterAt, type Point } from './village';
 import { groundHeight } from './terrain';
 import { closureTravel, nearestRoad, inClosedRegion } from './placement';
@@ -45,33 +46,27 @@ export function createTraffic(
 ) {
   const signalHeads: { axis: 'ns' | 'ew'; index: number; lamps: THREE.MeshStandardMaterial[] }[] =
     [];
-  JUNCTIONS.forEach((j, index) => {
-    for (const axis of ['ns', 'ew'] as const)
-      for (const side of [-1, 1]) {
-        const g = new THREE.Group();
-        const x = j.x + (axis === 'ns' ? side * 5.4 : side * 9),
-          z = j.z + (axis === 'ns' ? side * 9 : side * 5.4);
-        g.position.set(x, groundHeight(x, z), z);
-        g.rotation.y =
-          axis === 'ns' ? (side < 0 ? 0 : Math.PI) : side < 0 ? Math.PI / 2 : -Math.PI / 2;
-        cylinder(g, 0.07, 0.09, 3.5, [0, 1.75, 0], materials.darkWood, 8);
-        box(g, [0.49, 1.22, 0.3], [0, 3.1, 0], materials.black);
-        const lamps = ['#b4473b', '#d8a547', '#79a364'].map((color, i) => {
-          const mat = new THREE.MeshStandardMaterial({
-            color,
-            emissive: color,
-            emissiveIntensity: 0,
-          });
-          const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), mat);
-          lamp.scale.z = 0.35;
-          lamp.position.set(0, 3.5 - i * 0.37, 0.17);
-          g.add(lamp);
-          return mat;
-        });
-        signalHeads.push({ axis, index, lamps });
-        bakeStatic(g);
-        scene.add(g);
-      }
+  signalApproaches().forEach(({ x, z, inward, axis, offset }) => {
+    const g = new THREE.Group();
+    g.position.set(x, groundHeight(x, z), z);
+    g.rotation.y = Math.atan2(-inward.x, -inward.z);
+    cylinder(g, 0.07, 0.09, 3.5, [0, 1.75, 0], materials.darkWood, 8);
+    box(g, [0.49, 1.22, 0.3], [0, 3.1, 0], materials.black);
+    const lamps = ['#b4473b', '#d8a547', '#79a364'].map((color, i) => {
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0,
+      });
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), mat);
+      lamp.scale.z = 0.35;
+      lamp.position.set(0, 3.5 - i * 0.37, 0.17);
+      g.add(lamp);
+      return mat;
+    });
+    signalHeads.push({ axis, index: offset / 3, lamps });
+    bakeStatic(g);
+    scene.add(g);
   });
   const count = small ? 4 : 7;
   const occupied: Point[] = [];
@@ -344,6 +339,7 @@ export function createTraffic(
         } else {
           a.wheel += (a.speed * dt) / 0.33;
           a.model.wheels.forEach((w) => (w.rotation.x = a.wheel));
+          if ('animate' in model) model.animate(a.wheel, a.speed);
         }
       }
     },

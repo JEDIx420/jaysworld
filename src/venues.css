@@ -1,0 +1,691 @@
+/* Each venue is a room in the world. Keep the windows, instruments and scenery visible. */
+#radio-band {
+  display: block;
+  color: #9daf90;
+  font: 9px monospace;
+  letter-spacing: 0.15em;
+  margin: 8px 0;
+}
+@media (max-width: 640px) {
+  .room-experience[data-venue='about'][data-page='2'] .room-activities {
+    bottom: 128px;
+  }
+}
+body:has(#project-dialog[open]) .topbar {
+  display: none;
+}
+body:has(#project-dialog[open]) .hud:not(.toast) {
+  visibility: hidden;
+  pointer-events: none;
+}
+.room-radio {
+  position: absolute;
+  right: 22px;
+  top: max(18px, env(safe-area-inset-top));
+  z-index: 3;
+}
+.room-experience .room-location {
+  right: 160px;
+}
+.atlas-scene {
+  position: relative;
+}
+.map-preview {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  width: min(315px, calc(100% - 36px));
+  background: #e7d7aeef;
+  color: #2e4a3a;
+  border: 1px solid #afa17d;
+  border-radius: 6px;
+  padding: 18px;
+  box-shadow: 0 8px 25px #32462c3b;
+}
+.map-preview h2 {
+  font:
+    500 25px/1.1 Georgia,
+    serif;
+  margin: 8px 0;
+}
+.map-preview p {
+  font-size: 12px;
+  margin: 0 0 14px;
+  line-height: 1.5;
+}
+.map-preview > small {
+  font: 9px monospace;
+  letter-spacing: 0.07em;
+}
+.map-preview-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.map-preview-controls button {
+  min-height: 44px;
+  background: #385b47;
+  color: #f0e3c1;
+  border: 0;
+  border-radius: 3px;
+  padding: 9px 12px;
+  font: 11px monospace;
+}
+.map-preview-controls #map-drive {
+  flex: 1;
+}
+@media (max-width: 640px) {
+  .map-preview {
+    left: 10px;
+    bottom: 10px;
+    width: min(255px, calc(100% - 20px));
+    padding: 13px;
+  }
+  .map-preview h2 {
+    font-size: 21px;
+  }
+  .map-preview p {
+    font-size: 11px;
+    margin-bottom: 10px;
+  }
+  .map-preview > small:last-child {
+    display: none;
+  }
+  .map-preview-controls {
+    margin: 0;
+  }
+}
+dialog.room-experience {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #f4e9d1;
+  box-shadow: none;
+  overflow: hidden;
+  background-image: linear-gradient(0deg, #132b2cdd, transparent 30%, transparent 88%, #152c2ca8);
+}
+dialog.room-experience::backdrop {
+  background: transparent;
+  backdrop-filter: none;
+}
+.room-experience button,
+.room-experience a {
+  font-family: inherit;
+  color: inherit;
+  background: #193b36db;
+  border: 1px solid #d8d4b535;
+  border-radius: 5px;
+  min-height: 44px;
+  padding: 10px 16px;
+  text-decoration: none;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.room-experience button:hover,
+.room-experience a:hover {
+  background: #386653;
+}
+.room-experience button:focus-visible,
+.room-experience a:focus-visible {
+  outline: 3px solid #efd094;
+  outline-offset: 3px;
+}
+.room-exit {
+  position: absolute;
+  top: max(18px, env(safe-area-inset-top));
+  left: 22px;
+  z-index: 3;
+}
+.room-exit span {
+  margin-left: 12px;
+  opacity: 0.7;
+  font-size: 10px;
+}
+.room-location {
+  position: absolute;
+  right: 24px;
+  top: max(33px, calc(env(safe-area-inset-top) + 15px));
+  font: 11px monospace;
+  letter-spacing: 0.16em;
+}
+.room-story {
+  position: absolute;
+  bottom: 92px;
+  left: 32px;
+  max-width: 530px;
+  margin: 0;
+  pointer-events: none;
+}
+.room-story > small {
+  font: 10px monospace;
+  letter-spacing: 0.1em;
+  color: #e7c182;
+}
+.room-story h1 {
+  margin: 7px 0;
+  font:
+    500 clamp(23px, 2.5vw, 36px) / 1.15 Georgia,
+    serif;
+  letter-spacing: -0.03em;
+}
+.room-story p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #e8e5d2;
+}
+.room-navigation {
+  position: absolute;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  left: 32px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.room-navigation output {
+  padding: 8px;
+  font: 12px monospace;
+}
+.room-activities {
+  position: absolute;
+  right: 28px;
+  bottom: 92px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.retro-links {
+  position: absolute;
+  bottom: max(26px, env(safe-area-inset-bottom));
+  right: 28px;
+  display: flex;
+  gap: 10px;
+}
+.room-stage {
+  position: absolute;
+  inset: 10% 0 23%;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.room-stage > * {
+  pointer-events: auto;
+}
+.room-fallback-screen {
+  display: none;
+}
+.presentation-nodes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.presentation-nodes > div {
+  background: #325c50;
+  padding: 20px;
+  min-height: 100px;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+.presentation-nodes small {
+  color: #e5c182;
+  font: 13px monospace;
+}
+.presentation-nodes strong {
+  font-size: 20px;
+}
+.room-experience[data-venue='about'] .room-story {
+  display: none;
+}
+.village-paper {
+  width: min(650px, 82vw);
+  padding: 26px 30px;
+  color: #29443b;
+  background: #ede2bd;
+  border: 1px solid #baa982;
+  box-shadow: 0 16px 48px #0d24195c;
+  transform: rotate(-2deg);
+  background-image: linear-gradient(91deg, transparent 49.5%, #bba7741c 50%, transparent 50.6%);
+}
+.village-paper header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-bottom: 3px double #46624e;
+  padding-bottom: 12px;
+}
+.village-paper header small,
+.village-paper header span {
+  font: 9px monospace;
+  letter-spacing: 0.12em;
+}
+.village-paper header strong {
+  font:
+    bold clamp(17px, 2.4vw, 28px) Georgia,
+    serif;
+  margin: 8px 0;
+}
+.village-paper h2 {
+  font:
+    bold clamp(24px, 3.5vw, 38px) / 1.15 Georgia,
+    serif;
+  margin: 24px 0 8px;
+}
+.village-paper p {
+  font:
+    15px/1.5 Georgia,
+    serif;
+  margin: 0 0 20px;
+  max-width: 450px;
+}
+.paper-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  border-top: 1px solid #637659;
+  padding-top: 20px;
+}
+.paper-columns > div {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font:
+    bold 12px Georgia,
+    serif;
+}
+.paper-drawing {
+  font:
+    55px/1.2 Georgia,
+    serif;
+  height: 90px;
+  display: grid;
+  place-items: center;
+  color: #e5d6ac;
+  background: #587b60;
+}
+.drawing-1 {
+  background: #9b7346;
+}
+.drawing-2 {
+  background: #617e86;
+}
+.village-paper footer {
+  border-top: 1px solid #637659;
+  padding-top: 14px;
+  margin-top: 24px;
+  font: 9px monospace;
+  letter-spacing: 0.1em;
+}
+.room-experience[data-venue='music'] .room-stage {
+  inset: 18% 12% 17%;
+}
+.room-experience[data-venue='music'] .room-story {
+  top: 78px;
+  bottom: auto;
+  left: 12%;
+}
+.room-experience[data-venue='music'] .room-story h1 {
+  font-size: 26px;
+}
+.room-experience[data-venue='music'] .room-story > small {
+  display: none;
+}
+.room-stage .drum-machine {
+  width: min(900px, 100%);
+  max-width: none;
+  margin: 0;
+  padding: 27px 30px 23px;
+  border: 12px solid #755335;
+  border-left-width: 24px;
+  border-right-width: 24px;
+  border-radius: 10px;
+  background: linear-gradient(160deg, #536763, #2f4440);
+  box-shadow:
+    0 25px 45px #0c231bc9,
+    inset 0 0 0 2px #a2ae9163;
+  transform: perspective(1500px) rotateX(6deg);
+}
+.room-stage .drum-grid {
+  gap: 9px;
+  margin: 24px 0;
+}
+.room-stage .drum-pad {
+  height: 54px;
+  box-shadow: 0 3px 0 #192f29;
+  border-radius: 5px;
+}
+.room-stage .machine-brand {
+  color: #eddfb9;
+  font: 12px monospace;
+}
+.room-stage .machine-display {
+  margin-top: 18px;
+}
+.room-stage .machine-transport {
+  gap: 10px;
+}
+.room-stage .machine-transport button {
+  background: #d7bf86;
+  color: #2c4138;
+  font-weight: 700;
+}
+.room-stage .beat-play {
+  min-width: 110px;
+}
+.room-stage .instrument-hint {
+  display: block;
+  margin-top: 18px;
+  font-size: 10px;
+}
+.reconciliation-tray {
+  width: min(620px, 80vw);
+  padding: 30px;
+  background: #ded3b6;
+  color: #294a3c;
+  border: 12px solid #7b6950;
+  border-radius: 3px;
+  box-shadow: 0 20px 55px #18292199;
+}
+.reconciliation-tray > small {
+  font: 10px monospace;
+}
+.reconciliation-tray .rift-readouts {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 22px 0;
+}
+.reconciliation-tray .rift-readouts strong {
+  font: 26px monospace;
+}
+.reconciliation-tray output {
+  display: block;
+  padding: 18px;
+  background: #1e4537;
+  color: #e3c886;
+  font: 17px monospace;
+}
+.arrival-caption {
+  text-align: left;
+  padding: 22px 26px;
+  background: #183f36d6;
+  border-left: 3px solid #e4c083;
+  border-radius: 0 6px 6px 0;
+  box-shadow: 0 12px 40px #14292144;
+}
+.arrival-caption > small {
+  font: 10px monospace;
+  letter-spacing: 0.12em;
+  color: #e6c591;
+}
+.view-panel .arrival-caption h2 {
+  font:
+    26px/1.2 Georgia,
+    serif;
+  margin: 10px 0 17px;
+}
+.arrival-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+.arrival-actions button {
+  min-height: 44px;
+  border: 1px solid #cbd3af42;
+  padding: 8px 15px;
+  color: #ede3c4;
+  background: #264d42;
+  border-radius: 4px;
+}
+.arrival-actions [data-venue='act'] {
+  background: #dbc48d;
+  color: #254235;
+}
+body[data-scene='fallback'] .room-experience {
+  background: radial-gradient(ellipse at 80% 20%, #678a75, #173c33 70%);
+}
+body[data-scene='fallback'] .room-fallback-screen {
+  display: block;
+  width: min(850px, 82vw);
+}
+body[data-scene='fallback'] [data-venue='about'] .room-fallback-screen,
+body[data-scene='fallback'] [data-venue='music'] .room-fallback-screen,
+body[data-scene='fallback'] [data-venue='rift'] .room-fallback-screen {
+  display: none;
+}
+@media (max-width: 640px) {
+  .room-exit {
+    left: 12px;
+    top: max(12px, env(safe-area-inset-top));
+  }
+  .room-exit span {
+    display: none;
+  }
+  .room-location {
+    right: 14px;
+    top: max(27px, calc(env(safe-area-inset-top) + 15px));
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    max-width: 70%;
+    text-align: right;
+  }
+  .room-story {
+    left: 18px;
+    right: 18px;
+    bottom: 116px;
+  }
+  .room-story h1 {
+    font-size: 26px;
+  }
+  .room-story p {
+    font-size: 12px;
+    max-width: 360px;
+  }
+  .room-story > small {
+    font-size: 9px;
+  }
+  .room-navigation {
+    left: 18px;
+    bottom: max(18px, env(safe-area-inset-bottom));
+    gap: 6px;
+  }
+  .room-navigation button {
+    padding: 10px 13px;
+  }
+  .room-navigation output {
+    font-size: 10px;
+    padding: 5px;
+  }
+  .room-activities {
+    left: 18px;
+    right: auto;
+    bottom: 72px;
+    gap: 6px;
+  }
+  .room-activities button {
+    padding: 8px 10px;
+    font-size: 10px;
+  }
+  .retro-links {
+    right: 18px;
+    bottom: 72px;
+    gap: 5px;
+  }
+  .retro-links a {
+    padding: 8px 10px;
+    font-size: 10px;
+  }
+  .room-stage {
+    inset: 11% 0 26%;
+  }
+  .village-paper {
+    padding: 20px;
+    width: 87vw;
+  }
+  .village-paper h2 {
+    margin-top: 18px;
+  }
+  .village-paper p {
+    font-size: 13px;
+  }
+  .paper-columns {
+    gap: 10px;
+    padding-top: 16px;
+  }
+  .paper-drawing {
+    height: 70px;
+    font-size: 43px;
+  }
+  .paper-columns strong {
+    font-size: 10px;
+  }
+  .village-paper footer {
+    font-size: 7px;
+  }
+  .room-experience[data-venue='about'] .room-activities {
+    left: 12px;
+    right: 12px;
+    bottom: 75px;
+    justify-content: center;
+  }
+  .room-experience[data-venue='music'] .room-stage {
+    inset: 23% 12px 12%;
+  }
+  .room-experience[data-venue='music'] .room-story {
+    left: 18px;
+    top: 78px;
+  }
+  .room-stage .drum-machine {
+    padding: 19px 13px;
+    border-width: 8px 12px;
+    transform: none;
+  }
+  .room-stage .drum-grid {
+    gap: 7px;
+    margin: 19px 0;
+  }
+  .room-stage .drum-pad {
+    height: 46px;
+  }
+  .room-stage .machine-brand {
+    font-size: 10px;
+  }
+  .room-stage .machine-brand small {
+    font-size: 8px;
+  }
+  .room-stage .instrument-hint {
+    font-size: 8px;
+  }
+  .reconciliation-tray {
+    padding: 20px 16px;
+    width: 88vw;
+    border-width: 8px;
+  }
+  .reconciliation-tray .rift-readouts strong {
+    font-size: 19px;
+  }
+  .reconciliation-tray output {
+    font-size: 13px;
+  }
+  .presentation-nodes {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .presentation-nodes > div {
+    min-height: 65px;
+    padding: 14px;
+  }
+  .presentation-nodes strong {
+    font-size: 17px;
+  }
+  .view-panel .arrival-caption {
+    padding: 18px;
+  }
+  .view-panel .arrival-caption h2 {
+    font-size: 21px;
+  }
+  .arrival-actions {
+    gap: 5px;
+  }
+  .arrival-actions button {
+    padding: 7px 12px;
+  }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .room-story {
+    bottom: 75px;
+    left: 18px;
+  }
+  .room-story h1 {
+    font-size: 21px;
+  }
+  .room-story p {
+    font-size: 11px;
+  }
+  .room-navigation {
+    left: 18px;
+    bottom: 15px;
+  }
+  .room-activities {
+    right: 18px;
+    bottom: 75px;
+  }
+  .room-stage {
+    inset: 13% 15% 24%;
+  }
+  .village-paper {
+    width: 480px;
+    padding: 14px 20px;
+    transform: scale(0.78);
+  }
+  .village-paper h2 {
+    margin: 15px 0 5px;
+    font-size: 25px;
+  }
+  .paper-drawing {
+    height: 50px;
+    font-size: 33px;
+  }
+  .village-paper footer {
+    margin-top: 15px;
+  }
+  .room-experience[data-venue='music'] .room-story {
+    top: 65px;
+    left: 20px;
+    width: 24%;
+  }
+  .room-experience[data-venue='music'] .room-story h1 {
+    font-size: 20px;
+  }
+  .room-experience[data-venue='music'] .room-stage {
+    inset: 16% 5% 7% 31%;
+  }
+  .room-stage .drum-machine {
+    padding: 12px;
+    border-width: 6px 12px;
+  }
+  .room-stage .drum-grid {
+    margin: 12px 0;
+  }
+  .room-stage .drum-pad {
+    height: 32px;
+  }
+  .room-stage .machine-display {
+    margin-top: 9px;
+  }
+  .room-stage .instrument-hint {
+    display: none;
+  }
+}

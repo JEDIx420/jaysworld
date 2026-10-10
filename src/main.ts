@@ -1,11 +1,13 @@
 import './style.css';
 import './retro.css';
+import './venues.css';
 import '@fontsource/noto-sans-malayalam/malayalam-400.css';
 import { PLACES, nearestPlace, type Place } from './projects';
 import { VillageRadio } from './radio';
 import { VenueControls, RetroExhibit } from './retro';
 import { JourneyAudio } from './audio';
 import { FareGame, type Snack } from './fares';
+import { passengerStop } from './passenger-stops';
 import { districtAt, routeBetween, distance2, PASSENGERS, stopById, type Point } from './village';
 import { drawVillageMap, atlasHit, atlasOfferHit, setMapOffers, navigationCue } from './map';
 import type { Journey, ViewMode } from './engine';
@@ -125,7 +127,7 @@ function updateDuty() {
   setMapOffers(
     taxiEnabled
       ? fares.offers.map((id) => ({
-          ...stopById(PASSENGERS[id].from),
+          ...passengerStop(PASSENGERS[id].from),
           id,
           name: PASSENGERS[id].name,
         }))
@@ -147,6 +149,7 @@ function updateDuty() {
         fares.select(id);
         routePlace = undefined;
         updateDuty();
+        canvas.focus({ preventScroll: true });
       });
       offers.append(button);
     });
@@ -175,6 +178,7 @@ function updateDuty() {
   const action = taxiEnabled ? fares.actionAt(position, speed) : undefined;
   $('fare-action').hidden = !action || viewMode !== 'drive';
   $('fare-action').textContent = action === 'dropoff' ? 'Drop off ↵' : 'Pick up ↵';
+  updateInteraction();
   const route = target ? routeBetween(position, target).points : [];
   atlasRoute = route;
   const cue = navigationCue(position, yaw, route);
@@ -190,6 +194,23 @@ function updateDuty() {
   $('fare-card').dataset.onboard = String(state.onboard);
   $('fare-card').dataset.completed = String(state.completed);
 }
+function updateInteraction() {
+  const action = taxiEnabled ? fares.actionAt(position, speed) : undefined;
+  const customer =
+    !fares.snapshot.onboard && taxiEnabled
+      ? fares.offers.find((id) => distance2(position, passengerStop(PASSENGERS[id].from)) <= 9)
+      : undefined;
+  $('interaction-button').hidden =
+    viewMode !== 'drive' || (!action && customer === undefined && !activePlace);
+  $('interaction-place').textContent =
+    action || customer !== undefined ? 'AUTO TAXI' : (activePlace?.location ?? '');
+  $('interaction-label').textContent =
+    action === 'dropoff'
+      ? 'Drop off ' + fares.passenger.name
+      : customer !== undefined
+        ? (speed > 1.2 ? 'Stop to pick up ' : 'Pick up ') + PASSENGERS[customer].name
+        : 'Enter ' + (activePlace?.location ?? '');
+}
 function act() {
   startExperience();
   if (viewMode !== 'drive') return;
@@ -203,6 +224,12 @@ function act() {
       toast(result.message);
       updateDuty();
     }
+  } else if (
+    taxiEnabled &&
+    !fares.snapshot.onboard &&
+    fares.offers.some((id) => distance2(position, passengerStop(PASSENGERS[id].from)) <= 9)
+  ) {
+    toast('Stop beside the passenger, then press Enter.');
   } else if (activePlace) visit(activePlace);
 }
 function visit(place: Place) {
@@ -274,7 +301,13 @@ const exhibit = new RetroExhibit(project, {
   close: () => project.close(),
   crocs: observeCrocs,
   stars: observeStars,
-  playback: (active) => radio.duck(active),
+  playback: (active) => {
+    canvas.dataset.beatPlaying = String(active);
+  },
+  roof: () => journey?.roof(),
+  buy,
+  radio: showRadio,
+  slide: (page, progress) => journey?.slide(page, progress),
   cue: () => audio.cue('paper'),
 });
 const venue = new VenueControls($('view-panel'), {
@@ -301,6 +334,8 @@ function buy(item: Snack) {
 }
 function showProject(place: Place) {
   closeDialogs();
+  visitingPlace = place;
+  if (!sceneFailed) journey?.interior(place);
   visited.add(place.id);
   updatePlaces();
   exhibit.show(place);
@@ -312,6 +347,15 @@ function showPlaces() {
   updatePlaces();
   updateDuty();
   open(places);
+  selectAtlas(atlasIndex, false);
+}
+function showRadio() {
+  if (project.open) {
+    radioDialog.showModal();
+    radioDialog.tabIndex = -1;
+    radioDialog.focus({ preventScroll: true });
+    journey?.pause();
+  } else open(radioDialog);
 }
 function applyTime() {
   const labels = ['Time · auto', 'Time · dusk', 'Time · night', 'Time · day'];
@@ -396,7 +440,7 @@ window.addEventListener(
       startExperience();
     const nativeEnter = e.code === 'Enter' && !!el.closest('button,a');
     if (e.code === 'Escape') {
-      const dialog = dialogs.find((d) => d.open);
+      const dialog = radioDialog.open ? radioDialog : dialogs.find((d) => d.open);
       if (dialog) {
         e.preventDefault();
         dialog.close();
@@ -411,8 +455,13 @@ window.addEventListener(
       return;
     }
     if (project.open) {
-      if (!nativeEnter && exhibit.key(e.code)) e.preventDefault();
-      return;
+      if (!radioDialog.open) {
+        if (e.code === 'KeyQ') {
+          e.preventDefault();
+          showRadio();
+        } else if (!nativeEnter && exhibit.key(e.code)) e.preventDefault();
+        return;
+      }
     }
     if (radioDialog.open) {
       if (nativeEnter) return;
@@ -479,6 +528,11 @@ window.addEventListener(
       e.preventDefault();
       $('taxi-toggle').click();
     }
+    if (e.code === 'Enter' && !e.repeat && taxiEnabled && fares.actionAt(position, speed)) {
+      e.preventDefault();
+      act();
+      canvas.focus({ preventScroll: true });
+    }
   },
   { capture: true },
 );
@@ -502,6 +556,7 @@ $('fare-route').addEventListener('click', () => {
   routePlace = undefined;
   updateDuty();
   toast('Follow the gold arrows. Stop beside the passenger and press Enter.');
+  canvas.focus({ preventScroll: true });
 });
 $('taxi-toggle').addEventListener('click', () => {
   taxiEnabled = !taxiEnabled;
@@ -519,6 +574,7 @@ $('taxi-toggle').addEventListener('click', () => {
     /* Optional. */
   }
   updateDuty();
+  canvas.focus({ preventScroll: true });
 });
 function navigate(place: Place) {
   if (sceneFailed) return;
@@ -542,6 +598,41 @@ const atlasCenter = (): Point => ({
   z: Number(atlas.dataset.centerZ ?? 0),
 });
 const renderAtlas = () => drawVillageMap(atlas, position, yaw, atlasRoute, true);
+function selectAtlas(index: number, center = true) {
+  atlasIndex = (index + PLACES.length) % PLACES.length;
+  const place = PLACES[atlasIndex];
+  atlas.dataset.selected = place.id;
+  $('map-preview-label').textContent =
+    String(atlasIndex + 1).padStart(2, '0') + ' · ' + place.location.toUpperCase();
+  $('map-preview-title').textContent = place.id === 'about' ? 'Meet Jay' : place.name;
+  $('map-preview-copy').textContent = {
+    about: 'A tea shop, a morning paper and a little about Jay.',
+    'eagle-eye': 'AI systems, a glass office and a lift to the rooftop.',
+    opsflash: 'Connect your tools. Ask your data. Take action.',
+    rift: 'An exact records workshop. Try the one-paisa comparison.',
+    music: 'A recording studio. Make and save your own groove.',
+    saltwater: 'A wetland jetty. Follow three crocodiles as they swim and hunt.',
+    space: 'A hilltop dome. Explore the stars and the space game.',
+  }[place.id];
+  $('map-preview').dataset.venue = place.id;
+  $('map-drive').toggleAttribute('disabled', sceneFailed);
+  $('map-selection').textContent = place.location + ' · Enter to drive';
+  if (center) {
+    atlas.dataset.zoom = String(Math.max(1.5, Number(atlas.dataset.zoom ?? 1)));
+    atlas.dataset.centerX = String(place.trigger.x);
+    atlas.dataset.centerZ = String(place.trigger.z);
+  }
+  renderAtlas();
+}
+$('map-prev').addEventListener('click', () => {
+  selectAtlas(atlasIndex - 1);
+  atlas.focus();
+});
+$('map-next').addEventListener('click', () => {
+  selectAtlas(atlasIndex + 1);
+  atlas.focus();
+});
+$('map-drive').addEventListener('click', () => navigate(PLACES[atlasIndex]));
 const atlasPointerHit = (event: MouseEvent) => {
   const rect = atlas.getBoundingClientRect(),
     fit = Math.min(rect.width / atlas.width, rect.height / atlas.height);
@@ -560,8 +651,10 @@ const atlasPointerHit = (event: MouseEvent) => {
 atlas.addEventListener('click', (event) => {
   if (atlasDragged) return;
   const place = atlasPointerHit(event);
-  if (place) navigate(place);
-  else {
+  if (place) {
+    selectAtlas(PLACES.indexOf(place), false);
+    atlas.focus();
+  } else {
     const rect = atlas.getBoundingClientRect(),
       fit = Math.min(rect.width / atlas.width, rect.height / atlas.height);
     const left = rect.left + (rect.width - atlas.width * fit) / 2,
@@ -606,11 +699,7 @@ atlas.addEventListener('pointermove', (event) => {
   } else {
     const place = atlasPointerHit(event);
     if (place) {
-      atlasIndex = PLACES.indexOf(place);
-      atlas.dataset.selected = place.id;
-      $('map-selection').textContent =
-        String(atlasIndex + 1).padStart(2, '0') + ' · ' + place.location;
-      renderAtlas();
+      selectAtlas(PLACES.indexOf(place), false);
     }
   }
 });
@@ -629,14 +718,7 @@ atlas.addEventListener('keydown', (event) => {
       PLACES.length;
     if (event.code === 'Home') atlasIndex = 0;
     if (event.code === 'End') atlasIndex = PLACES.length - 1;
-    const place = PLACES[atlasIndex];
-    atlas.dataset.selected = place.id;
-    atlas.dataset.zoom = String(Math.max(1.5, Number(atlas.dataset.zoom ?? 1)));
-    atlas.dataset.centerX = String(place.trigger.x);
-    atlas.dataset.centerZ = String(place.trigger.z);
-    $('map-selection').textContent =
-      String(atlasIndex + 1).padStart(2, '0') + ' · ' + place.location + ' · Enter to drive';
-    renderAtlas();
+    selectAtlas(atlasIndex);
   } else if (event.code === 'Enter') {
     event.preventDefault();
     navigate(PLACES[atlasIndex]);
@@ -710,8 +792,18 @@ for (const dialog of dialogs) {
   dialog.addEventListener('close', () => {
     if (dialog === project && !project.open) {
       exhibit.dispose();
+      if (viewMode === 'interior') {
+        if (
+          experienceStarted &&
+          visitingPlace &&
+          nearestPlace(position.x, position.z, 9)?.id === visitingPlace.id
+        )
+          journey?.visit(visitingPlace);
+        else journey?.leaveView();
+      }
     }
     journey?.pause();
+    if (dialog === radioDialog && project.open) project.focus({ preventScroll: true });
     if (!paused() && booted) canvas.focus({ preventScroll: true });
   });
   dialog.addEventListener('click', (e) => {
@@ -732,6 +824,7 @@ const progress = (value: number, text: string) => {
 };
 const fallback = (message: string) => {
   sceneFailed = true;
+  document.body.dataset.scene = 'fallback';
   document.body.classList.remove('visiting');
   loading.hidden = true;
   canvas.hidden = true;
@@ -780,10 +873,8 @@ void import('./engine')
       },
       onNear: (place) => {
         activePlace = place;
-        $('interaction-button').hidden = !place;
+        updateInteraction();
         if (place) {
-          $('interaction-place').textContent = place.location.toUpperCase();
-          $('interaction-label').textContent = 'Park at ' + place.location;
           if (lastPlace !== place.id)
             announce(place.location + '. Press Enter to visit, or pick up a waiting passenger.');
         }
@@ -803,7 +894,13 @@ void import('./engine')
         toast(message);
       },
       onError: fallback,
-      onAudio: (v, p, t, b) => audio.update(v, p, t, b),
+      onAudio: (v, p, t, b) => {
+        audio.update(v, p, t, b);
+        audio.studio(
+          distance2(position, PLACES.find((v) => v.id === 'music')!.position),
+          (viewMode === 'drive' || viewMode === 'storefront') && !dialogs.some((d) => d.open),
+        );
+      },
       onWeather: (rain, wind, night) => {
         audio.weather(rain, wind, night);
         document.body.classList.toggle('night', night > 0.5);

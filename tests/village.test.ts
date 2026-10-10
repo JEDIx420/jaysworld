@@ -43,7 +43,11 @@ test('Rapier driving earns a fare which funds tea and a snack, with exact wallet
   );
   const g = new FareGame(),
     v = new AutoVehicle(world);
-  v.reset(g.pickup.x, g.pickup.z, Math.PI / 2);
+  v.reset(
+    g.pickup.x,
+    g.pickup.z,
+    Math.atan2(g.pickup.x - g.destination.x, g.pickup.z - g.destination.z),
+  );
   try {
     for (let i = 0; i < 90; i++) {
       v.beforeStep(REST_INPUT);

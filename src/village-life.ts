@@ -17,42 +17,104 @@ import { groundHeight } from './terrain';
 import { addField } from './surfaces';
 import type { Resident } from './safety';
 import { vergePosition } from './placement';
+import { passengerStop } from './passenger-stops';
 
 export function makePerson(color = '#b97673', seated = false) {
   const group = new THREE.Group();
   const shirt = new THREE.MeshStandardMaterial({ color, roughness: 1 });
   const skin = new THREE.MeshStandardMaterial({ color: '#a77952', roughness: 1 });
   cylinder(group, 0.18, 0.22, 0.53, [0, seated ? 0.74 : 0.99, 0], shirt, 8);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), skin);
+  const head = new THREE.Group();
   head.position.set(0, seated ? 1.17 : 1.42, 0);
   group.add(head);
+  head.add(new THREE.Mesh(new THREE.SphereGeometry(0.17, 10, 8), skin));
   const hair = new THREE.Mesh(
     new THREE.SphereGeometry(0.18, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.55),
     materials.black,
   );
-  hair.position.copy(head.position);
-  hair.position.y += 0.025;
-  group.add(hair);
+  hair.position.y = 0.025;
+  head.add(hair);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.045, 7, 5), skin);
+  nose.position.set(0, -0.02, -0.165);
+  head.add(nose);
+  const legs: THREE.Group[] = [];
   for (const x of [-0.1, 0.1]) {
-    const leg = cylinder(
-      group,
+    const leg = new THREE.Group();
+    leg.position.set(x, seated ? 0.55 : 0.73, 0);
+    group.add(leg);
+    legs.push(leg);
+    cylinder(
+      leg,
       0.075,
-      0.065,
-      seated ? 0.45 : 0.61,
-      [x, seated ? 0.42 : 0.4, seated ? -0.15 : 0],
+      0.07,
+      0.31,
+      [0, -0.15, seated ? -0.13 : 0],
+      materials.cream,
+      7,
+    ).rotation.x = seated ? Math.PI / 2 : 0;
+    cylinder(
+      leg,
+      0.07,
+      0.06,
+      seated ? 0.27 : 0.34,
+      [0, seated ? -0.19 : -0.47, seated ? -0.28 : 0],
       materials.cream,
       7,
     );
-    if (seated) leg.rotation.x = Math.PI / 2;
-    box(group, [0.14, 0.08, 0.25], [x, seated ? 0.34 : 0.07, -0.065], materials.black);
+    box(
+      leg,
+      [0.14, 0.08, 0.25],
+      [0, seated ? -0.34 : -0.65, seated ? -0.33 : -0.065],
+      materials.black,
+    );
+    bakeStatic(leg);
   }
   const arm = new THREE.Group();
   arm.position.set(-0.22, seated ? 0.93 : 1.2, 0);
   group.add(arm);
-  cylinder(arm, 0.065, 0.065, 0.42, [0, -0.18, 0], skin, 7);
-  cylinder(group, 0.065, 0.065, 0.45, [0.23, seated ? 0.77 : 1.01, 0], skin, 7);
-  bakeStatic(group, [arm]);
-  return { group, arm };
+  const rightArm = new THREE.Group();
+  rightArm.position.set(0.23, seated ? 0.93 : 1.2, 0);
+  group.add(rightArm);
+  for (const limb of [arm, rightArm]) {
+    cylinder(limb, 0.065, 0.06, 0.25, [0, -0.12, 0], skin, 7);
+    cylinder(limb, 0.06, 0.05, 0.23, [0, -0.34, -0.025], skin, 7);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.065, 7, 5), skin);
+    hand.position.set(0, -0.47, -0.025);
+    limb.add(hand);
+    bakeStatic(limb);
+  }
+  bakeStatic(head);
+  bakeStatic(group, [arm, rightArm, head, ...legs]);
+  return { group, arm, rightArm, head, legs };
+}
+
+export function animatePerson(
+  person: ReturnType<typeof makePerson>,
+  time: number,
+  phase = 0,
+  motion = 'chat',
+) {
+  const t = time + phase,
+    clap = motion === 'clap',
+    chant = motion === 'chant',
+    police = motion === 'police';
+  person.head.rotation.y = Math.sin(t * 0.7) * 0.28;
+  person.head.rotation.x = Math.sin(t * 1.3) * 0.055;
+  person.arm.rotation.z = clap
+    ? -0.85 + Math.sin(t * 3.8) * 0.17
+    : chant
+      ? -1.8 + Math.sin(t * 2.2) * 0.28
+      : police
+        ? -1.15 + Math.sin(t) * 0.18
+        : -0.2 + Math.sin(t * 1.6) * 0.17;
+  person.rightArm.rotation.z = clap
+    ? 0.85 - Math.sin(t * 3.8) * 0.17
+    : chant
+      ? 0.4 + Math.sin(t * 1.8) * 0.25
+      : 0.16 + Math.sin(t * 1.4 + 0.8) * 0.15;
+  person.arm.rotation.x = clap ? -1.1 : police ? -0.5 : Math.sin(t) * 0.15;
+  person.rightArm.rotation.x = clap ? -1.1 : Math.sin(t + 0.7) * 0.13;
+  person.legs.forEach((leg, i) => (leg.rotation.x = Math.sin(t * 0.9 + i * Math.PI) * 0.055));
 }
 
 export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, statics: THREE.Group) {
@@ -224,9 +286,9 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
   }
   const npcs = TAXI_STOPS.map((stop, i) => {
     const p = makePerson(PASSENGERS[i % PASSENGERS.length].color);
-    const safe = vergePosition({ x: stop.npcX, z: stop.npcZ });
+    const safe = passengerStop(stop.id);
     p.group.position.set(safe.x, groundHeight(safe.x, safe.z), safe.z);
-    p.group.rotation.y = Math.atan2(stop.x - stop.npcX, stop.z - stop.npcZ);
+    p.group.rotation.y = Math.atan2(stop.x - safe.x, stop.z - safe.z);
     scene.add(p.group);
     return p;
   });
@@ -325,6 +387,7 @@ export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, stati
       );
       npcs.forEach((p, i) => {
         p.group.visible = !unavailable.some((n) => PASSENGERS[n].from === TAXI_STOPS[i].id);
+        animatePerson(p, t, i);
         p.arm.rotation.z =
           duty && offerStops.includes(i)
             ? -0.8 + Math.sin(t * 3 + i) * 0.35

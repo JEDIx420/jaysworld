@@ -42,6 +42,22 @@ export const CURATED_STATIONS: readonly Station[] = [
     url: 'https://ice31.securenetsystems.net/RADIOKERAL',
     homepage: 'https://radiokeralam.com/',
   },
+  {
+    id: 'true-blues',
+    name: '181.FM · True Blues',
+    description: 'Classic blues · Guitar, soul & late-night roads',
+    url: 'https://listen.181fm.com/181-blues_128k.mp3',
+    homepage: 'https://www.181.fm/',
+    alternates: ['https://listen.181fm.com/181-blues_64k.aac'],
+  },
+  {
+    id: 'classic-rock',
+    name: '181.FM · The Eagle',
+    description: 'Classic rock · The great guitar years',
+    url: 'https://listen.181fm.com/181-eagle_128k.mp3',
+    homepage: 'https://www.181.fm/',
+    alternates: ['https://listen.181fm.com/181-eagle_64k.aac'],
+  },
 ];
 
 export function publicHttps(value: unknown): value is string {
@@ -166,6 +182,10 @@ export class VillageRadio {
     const station = this.stations[this.index];
     $('radio-dialog').dataset.phase = this.phase;
     $('radio-name').textContent = station.name;
+    $('radio-band').textContent =
+      station.id === 'ente'
+        ? 'MALAYALAM · COMMUNITY'
+        : station.description.split(' · ')[0].toUpperCase();
     $('radio-status').textContent = {
       off: 'POWER OFF',
       tuning: 'SEEKING SIGNAL…',
@@ -224,6 +244,9 @@ export class VillageRadio {
       return;
     }
     const audio = (this.audio = new Audio());
+    audio.hidden = true;
+    audio.dataset.station = station.id;
+    document.body.append(audio);
     audio.preload = 'none';
     audio.volume = this.level * (this.ducked ? 0.16 : 1);
     // Keep the live stream on the native media path: station CORS policies need not permit Web Audio.
@@ -235,6 +258,7 @@ export class VillageRadio {
       audio.pause();
       audio.removeAttribute('src');
       audio.load();
+      audio.remove();
       this.state('unavailable');
     };
     const deadline = () => {
@@ -256,6 +280,7 @@ export class VillageRadio {
       }
     });
     audio.addEventListener('error', fail);
+    audio.addEventListener('ended', fail);
     deadline();
     void audio.play().catch(fail);
   }
@@ -266,6 +291,7 @@ export class VillageRadio {
     if (this.audio) {
       this.audio.removeAttribute('src');
       this.audio.load();
+      this.audio.remove();
     }
     this.audio = undefined;
     if (explicit) {

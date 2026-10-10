@@ -9,12 +9,14 @@ import { lanePath, trafficSpawn } from '../src/traffic';
 import { distance2 } from '../src/village';
 import { PLACES } from '../src/projects';
 import { groundHeight } from '../src/terrain';
+import { passengerStop } from '../src/passenger-stops';
+import { streetlightPositions, signalApproaches } from '../src/road-fixtures';
 
 test('four offers remain available; a rival cannot steal a boarded passenger or mint money', () => {
   const game = new FareGame();
   assert.equal(game.offers.length, 4);
   const id = game.offers[0],
-    stop = stopById(PASSENGERS[id].from);
+    stop = passengerStop(PASSENGERS[id].from);
   assert.equal(game.interact(stop, 0)?.kind, 'pickup');
   assert.equal(game.rivalArrive(id, stop, 0), false);
   assert.equal(game.snapshot.onboard, true);
