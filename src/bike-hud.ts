@@ -7,5 +7,5 @@ export function updateBikeHud(speed: number, gear: number, rpm: number, boost: b
   $('bike-rev-fill').style.width = Math.min(100, (rpm / 11000) * 100) + '%';
   $('bike-hud').classList.toggle('shift-ready', rpm > 9600);
   $('bike-hud').dataset.boost = String(boost);
-  $('bike-riding-state').textContent = boost ? 'FULL THROTTLE / BOOST' : 'TRACK';
+  $('bike-riding-state').textContent = boost ? 'BOOST' : 'TRACK';
 }

@@ -302,3 +302,44 @@ body.bike-mode.visiting #bike-hud {
     display: none;
   }
 }
+@media (max-width: 380px) and (min-height: 521px) and (pointer: coarse) {
+  .bike-hud {
+    width: 168px;
+    top: 150px;
+    bottom: auto;
+    right: 12px;
+    padding: 9px 10px;
+    border-width: 4px;
+  }
+  .bike-tft-top {
+    font-size: 8px;
+    letter-spacing: 0.5px;
+  }
+  .bike-tft-top strong {
+    font-size: 12px;
+  }
+  .bike-rev-scale {
+    margin-top: 9px;
+    font-size: 8px;
+  }
+  .bike-rev-bar {
+    height: 11px;
+  }
+  .bike-readouts {
+    grid-template-columns: 34px 1fr 40px;
+    gap: 6px;
+    padding: 7px 0;
+  }
+  .bike-speed-readout strong {
+    font-size: 40px;
+  }
+  .bike-gear-readout strong {
+    font-size: 26px;
+  }
+  .bike-revs-readout {
+    font-size: 15px;
+  }
+  .bike-tft-bottom {
+    font-size: 7px;
+  }
+}
