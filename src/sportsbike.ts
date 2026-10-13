@@ -21,9 +21,9 @@ const white = new THREE.MeshStandardMaterial({
   emissiveIntensity: 1.8,
 });
 const tail = new THREE.MeshStandardMaterial({
-  color: '#bf132c',
-  emissive: '#ff163c',
-  emissiveIntensity: 1.8,
+  color: '#941811',
+  emissive: '#ff1205',
+  emissiveIntensity: 1,
 });
 
 function rod(parent: THREE.Object3D, a: V, b: V, r: number, material: THREE.Material) {
@@ -66,10 +66,10 @@ function panel(parent: THREE.Object3D, points: V[], material: THREE.Material) {
 function fairing(parent: THREE.Object3D, side: number, material: THREE.Material) {
   const sections = [
     // z, top, bottom, shoulder width, lower width
-    [-0.86, 0.29, -0.01, 0.16, 0.12],
-    [-0.68, 0.38, -0.22, 0.285, 0.2],
-    [-0.48, 0.34, -0.45, 0.315, 0.235],
-    [-0.24, 0.24, -0.44, 0.31, 0.215],
+    [-0.86, 0.29, 0.08, 0.16, 0.12],
+    [-0.68, 0.38, 0.08, 0.285, 0.17],
+    [-0.48, 0.34, -0.11, 0.315, 0.185],
+    [-0.24, 0.24, -0.4, 0.31, 0.215],
     [0.01, 0.12, -0.43, 0.285, 0.19],
     [0.22, 0.04, -0.4, 0.23, 0.16],
     [0.39, -0.2, -0.36, 0.17, 0.13],
@@ -389,13 +389,6 @@ export function makeSportsbike() {
       tail,
       12,
     );
-    for (let i = 0; i < 7; i++)
-      oval(
-        tailLamp,
-        [side * (0.032 + i * 0.009), 0.38 - i * 0.009, 1.043],
-        [0.005, 0.004, 0.003],
-        tail,
-      );
     rod(chassis, [side * 0.03, 0.1, 1.03], [side * 0.16, 0.1, 1.055], 0.007, rubber);
     oval(chassis, [side * 0.17, 0.1, 1.055], [0.04, 0.014, 0.019], mat('#b48635'));
   }
@@ -797,7 +790,7 @@ export function makeSportsbike() {
       rider.rotation.z = stopped ? 0 : lean * 0.08;
       rider.position.y = 0;
       head.rotation.y = stopped ? 0 : -lean * 0.18;
-      tail.emissiveIntensity = brake ? 4 : 1.3;
+      tail.emissiveIntensity = brake ? 2.8 : 1;
       headlight.intensity = 8 + night * 34;
     },
   };

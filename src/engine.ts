@@ -665,7 +665,11 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
         camera.position.y,
         groundHeight(camera.position.x, camera.position.z) + 1.0,
       );
-      camera.lookAt(target.x, target.y + 0.65, target.z);
+      const focusLift =
+        drivingBike && mode === 'drive'
+          ? 0.35 + 0.3 * THREE.MathUtils.clamp((distance - 3.5) / 2, 0, 1)
+          : 0.65;
+      camera.lookAt(target.x, target.y + focusLift, target.z);
     }
     sky.update(camera, nightAmount, mode === 'stars');
     sun.position.set(current.x - 42, current.y + 62, current.z + 33);

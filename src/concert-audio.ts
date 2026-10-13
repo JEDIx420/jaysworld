@@ -57,7 +57,7 @@ export class ConcertAudio {
       if (!current()) return;
       this.phase = 'tuning';
       clearTimeout(this.deadline);
-      if (this.audible) this.deadline = window.setTimeout(fail, 14000);
+      this.deadline = window.setTimeout(fail, 14000);
       this.render();
     });
     audio.addEventListener('error', fail);
