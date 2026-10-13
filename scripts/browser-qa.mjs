@@ -877,7 +877,7 @@ try {
           JSON.parse(localStorage.getItem('jaysworld-journey-v1')).earned.includes('company'),
         ),
       );
-      assert.match(await page.locator('#mission-route').textContent(), /OpsFlash/);
+      assert.match(await page.locator('#mission-route').textContent(), /rooftop/);
       await page.reload();
       await page.waitForSelector('#world[data-rendered=true]', { timeout: 45000 });
       assert.equal(await page.locator('#world').getAttribute('data-view'), 'drive');
@@ -1151,6 +1151,209 @@ try {
           await closeProject(page);
         }
       }
+      await clean(errors);
+    },
+  );
+  await run(
+    'sportsbike keys, persistent unlock, dedicated HUD and desktop riding',
+    { viewport: { width: 1280, height: 800 } },
+    async (page, context, errors) => {
+      await context.addInitScript(() => {
+        if (!localStorage.getItem('jaysworld-journey-v1'))
+          localStorage.setItem(
+            'jaysworld-journey-v1',
+            JSON.stringify({
+              version: 1,
+              trail: 'company',
+              bikeKeys: false,
+              visits: ['about', 'eagle-eye', 'opsflash', 'rift', 'music', 'saltwater', 'space'],
+              earned: [
+                'first-road',
+                'company',
+                'fare',
+                'beat',
+                'roof',
+                'wetland',
+                'stars',
+                'explorer',
+              ],
+            }),
+          );
+      });
+      await ready(page);
+      await start(page);
+      assert.equal(await page.locator('#world').getAttribute('data-bike-unlocked'), 'false');
+      await park(page, 'eagle-eye');
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator('#world').getAttribute('data-vehicle'), 'auto');
+      await park(page, 'space');
+      await page.waitForSelector('#bike-keys-dialog[open]');
+      await capture(page, 'rr310-keys.png');
+      await page.locator('#bike-reward-route').click();
+      assert.match(await page.locator('#navigation-destination').textContent(), /Eagle Towers/);
+      assert.equal(
+        await page.evaluate(
+          () => JSON.parse(localStorage.getItem('jaysworld-journey-v1')).bikeKeys,
+        ),
+        true,
+      );
+      await park(page, 'eagle-eye');
+      await page.keyboard.press('Escape');
+      await page.locator('#interaction-button').click();
+      await page.waitForFunction(() => document.getElementById('world').dataset.vehicle === 'bike');
+      assert.equal(await page.locator('#fare-card').isVisible(), false);
+      assert.equal(await page.locator('#speedometer').isVisible(), false);
+      assert.equal(await page.locator('#bike-hud').isVisible(), true);
+      await capture(page, 'rr310-mounted.png');
+      await page.locator('#world').focus();
+      await page.keyboard.down('w');
+      await page.keyboard.down('Shift');
+      await page.waitForFunction(
+        () =>
+          Number(document.getElementById('world').dataset.speed) > 2 &&
+          Number(document.getElementById('world').dataset.wheelie) > 0.05,
+        undefined,
+        { timeout: 15000 },
+      );
+      assert.ok(Number(await page.locator('#bike-speed').textContent()) > 0);
+      await capture(page, 'rr310-wheelie.png');
+      await page.keyboard.up('Shift');
+      await page.keyboard.up('w');
+      await page.keyboard.down('Space');
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.speed) < 0.4,
+        undefined,
+        { timeout: 15000 },
+      );
+      await page.keyboard.up('Space');
+      await page.keyboard.press('r');
+      await page.waitForFunction(
+        () => Math.abs(Number(document.getElementById('world').dataset.x) + 49.2) < 0.8,
+      );
+      await page.locator('#bike-return-button').click();
+      await page.waitForFunction(() => document.getElementById('world').dataset.vehicle === 'auto');
+      assert.equal(await page.locator('#bike-hud').isVisible(), false);
+      assert.equal(await page.locator('#fare-card').isVisible(), true);
+      await page.reload();
+      await page.waitForSelector('#world[data-rendered=true]', { timeout: 45000 });
+      assert.equal(await page.locator('#world').getAttribute('data-bike-unlocked'), 'true');
+      assert.equal(await page.locator('#bike-keys-dialog').evaluate((d) => d.open), false);
+      await clean(errors);
+    },
+  );
+  await run(
+    'sportsbike TFT and touch controls on portrait and landscape phones',
+    { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+    async (page, context, errors) => {
+      await context.addInitScript(() =>
+        localStorage.setItem(
+          'jaysworld-journey-v1',
+          JSON.stringify({
+            version: 1,
+            bikeKeys: true,
+            visits: ['about', 'eagle-eye', 'opsflash', 'rift', 'music', 'saltwater', 'space'],
+            earned: [
+              'first-road',
+              'company',
+              'fare',
+              'beat',
+              'roof',
+              'wetland',
+              'stars',
+              'explorer',
+            ],
+          }),
+        ),
+      );
+      await ready(page);
+      await start(page);
+      await park(page, 'eagle-eye');
+      await page.keyboard.press('Escape');
+      await page.locator('#interaction-button').click();
+      await page.waitForFunction(() => document.getElementById('world').dataset.vehicle === 'bike');
+      for (const size of [
+        { width: 320, height: 640 },
+        { width: 430, height: 932 },
+        { width: 844, height: 390 },
+      ]) {
+        await page.setViewportSize(size);
+        await page.waitForTimeout(300);
+        const hud = await page.locator('#bike-hud').boundingBox(),
+          map = await page.locator('#minimap-button').boundingBox();
+        const boost = await page.locator('#boost-button').boundingBox();
+        const overlaps = (a, b) =>
+          Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 1 &&
+          Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y) > 1;
+        assert.ok(
+          hud.x >= 0 &&
+            hud.y >= 0 &&
+            hud.x + hud.width <= size.width + 1 &&
+            hud.y + hud.height <= size.height + 1,
+          'TFT fits viewport',
+        );
+        assert.equal(overlaps(hud, map), false, 'TFT and map stay separate');
+        assert.equal(overlaps(hud, boost), false, 'TFT and boost stay separate');
+        assert.equal(await page.locator('#fare-card').isVisible(), false);
+        await capture(page, 'rr310-phone-' + size.width + '.png');
+      }
+      await page.setViewportSize({ width: 390, height: 844 });
+      await page.waitForTimeout(300);
+      const stick = await page.locator('#joystick').boundingBox(),
+        boost = await page.locator('#boost-button').boundingBox();
+      const session = await context.newCDPSession(page);
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [
+          { id: 1, x: stick.x + stick.width / 2, y: stick.y + stick.height / 2 - 35 },
+          { id: 2, x: boost.x + boost.width / 2, y: boost.y + boost.height / 2 },
+        ],
+      });
+      await page.waitForFunction(
+        () =>
+          document.getElementById('world').dataset.boost === 'true' &&
+          Number(document.getElementById('world').dataset.speed) > 1,
+        undefined,
+        { timeout: 15000 },
+      );
+      await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+      await clean(errors);
+    },
+  );
+  await run(
+    'amphitheatre five-piece production and animated childrens grove park',
+    { viewport: { width: 1440, height: 900 } },
+    async (page, context, errors) => {
+      await ready(page);
+      await start(page);
+      assert.equal(await page.locator('#world').getAttribute('data-band-members'), '5');
+      await places(page);
+      await page.locator('#landmark-concert').click();
+      await page.waitForFunction(
+        () => Math.abs(Number(document.getElementById('world').dataset.x) + 182) < 1,
+      );
+      await page.waitForTimeout(1200);
+      await capture(page, 'brickyard-day.png');
+      await page.locator('#settings-button').click();
+      await page.locator('#time-button').click();
+      await page.locator('#time-button').click();
+      await page.locator('#settings-dialog [data-close]').click();
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.night) > 0.6,
+        undefined,
+        { timeout: 15000 },
+      );
+      await capture(page, 'brickyard-night.png');
+      await places(page);
+      await page.locator('#landmark-park').click();
+      await page.waitForFunction(
+        () => Math.abs(Number(document.getElementById('world').dataset.x) + 177) < 1,
+      );
+      await page.locator('#settings-button').click();
+      await page.locator('#time-button').click();
+      await page.locator('#settings-dialog [data-close]').click();
+      await page.waitForTimeout(1600);
+      await capture(page, 'childrens-park.png');
+      assert.equal(await page.locator('#world').getAttribute('data-bike-unlocked'), 'false');
       await clean(errors);
     },
   );

@@ -2,6 +2,7 @@ import './style.css';
 import './retro.css';
 import './venues.css';
 import './journey-hud.css';
+import './bike.css';
 import '@fontsource/noto-sans-malayalam/malayalam-400.css';
 import { PLACES, nearestPlace, type Place } from './projects';
 import { VillageRadio } from './radio';
@@ -26,7 +27,10 @@ import {
   ACCOMPLISHMENTS,
   type AccomplishmentId,
   type Trail,
+  guidedObjective,
 } from './journey-progress';
+import { updateBikeHud } from './bike-hud';
+import { BIKE_BAY, AMPHITHEATRE } from './recreation-layout';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const canvas = $<HTMLCanvasElement>('world'),
@@ -35,7 +39,8 @@ const canvas = $<HTMLCanvasElement>('world'),
   places = $<HTMLDialogElement>('places-dialog'),
   settings = $<HTMLDialogElement>('settings-dialog'),
   radioDialog = $<HTMLDialogElement>('radio-dialog');
-const dialogs = [project, places, settings, radioDialog],
+const bikeKeysDialog = $<HTMLDialogElement>('bike-keys-dialog');
+const dialogs = [project, places, settings, radioDialog, bikeKeysDialog],
   radio = new VillageRadio(),
   audio = new JourneyAudio(),
   visited = new Set<string>();
@@ -85,6 +90,9 @@ let journey: Journey | undefined,
   lastRoutePosition: Point = { x: Infinity, z: Infinity },
   lastDrivePoint: Point = { ...ROAD_START },
   drivenDistance = 0;
+let ridingBike = false,
+  tourSignature = '',
+  rewardPending = false;
 const paused = () => dialogs.some((d) => d.open) || document.hidden || !experienceStarted;
 const announce = (text: string) => {
   $('announcements').textContent = text;
@@ -162,6 +170,8 @@ function saveJourney() {
     /* Optional. */
   }
   updateJourney();
+  maybeAwardBikeKeys();
+  if (discovery.trail === 'company') refreshTourRoute();
 }
 function accomplish(id: AccomplishmentId) {
   const item = discovery.earn(id);
@@ -170,18 +180,13 @@ function accomplish(id: AccomplishmentId) {
   toast(item.hint, item.title + ' · accomplished');
 }
 function nextCompanyPlace() {
-  return (
-    PLACES.find((p) => p.id !== 'about' && !discovery.visits.has(p.id)) ??
-    (!discovery.visits.has('about') ? PLACES[0] : undefined)
-  );
+  return PLACES.find((p) => p.id === guidedObjective(discovery).place);
 }
 function updateJourney() {
   $('journey-button').textContent = discovery.earned.size + ' / ' + ACCOMPLISHMENTS.length;
   $('mission-route').textContent =
     discovery.trail === 'company'
-      ? nextCompanyPlace()
-        ? 'Next · visit ' + nextCompanyPlace()!.name
-        : 'Tour complete · explore freely'
+      ? guidedObjective(discovery).label
       : discovery.trail === 'taxi'
         ? discovery.earned.has('fare')
           ? 'Take another fare'
@@ -203,6 +208,83 @@ function updateJourney() {
     row.append(title, hint);
     list.append(row);
   });
+  $('bike-actions').hidden = !discovery.bikeKeys && !discovery.complete;
+  $('bike-key-button').textContent = ridingBike
+    ? 'Return to Eagle Towers'
+    : discovery.bikeKeys
+      ? 'Bike keys · collect RR 310'
+      : 'Collect keys · observatory';
+  $('bike-return-button').hidden = !ridingBike;
+  $('bike-hud').hidden = !ridingBike;
+}
+function refreshTourRoute() {
+  const objective = guidedObjective(discovery),
+    signature = objective.kind + ':' + objective.place;
+  if (signature === tourSignature || ridingBike) return;
+  tourSignature = signature;
+  if (objective.kind === 'fare') {
+    taxiEnabled = true;
+    routePlace = undefined;
+  } else {
+    if (taxiEnabled && !fares.snapshot.onboard) taxiEnabled = false;
+    routePlace = nextCompanyPlace();
+  }
+  lastDutySignature = '';
+  if (booted) updateDuty();
+}
+function maybeAwardBikeKeys() {
+  if (
+    !discovery.complete ||
+    discovery.bikeKeys ||
+    rewardPending ||
+    !experienceStarted ||
+    speed > 1.2 ||
+    distance2(position, PLACES.find((p) => p.id === 'space')!.trigger) > 10
+  )
+    return;
+  rewardPending = true;
+  queueMicrotask(() => {
+    rewardPending = false;
+    if (!discovery.claimBikeKeys()) return;
+    journey?.unlockBike(true);
+    saveJourney();
+    closeDialogs();
+    bikeKeysDialog.showModal();
+    journey?.pause();
+    audio.cue('coins');
+    announce(
+      'All missions complete. Your Apache RR 310 keys are yours. Follow the route to Eagle Towers.',
+    );
+  });
+}
+function routeToBike() {
+  navigate(PLACES.find((p) => p.id === 'eagle-eye')!);
+  toast(
+    'Your RR 310 is parked outside Eagle Towers. Stop beside it and press Enter.',
+    'The keys are yours',
+  );
+}
+function mountBike() {
+  if (!journey?.mountBike()) {
+    toast('Stop beside the RR 310 outside Eagle Towers to ride it.');
+    return;
+  }
+  fares.cancel();
+  taxiEnabled = false;
+  ridingBike = true;
+  routePlace = undefined;
+  document.body.classList.add('bike-mode');
+  $('world').setAttribute(
+    'aria-label',
+    'Ride the Apache RR 310. WASD or arrow keys steer and accelerate. Space brakes. Shift gives boost and a wheelie.',
+  );
+  lastDutySignature = lastPassenger = lastOfferSignature = '';
+  updateDuty();
+  updateJourney();
+  toast(
+    'WASD or arrows to ride. Space brakes. Hold Shift for full response and a wheelie.',
+    'RR 310 · Track mode',
+  );
 }
 function chooseTrail(trail: Trail) {
   discovery.trail = trail;
@@ -210,13 +292,18 @@ function chooseTrail(trail: Trail) {
   closeDialogs();
   journey?.leaveView();
   startExperience();
-  if (trail !== 'taxi' && taxiEnabled) $('taxi-toggle').click();
+  if (trail === 'explore' && taxiEnabled) $('taxi-toggle').click();
   if (trail === 'company') {
-    const next = nextCompanyPlace() ?? PLACES[1];
-    navigate(next);
+    tourSignature = '';
+    refreshTourRoute();
+    const objective = guidedObjective(discovery),
+      next = nextCompanyPlace()!;
+    if (objective.kind !== 'fare') navigate(next);
     toast(
-      'Follow the arrows to the X at ' + next.location + '. Stop there and press Enter.',
-      'Meet ' + next.name,
+      objective.kind === 'fare'
+        ? 'Follow the passenger arrows. Pick up, then complete one fare to continue the tour.'
+        : 'Follow the arrows to the X at ' + next.location + '. Stop there and press Enter.',
+      objective.label,
     );
   } else if (trail === 'taxi') {
     if (!taxiEnabled) $('taxi-toggle').click();
@@ -261,10 +348,11 @@ function cancelRide() {
 function updateDuty() {
   const state = fares.snapshot,
     p = fares.passenger,
-    target = routePlace?.trigger ?? (taxiEnabled ? fares.target : undefined);
+    target = routePlace?.trigger ?? (taxiEnabled && !ridingBike ? fares.target : undefined);
   const signature = [
     booted,
     taxiEnabled,
+    ridingBike,
     Math.round(yaw * 10),
     state.wallet,
     state.completed,
@@ -375,6 +463,14 @@ function updateDuty() {
   $('fare-card').dataset.completed = String(state.completed);
 }
 function updateInteraction() {
+  const nearBike = distance2(position, BIKE_BAY) < 5.5 && !ridingBike;
+  if (nearBike && discovery.bikeKeys && viewMode === 'drive') {
+    $('interaction-button').hidden = false;
+    $('interaction-place').textContent = 'APACHE RR 310';
+    $('interaction-label').textContent =
+      speed > 1.2 ? 'Stop beside your sportsbike' : 'Use keys · ride RR 310';
+    return;
+  }
   const action = taxiEnabled ? fares.actionAt(position, speed) : undefined;
   const customer =
     !fares.snapshot.onboard && taxiEnabled
@@ -394,6 +490,14 @@ function updateInteraction() {
 function act() {
   startExperience();
   if (viewMode !== 'drive') return;
+  if (discovery.bikeKeys && !ridingBike && distance2(position, BIKE_BAY) < 5.5) {
+    mountBike();
+    return;
+  }
+  if (discovery.complete && !discovery.bikeKeys && activePlace?.id === 'space') {
+    maybeAwardBikeKeys();
+    return;
+  }
   const action = taxiEnabled ? fares.actionAt(position, speed) : undefined;
   if (action) {
     const result = fares.interact(position, speed);
@@ -576,7 +680,7 @@ function startExperience() {
   canvas.focus({ preventScroll: true });
   updateDuty();
   toast(
-    'Visit Eagle Eye, earn your first taxi fare, or just ride around. Nothing is locked behind a mission.',
+    'Follow the guided tour, take fares, or explore freely. Complete every mission to unlock the RR 310.',
     'Welcome to Jay’s World',
     [
       { label: 'Visit Eagle Eye', action: () => chooseTrail('company') },
@@ -739,7 +843,10 @@ $('minimap-button').addEventListener('click', showPlaces);
 $('mission-route').addEventListener('click', () => {
   if (discovery.trail === 'company') {
     const next = nextCompanyPlace();
-    if (next) navigate(next);
+    if (guidedObjective(discovery).kind === 'fare') {
+      refreshTourRoute();
+      $('fare-route').click();
+    } else if (next) navigate(next);
     else showPlaces();
   } else if (discovery.trail === 'taxi') $('fare-route').click();
   else showPlaces();
@@ -770,6 +877,7 @@ $('fare-route').addEventListener('click', () => {
   canvas.focus({ preventScroll: true });
 });
 $('taxi-toggle').addEventListener('click', () => {
+  if (ridingBike) return;
   taxiEnabled = !taxiEnabled;
   if (!taxiEnabled && fares.cancel())
     toast('Off duty. The passenger returns to the stop; no fare was charged.');
@@ -786,6 +894,36 @@ $('taxi-toggle').addEventListener('click', () => {
   }
   updateDuty();
   canvas.focus({ preventScroll: true });
+});
+$('bike-reward-route').addEventListener('click', routeToBike);
+for (const kind of ['concert', 'park'] as const)
+  $('landmark-' + kind).addEventListener('click', () => {
+    closeDialogs();
+    startExperience();
+    journey?.recreation(kind);
+    toast(
+      kind === 'concert'
+        ? 'Walk-in aisles lead to the brick terraces. The five-piece band is playing live.'
+        : 'A shady play garden with swings, a slide, seesaw and roundabout.',
+      kind === 'concert' ? 'The Brickyard · live rock' : 'Little Explorers',
+    );
+  });
+$('bike-key-button').addEventListener('click', () => {
+  if (discovery.bikeKeys) routeToBike();
+  else navigate(PLACES.find((p) => p.id === 'space')!);
+});
+$('bike-return-button').addEventListener('click', () => {
+  if (!journey?.returnToAuto()) {
+    routeToBike();
+    toast('Return to Eagle Towers and stop to park the bike.');
+    return;
+  }
+  ridingBike = false;
+  taxiEnabled = false;
+  document.body.classList.remove('bike-mode');
+  lastDutySignature = lastPassenger = '';
+  updateDuty();
+  updateJourney();
 });
 function navigate(place: Place) {
   if (sceneFailed) return;
@@ -1079,6 +1217,8 @@ void import('./engine')
         yaw = angle;
         if (taxiEnabled) fares.update(position);
         updateDials(v, gear, rpm, boost);
+        if (ridingBike) updateBikeHud(v, gear, rpm, boost);
+        maybeAwardBikeKeys();
         const driven = distance2(position, lastDrivePoint);
         if (experienceStarted && viewMode === 'drive' && v > 0.5 && driven < 10)
           drivenDistance += driven;
@@ -1115,7 +1255,8 @@ void import('./engine')
       },
       onError: fallback,
       onAudio: (v, p, t, b, gear, rpm) => {
-        audio.update(v, p, t, b, gear, rpm);
+        audio.update(v, p, t, b, gear, rpm, ridingBike);
+        audio.concert(distance2(position, AMPHITHEATRE), !p);
         audio.studio(
           distance2(position, PLACES.find((v) => v.id === 'music')!.position),
           (viewMode === 'drive' || viewMode === 'storefront') && !dialogs.some((d) => d.open),
@@ -1134,6 +1275,8 @@ void import('./engine')
       honk: () => audio.honk(),
     });
     booted = true;
+    journey.unlockBike(discovery.bikeKeys);
+    if (discovery.trail === 'company') refreshTourRoute();
 
     lastPassenger = '';
     updateDuty();

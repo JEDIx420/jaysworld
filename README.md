@@ -1,19 +1,25 @@
-# Jay’s World — Lanes & High Command
+# Jay’s World — The Brickyard & RR 310
 
 A Kerala-inspired portfolio you drive through in a black-and-yellow auto. Start **on the road**, press Enter, then visit Eagle Eye, earn taxi fares or explore seven destinations at your own pace.
 
 **Live:** https://jedix420.github.io/jaysworld/
 
-**v0.8** extends the existing Three.js and Rapier game. Everything builds into static files for GitHub Pages; no account, secret or backend is required.
+**v0.9** extends the existing Three.js and Rapier game. Everything builds into static files for GitHub Pages; no account, secret or backend is required.
 
 ## This release
+
+- Laurie Baker inspired exposed-brick amphitheatre opposite the market, with curved seating, jali screens and a five-piece modern rock production. The black-clad lead has white shoes, a green fedora and a black/white Telecaster. A shaded children's play garden sits beyond it.
+- Complete all eight accomplishments and seven project visits, collect keys at the final observatory stop, then return to the detailed Sinister Black RR 310 parked outside Eagle Towers. The bike has a black rider, separate two-wheel suspension and six-speed drivetrain, cornering lean and boost wheelies. Taxi controls disappear in favour of an RR 310 Track inspired TFT. Keys persist on the device.
+- See [the v0.9 plan and validation notes](docs/BRICKYARD_RR310_RELEASE.md) for reference specifications, simulated performance, model detail and release checks.
+
+## Retained v0.8 improvements
 
 - Traffic follows continuous, rounded left-hand lanes, with acceleration, braking, static obstacle sweeps and fair junction queues. Paved turning aprons, clear building porches and the Eagle Towers junction keep turns unobstructed. Cars stay off private forecourts. The rival taxi pulls into real curb stops and joins new routes along a smooth forward curve; routine reverse/teleport recovery is removed. Rendering interpolates between physics poses.
 - RIFT is a computer centre, relocated clear of the paddy road. An analyst’s computer walks through a bank statement and cash ledger, detects a one-paisa mismatch, a deposit in transit and an unrecorded bank fee, explains them and balances both sides to ₹12,825.76. All demo arithmetic uses integer paisa; suggested adjustments are illustrative and reviewed before posting.
 - OpsFlash is a dark command centre with console workstations and a holographic world map. Arrows or four touch controls switch search demand, social interactions, leads and revenue across five regions. All values are clearly labelled fictional demo data.
 - Each upshift needs at least three seconds of powered driving in the current gear. Torque builds gradually and compensates for climbing slopes. The 70 km/h road and 120 km/h boost limits are preserved. The two-second wheelie eases into touchdown, and early release or braking triggers a controlled descent.
 - Police and roadside residents reserve spaced verge positions, avoiding the duplicate placements that stacked officers together. Small portrait and landscape layouts keep instrument screens, stories and controls separate; compact computer screens scroll by touch.
-- Release checks build once in CI, cache Chromium and gate Pages on physics tests and four focused browser journeys. The complete browser suite runs locally before publication and remains available through manual workflow dispatch.
+- Release checks build once in CI, cache Chromium and gate Pages on physics tests and focused browser journeys covering existing rooms/driving and the concert, keys, bike and touch HUD. The complete browser suite and remains available through manual workflow dispatch.
 
 ## The village
 

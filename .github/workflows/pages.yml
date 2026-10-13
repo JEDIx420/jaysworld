@@ -41,7 +41,7 @@ jobs:
       - name: Check driving, every room, phone screens and traffic
         if: ${{ !inputs.full_browser_validation }}
         env:
-          JAYSWORLD_QA_FILTER: desktop keyboard driving|seven short exhibits|computer centre|traffic lane motion
+          JAYSWORLD_QA_FILTER: desktop keyboard driving|seven short exhibits|computer centre|traffic lane motion|road-first welcome|sportsbike|amphitheatre
         run: npm run test:browser
       - name: Run the complete visitor suite
         if: ${{ inputs.full_browser_validation }}

@@ -1,0 +1,37 @@
+# v0.9 — The Brickyard and the keys to the village
+
+## Build plan and result
+
+The south lawn opposite the five market stalls holds a Laurie Baker inspired open-air amphitheatre. Six curved exposed-brick seating terraces, stone caps, open aisles, perforated brick jali screens and a terracotta canopy frame the performance. Footprints are reserved before random houses and grove trunks are placed, and the seating and stage have static collisions. The small grove beyond Canal Road holds Little Explorers: swings carrying two children, a play tower with slide and ladder, a seesaw, a rotating roundabout, shade trees, benches and a perimeter fence.
+
+The Brickyard has exactly five animated performers: lead singer/guitarist, second guitarist, bassist, keyboardist and drummer. The lead wears black clothes, white shoes and a broad green fedora, and plays a black Telecaster shape with a white pickguard. The production includes moving-head colour sweeps, visible beam cones, stage LEDs, line arrays, subwoofers, monitors, amps, keyboard keys, drum kit and cymbals. An original procedural rock instrumental fades with distance. The lead's singing is represented by the performance animation; no recorded vocal track is included. Lighting uses continuous sweeps rather than rapid flashing, and performance/reduced-motion settings limit effects and crowd animation.
+
+The guided itinerary now covers the briefing room, rooftop, OpsFlash, RIFT, the music studio and beat activity, wetlands and crocodiles, Jay's newspaper, a completed taxi fare, and the observatory/telescope. Driving and discovering all seven destinations award the remaining accomplishments. Every one of the eight accomplishments and all seven visits are required before keys can be collected at the final observatory stop. The existing version-1 save remains compatible. Keys persist and are awarded once; a keys flag without complete progress is ignored.
+
+After collecting keys, a road route leads back to Eagle Towers. A Sinister Black RR 310 is parked outside, pointing out of the forecourt. Stop beside it and use Enter or the interaction button. The bike replaces the player's active Rapier vehicle; only one vehicle simulates. The rider wears black armour and a black full-face helmet. Taxi offers, wallet, duty controls and the auto instruments disappear, replaced by a dark RR 310 Track inspired TFT with a blue tachometer, speed and gear readouts, RPM and shift indication. Keyboard, touch joystick, brake, boost, camera and map controls remain available. Returning to Eagle Towers allows parking the bike and taking the auto again.
+
+## Model and handling
+
+The mesh is original procedural geometry modeled from the supplied image: sculpted fairing and tank cross-sections, twin projector lights and running lights, windscreen and mirrors, silver Apache/red RR 310 decals, gold inverted fork tubes, split-spoke alloys, red rim tape, tyre grooves, drilled brake discs, radiator fins, red trellis tubes, rear shock spring, swingarm, chain/sprocket, silver exhaust, stepped seats and side stand. This is an approximation of the reference, not a scanned or manufacturer CAD asset.
+
+The bike has two suspension ray contacts, rear-wheel drive, RPM-coupled six-speed automatic shifting, an engine torque curve, drag, braking, walking-speed reverse, wet-grip adjustment, CCD collisions and assisted balancing. Visual lean follows the turn; a boost wheelie rotates around the rear axle and settles smoothly. Boost changes response and effects without increasing the 160 km/h ceiling. This is an accessible game simulation, not a validated motorcycle dynamics model.
+
+The supplied image depicts the earlier bike. Published 2019 ratios are used, rather than the later 38 PS variant:
+
+| Parameter                 | Value                                    |
+| ------------------------- | ---------------------------------------- |
+| Gear ratios 1–6           | 3.000, 2.063, 1.588, 1.286, 1.095, 0.955 |
+| Primary / final reduction | 3.080 / 2.470                            |
+| Wheelbase                 | 1.365 m                                  |
+| Rear rolling radius       | 0.306 m, approximated from 150/60 R17    |
+| Bike / rider mass         | 174 / 75 kg                              |
+| Peak torque               | 27.3 Nm at 7,700 RPM                     |
+| Performance ceiling       | 160 km/h                                 |
+
+Primary sources: [TVS 2019 owner manual](https://www.tvsmotor.com/-/media/Feature/Owners/User-Manual/OM_Apache-RR310_Rev-2.pdf?hash=9D63DDB801FB222ACC8682C71DEC53F3&la=en), [TVS launch specification](https://www.tvsmotor.com/media/press-release/tvs-apache-rr-310-signals-tvs-motor-companys-entry-into-the-super-premium-motorcycle-segment), [TVS Track-mode manual](https://www.tvsmotor.com/assets/img/brands/arive/pdf/Apache_RR310_BSVI_REV_2.pdf).
+
+## Validation
+
+Local Rapier benchmarks at 60 Hz on a flat surface measured approximately 3.13 s for 0–60 km/h, 6.93 s for 0–100 km/h, and 160 km/h maximum, with a 75 kg rider. These are simulated measurements; manufacturer published reference figures are approximately 2.93 s and 7.17 s. Gear, suspension, mass, braking, reverse, turning, wall collision, recovery, progression, persistence and reserved-layout tests are included in `tests/bike.test.ts`.
+
+The GitHub Pages gate retains the existing driving/room/traffic checks and adds desktop keys/mount/ride/park/reload, portrait/landscape touch HUD checks, and day/night concert and park captures. Browser checks run in the existing GitHub Actions runner. The local environment has no supported browser-control skill, so local browser QA was unavailable.

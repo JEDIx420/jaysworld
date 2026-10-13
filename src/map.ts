@@ -8,6 +8,7 @@ import {
 } from './village';
 import { PLACES } from './projects';
 import { groundHeight } from './terrain';
+import { AMPHITHEATRE, CHILDRENS_PARK, BIKE_BAY } from './recreation-layout';
 
 export type MapOffer = Point & { id: number; name: string };
 let mapOffers: MapOffer[] = [];
@@ -136,6 +137,19 @@ export function drawVillageMap(
     ctx.restore();
   }
   ctx.textAlign = 'center';
+  for (const [point, symbol, name] of [
+    [AMPHITHEATRE, '♫', 'BRICKYARD LIVE'],
+    [CHILDRENS_PARK, '✿', 'PLAY GARDEN'],
+    [BIKE_BAY, '◆', 'RR 310'],
+  ] as const) {
+    ctx.fillStyle = full ? '#8e4c35' : '#b2e3db';
+    ctx.font = `${full ? 18 : 13}px sans-serif`;
+    ctx.fillText(symbol, x(point.x), z(point.z));
+    if (full && zoom > 1.4) {
+      ctx.font = '600 9px sans-serif';
+      ctx.fillText(name, x(point.x), z(point.z) + 13);
+    }
+  }
   if (full && (canvas.clientWidth >= 420 || zoom > 1.4)) {
     ctx.font = '600 15px sans-serif';
     ctx.fillStyle = '#53644d';

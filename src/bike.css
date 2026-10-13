@@ -1,0 +1,304 @@
+.bike-reward {
+  max-width: 510px;
+  text-align: center;
+  background: #111c24;
+  border: 1px solid #4c6976;
+  color: #e8f0ef;
+}
+.bike-reward .eyebrow {
+  color: #79d8d4;
+}
+.bike-reward h1 {
+  font-size: clamp(28px, 5vw, 40px);
+  margin: 15px 0;
+}
+.bike-reward p {
+  color: #b3c6cd;
+  line-height: 1.65;
+}
+.bike-key-art {
+  display: block;
+  width: 140px;
+  height: 100px;
+  margin: 18px auto 0;
+  fill: none;
+  stroke: #dbe9e7;
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.bike-reward button {
+  background: #87dbd5;
+  color: #112027;
+  padding: 14px 20px;
+  border-radius: 9px;
+  border: 0;
+  font-weight: 700;
+  margin: 8px;
+}
+.bike-reward button[data-close] {
+  background: transparent;
+  color: #bfd3d5;
+  border: 1px solid #486269;
+}
+.bike-specs {
+  display: flex;
+  justify-content: center;
+  gap: 26px;
+  margin: 24px 0;
+}
+.bike-specs strong {
+  font-size: 23px;
+  display: block;
+}
+.bike-specs small {
+  color: #86a3af;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+}
+.bike-hud {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 328px;
+  padding: 13px 18px 11px;
+  border: 6px solid #293038;
+  border-radius: 14px 14px 28px 28px;
+  color: #eef6ff;
+  background: #080e16;
+  box-shadow:
+    0 8px 28px #05101a70,
+    inset 0 0 0 1px #495663;
+  font-family: 'Arial', sans-serif;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.bike-hud[hidden] {
+  display: none;
+}
+.bike-tft-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: #9fc1dd;
+}
+.bike-tft-top strong {
+  color: #e63e51;
+  font-style: italic;
+  font-size: 15px;
+}
+.bike-rev-scale {
+  margin-top: 14px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #7f94a9;
+}
+.bike-rev-bar {
+  margin-top: 3px;
+  height: 15px;
+  background: repeating-linear-gradient(90deg, #202e3d 0 12px, #0b1521 12px 14px);
+  clip-path: polygon(0 40%, 60% 40%, 78% 0, 100% 0, 100% 100%, 0 100%);
+}
+#bike-rev-fill {
+  height: 100%;
+  background: repeating-linear-gradient(90deg, #58b8ff 0 12px, #193b61 12px 14px);
+  transition: width 100ms linear;
+}
+.bike-hud.shift-ready #bike-rev-fill {
+  background: #ef5263;
+}
+.bike-readouts {
+  display: grid;
+  grid-template-columns: 53px 1fr 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 0 10px;
+}
+.bike-gear-readout {
+  text-align: center;
+  background: #14253b;
+  border: 1px solid #4c739a;
+  border-radius: 5px;
+  padding: 5px;
+}
+.bike-gear-readout strong {
+  display: block;
+  font-size: 39px;
+  font-weight: 400;
+}
+.bike-gear-readout small {
+  color: #7bacd8;
+  font-size: 8px;
+}
+.bike-speed-readout {
+  text-align: center;
+}
+.bike-speed-readout strong {
+  display: block;
+  font-size: 65px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -3px;
+}
+.bike-speed-readout small {
+  font-size: 11px;
+  color: #9aaabd;
+}
+.bike-revs-readout {
+  text-align: right;
+  font-size: 19px;
+}
+.bike-revs-readout small {
+  display: block;
+  font-size: 8px;
+  color: #8ba2b8;
+}
+.bike-tft-bottom {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 7px;
+  border-top: 1px solid #293748;
+  font-size: 9px;
+  color: #a2bfd5;
+}
+.bike-controls {
+  padding-top: 7px;
+  font-size: 9px;
+  color: #5f7790;
+  text-align: center;
+}
+.bike-actions {
+  position: fixed;
+  top: 100px;
+  left: 24px;
+  display: flex;
+  gap: 8px;
+  z-index: 12;
+}
+.bike-actions button {
+  background: #11232bea;
+  border: 1px solid #496672;
+  color: #cbe8e7;
+  border-radius: 8px;
+  padding: 11px 14px;
+  font-size: 12px;
+}
+.bike-actions[hidden] {
+  display: none;
+}
+.recreation-directory {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+.recreation-directory button {
+  border: 1px solid #ae9877;
+  color: #315447;
+  background: #e8dec6;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-weight: 600;
+}
+body.bike-mode #fare-card,
+body.bike-mode #speedometer,
+body.bike-mode #journey-guide,
+body.bike-mode #taxi-toggle {
+  display: none !important;
+}
+body.bike-mode #minimap-button {
+  position: fixed;
+  right: 416px;
+  bottom: 26px;
+}
+body.bike-mode #place-name {
+  position: fixed;
+  right: 432px;
+  bottom: 6px;
+}
+body.bike-mode.visiting #bike-hud {
+  opacity: 0.2;
+}
+@media (max-width: 760px) {
+  .bike-hud {
+    width: 258px;
+    bottom: 18px;
+    right: 14px;
+    padding: 10px 12px;
+  }
+  .bike-speed-readout strong {
+    font-size: 51px;
+  }
+  .bike-readouts {
+    grid-template-columns: 43px 1fr 55px;
+    gap: 8px;
+  }
+  .bike-gear-readout strong {
+    font-size: 31px;
+  }
+  .bike-controls {
+    display: none;
+  }
+  .bike-actions {
+    top: 88px;
+    left: 15px;
+  }
+  body.bike-mode #minimap-button {
+    right: auto;
+    left: 14px;
+    bottom: 202px;
+  }
+  body.bike-mode #place-name {
+    right: auto;
+    left: 24px;
+    bottom: 182px;
+  }
+}
+@media (pointer: coarse) {
+  .bike-hud {
+    bottom: 174px;
+    right: 14px;
+    width: 246px;
+  }
+  .bike-actions {
+    top: 82px;
+  }
+  body.bike-mode #minimap-button {
+    left: 14px;
+    top: 142px;
+    bottom: auto;
+    width: 88px;
+    height: 88px;
+  }
+  body.bike-mode #place-name {
+    display: none;
+  }
+}
+@media (max-height: 520px) and (pointer: coarse) {
+  .bike-hud {
+    width: 214px;
+    top: 80px;
+    bottom: auto;
+    right: 14px;
+  }
+  .bike-speed-readout strong {
+    font-size: 42px;
+  }
+  .bike-rev-scale {
+    margin-top: 7px;
+  }
+  .bike-actions {
+    top: 84px;
+  }
+  body.bike-mode #minimap-button {
+    left: 200px;
+    top: 144px;
+    bottom: auto;
+  }
+  body.bike-mode #place-name {
+    display: none;
+  }
+}

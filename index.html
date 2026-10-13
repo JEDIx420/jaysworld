@@ -105,6 +105,57 @@
       <button id="navigation-clear" type="button" aria-label="Clear directions">×</button>
     </aside>
     <section class="hud view-panel" id="view-panel" hidden aria-label="Village visit"></section>
+    <aside class="hud bike-actions" id="bike-actions" hidden aria-label="Sportsbike reward">
+      <button type="button" id="bike-key-button">Bike keys · Eagle Towers</button>
+      <button type="button" id="bike-return-button" hidden>Park bike &amp; take auto</button>
+    </aside>
+    <aside
+      class="hud bike-hud"
+      id="bike-hud"
+      hidden
+      aria-label="Apache RR 310 track instrument cluster"
+    >
+      <div class="bike-tft-top">
+        <strong>Apache RR 310</strong><span id="bike-riding-state">TRACK</span>
+      </div>
+      <div class="bike-rev-scale" aria-hidden="true">
+        <span>0</span><span>2</span><span>4</span><span>6</span><span>8</span><span>10</span
+        ><span>11</span>
+      </div>
+      <div class="bike-rev-bar" aria-label="Engine revs"><div id="bike-rev-fill"></div></div>
+      <div class="bike-readouts">
+        <div class="bike-gear-readout"><strong id="bike-gear">N</strong><small>GEAR</small></div>
+        <div class="bike-speed-readout"><strong id="bike-speed">0</strong><small>km/h</small></div>
+        <div class="bike-revs-readout"><span id="bike-rpm">1.7</span><small>×1000 RPM</small></div>
+      </div>
+      <div class="bike-tft-bottom">
+        <span>ABS · TRACK</span><span>6 SPEED</span><span>ENGINE READY</span>
+      </div>
+      <div class="bike-controls">
+        WASD / ARROWS · RIDE &nbsp; SPACE · BRAKE &nbsp; SHIFT · BOOST
+      </div>
+    </aside>
+    <dialog class="dialog bike-reward" id="bike-keys-dialog" aria-labelledby="bike-keys-title">
+      <p class="eyebrow">EVERY MISSION COMPLETE</p>
+      <svg class="bike-key-art" viewBox="0 0 140 100" aria-hidden="true">
+        <circle cx="37" cy="32" r="20" />
+        <circle cx="37" cy="32" r="7" />
+        <path d="m53 44 48 43h17v-14h-14v-13H91L67 39" />
+        <path d="m41 53-4 21 8 12 8-11" />
+      </svg>
+      <h1 id="bike-keys-title">The keys are yours.</h1>
+      <p>
+        Your guided tour ends here at the observatory. A Sinister Black Apache RR 310 is waiting
+        outside Eagle Towers.
+      </p>
+      <div class="bike-specs">
+        <span><strong>312.2</strong><small>CC</small></span
+        ><span><strong>6</strong><small>GEARS</small></span
+        ><span><strong>160</strong><small>KM/H</small></span>
+      </div>
+      <button type="button" id="bike-reward-route">Follow the route to my bike →</button
+      ><button type="button" data-close>Keep exploring</button>
+    </dialog>
     <aside class="hud journey-guide" id="journey-guide" aria-label="Optional journey">
       <button id="mission-route" type="button">Explore at your pace</button>
       <button id="journey-button" type="button" aria-label="View accomplishments">0 / 8</button>
@@ -235,7 +286,13 @@
         </div>
         <div id="accomplishments"></div>
       </section>
-      <p class="dialog-foot">The road is yours. Every place has something to explore.</p>
+      <div class="recreation-directory" aria-label="Village recreation">
+        <button id="landmark-concert" type="button">♫ The Brickyard · live rock</button
+        ><button id="landmark-park" type="button">Little Explorers · play garden</button>
+      </div>
+      <p class="dialog-foot">
+        Complete the guided tour to collect your RR 310 keys at the observatory.
+      </p>
     </dialog>
     <dialog class="retro-exhibit" id="project-dialog" aria-labelledby="project-title">
       <button data-close aria-label="Close project">×</button>

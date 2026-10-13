@@ -23,6 +23,7 @@ import { createVillageLife } from './village-life';
 import { createWildlife } from './wildlife';
 import { streetlightPositions } from './road-fixtures';
 import { createVenueLife } from './venue-life';
+import { createRecreation } from './recreation';
 
 export interface Environment {
   update: (elapsed: number, dt: number, driver?: THREE.Vector3) => void;
@@ -36,6 +37,7 @@ export interface Environment {
   life: ReturnType<typeof createVillageLife>;
   wildlife: ReturnType<typeof createWildlife>;
   roadside: ReturnType<typeof createRoadside>;
+  recreation: ReturnType<typeof createRecreation>;
 }
 export const ROAD_POINTS = [
   [-51, 30],
@@ -712,6 +714,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
   const life = createVillageLife(scene, world, statics);
   const venueLife = createVenueLife(scene);
   const roadside = createRoadside(scene, world, statics);
+  const recreation = createRecreation(scene, world);
   bakeStatic(statics);
   const towerWindows = new Set<THREE.MeshStandardMaterial>();
   statics.traverse((o) => {
@@ -726,7 +729,9 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
     life,
     wildlife,
     roadside,
+    recreation,
     setQuality(performance) {
+      recreation.quality(performance);
       life.quality(performance);
       roadside.quality(performance);
       fronds.castShadow = trunks.castShadow = !performance;
@@ -739,6 +744,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       asphaltMaterial.color.set('#48514b').lerp(new THREE.Color('#354742'), amount * 0.3);
     },
     setNight(amount) {
+      recreation.night(amount);
       night = amount;
       towerWindows.forEach((m) => (m.emissiveIntensity = amount * 0.25));
       waterMaterial.uniforms.night.value = amount;
@@ -757,6 +763,7 @@ export function createEnvironment(scene: THREE.Scene, world: RAPIER.World): Envi
       life.update(elapsed);
       venueLife.update(elapsed);
       roadside.update(elapsed, dt, driver);
+      recreation.update(elapsed, driver);
       waterMaterial.uniforms.croc.value.set(crocPosition.x, crocPosition.z);
       waterMaterial.uniforms.feed.value = feed > 0 ? 1 : 0;
       boat.position.y = Math.sin(elapsed * 0.64) * 0.033;

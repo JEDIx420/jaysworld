@@ -1,5 +1,7 @@
 /** Original procedural sound design. No third-party engine recordings. */
 export class JourneyAudio {
+  private concertBeatAt = 0;
+  private concertBeat = 0;
   private studioBeatAt = 0;
   private studioBeat = 0;
   private context?: AudioContext;
@@ -112,7 +114,15 @@ export class JourneyAudio {
     if (this.enabled) this.cue('ignition');
     return this.enabled;
   }
-  update(speed: number, paused: boolean, throttle = 0, brake = false, gear = 1, engineRpm = 1000) {
+  update(
+    speed: number,
+    paused: boolean,
+    throttle = 0,
+    brake = false,
+    gear = 1,
+    engineRpm = 1000,
+    bike = false,
+  ) {
     if (!this.context) return;
     const t = this.context.currentTime;
     this.master!.gain.setTargetAtTime(this.enabled ? 0.65 : 0, t, 0.1);
@@ -121,8 +131,8 @@ export class JourneyAudio {
       this.tone(110, 0.06, 0.022, 'triangle');
     }
     const rpm = paused ? 0 : engineRpm / 110;
-    this.exhaust!.frequency.setTargetAtTime(38 + rpm * 2, t, 0.1);
-    this.pulse!.frequency.setTargetAtTime(Math.max(1, rpm), t, 0.08);
+    this.exhaust!.frequency.setTargetAtTime(bike ? 42 + engineRpm / 40 : 38 + rpm * 2, t, 0.1);
+    this.pulse!.frequency.setTargetAtTime(Math.max(1, bike ? engineRpm / 120 : rpm), t, 0.08);
     this.engineFilter!.frequency.setTargetAtTime(
       280 + rpm * 12 + Math.abs(throttle) * 260,
       t,
@@ -136,7 +146,7 @@ export class JourneyAudio {
     );
     this.windLevel!.gain.setTargetAtTime(paused ? 0 : Math.min(speed / 16, 1) * 0.12, t, 0.2);
     this.rattleLevel!.gain.setTargetAtTime(
-      paused ? 0 : 0.025 + Math.min(speed / 16, 1) * 0.04,
+      paused || bike ? 0 : 0.025 + Math.min(speed / 16, 1) * 0.04,
       t,
       0.15,
     );
@@ -181,6 +191,35 @@ export class JourneyAudio {
       'triangle',
     );
     this.studioBeat = (this.studioBeat + 1) % 8;
+  }
+  concert(distance: number, audible: boolean) {
+    if (!this.context || !this.enabled || !audible || document.hidden || distance > 65) return;
+    const now = this.context.currentTime;
+    if (now < this.concertBeatAt) return;
+    this.concertBeatAt = now + 60 / 114 / 2;
+    const level = Math.max(0, 1 - distance / 65) ** 2 * 0.027;
+    const roots = [82.41, 82.41, 110, 98],
+      root = roots[Math.floor(this.concertBeat / 8) % 4];
+    // An original instrumental loop: kick/snare, bass, power chords, keys and a lead riff.
+    this.tone(root, 0.21, level * 1.2, 'triangle');
+    if (this.concertBeat % 4 === 0) this.tone(130, 0.13, level * 1.7, 'sine', 42);
+    if (this.concertBeat % 4 === 2) {
+      this.tone(190, 0.075, level, 'triangle', 90);
+      this.tone(2900, 0.055, level * 0.5, 'sawtooth', 1100);
+    }
+    this.tone(7200, 0.025, level * 0.13, 'square', 4200);
+    if (this.concertBeat % 2 === 0) {
+      this.tone(root * 2, 0.2, level * 0.38, 'sawtooth');
+      this.tone(root * 3, 0.19, level * 0.25, 'sawtooth');
+      this.tone(root * 4, 0.3, level * 0.2, 'sine');
+    }
+    this.tone(
+      root * [4, 4, 6, 4, 7, 6, 4, 3][this.concertBeat % 8],
+      0.17,
+      level * 0.28,
+      'triangle',
+    );
+    this.concertBeat = (this.concertBeat + 1) % 32;
   }
   private tone(
     frequency: number,

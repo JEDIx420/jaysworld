@@ -18,6 +18,7 @@ import { addField } from './surfaces';
 import type { Resident } from './safety';
 import { vergePosition } from './placement';
 import { passengerStop } from './passenger-stops';
+import { recreationReserved } from './recreation-layout';
 
 export function makePerson(color = '#b97673', seated = false) {
   const group = new THREE.Group();
@@ -120,6 +121,7 @@ export function animatePerson(
 export function createVillageLife(scene: THREE.Scene, world: RAPIER.World, statics: THREE.Group) {
   const samples = ROAD_PATHS.flatMap((c) => c.samples);
   const clear = (x: number, z: number, r = 10) =>
+    !recreationReserved(x, z) &&
     !waterAt(x, z) &&
     !samples.some((p) => Math.hypot(p.x - x, p.z - z) < r) &&
     !PLACES.some((p) => Math.hypot(p.position.x - x, p.position.z - z) < 16);

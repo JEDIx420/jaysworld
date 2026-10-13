@@ -16,6 +16,9 @@ import { closureTravel, nearestRoad } from './placement';
 import { createTraffic, type RivalJob } from './traffic';
 import { createWeather } from './weather';
 import { createVenueRooms } from './venue-rooms';
+import { BikeVehicle, BIKE_WHEELS } from './bike-vehicle';
+import { makeSportsbike } from './sportsbike';
+import { BIKE_BAY, AMPHITHEATRE, CHILDRENS_PARK } from './recreation-layout';
 
 export interface JourneyOptions {
   canvas: HTMLCanvasElement;
@@ -85,6 +88,10 @@ export interface Journey {
   constellation: (id: string) => void;
   setPassenger: (index: number, onboard: boolean) => void;
   setDuty: (enabled: boolean) => void;
+  unlockBike: (enabled: boolean) => void;
+  mountBike: () => boolean;
+  returnToAuto: () => boolean;
+  recreation: (kind: 'concert' | 'park') => void;
   setOffers: (indices: number[], unavailable: number[]) => void;
   serve: (item: string) => void;
   route: (points: readonly Point[]) => void;
@@ -133,8 +140,32 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
   const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
   world.timestep = FIXED_STEP;
   const environment = createEnvironment(scene, world),
-    vehicle = new AutoVehicle(world),
-    auto = makeAuto();
+    autoVehicle = new AutoVehicle(world),
+    bikeVehicle = new BikeVehicle(world),
+    auto = makeAuto(),
+    bike = makeSportsbike();
+  let vehicle: AutoVehicle | BikeVehicle = autoVehicle;
+  let drivingBike = false,
+    bikeUnlocked = false;
+  bikeVehicle.body.setEnabled(false);
+  bike.group.position.set(BIKE_BAY.x, groundHeight(BIKE_BAY.x, BIKE_BAY.z) + 0.72, BIKE_BAY.z);
+  bike.group.rotation.set(0, BIKE_BAY.yaw, -0.13);
+  bike.rider.visible = false;
+  scene.add(bike.group);
+  const bikeHalo = new THREE.Mesh(
+    new THREE.RingGeometry(1.3, 1.42, 48),
+    new THREE.MeshBasicMaterial({
+      color: '#8be6e1',
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    }),
+  );
+  bikeHalo.rotation.x = -Math.PI / 2;
+  bikeHalo.position.set(BIKE_BAY.x, groundHeight(BIKE_BAY.x, BIKE_BAY.z) + 0.13, BIKE_BAY.z);
+  bikeHalo.visible = false;
+  scene.add(bikeHalo);
   scene.add(auto.group);
   const autoShadow = new THREE.Mesh(
     new THREE.CircleGeometry(1, 24),
@@ -258,7 +289,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     cameraStyle = style;
     orbitYaw = new THREE.Euler().setFromQuaternion(currentQ, 'YXZ').y - 0.35;
     elevation = style === 'close' ? 0.36 : 0.61;
-    distance = style === 'close' ? 13 : 25;
+    distance = drivingBike ? (style === 'close' ? 7 : 14) : style === 'close' ? 13 : 25;
   };
   const reset = (place?: Place) => {
     if (mode !== 'drive') view('drive');
@@ -429,8 +460,9 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       currentQ.copy(vehicle.body.rotation());
       previousQ.copy(currentQ);
     }
-    auto.group.position.lerpVectors(previous, current, paused ? 1 : accumulator / FIXED_STEP);
-    auto.group.quaternion.slerpQuaternions(
+    const rig = drivingBike ? bike : auto;
+    rig.group.position.lerpVectors(previous, current, paused ? 1 : accumulator / FIXED_STEP);
+    rig.group.quaternion.slerpQuaternions(
       previousQ,
       currentQ,
       paused ? 1 : accumulator / FIXED_STEP,
@@ -439,13 +471,27 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     const lift = reducedMotion ? 0 : powertrain.wheelie;
     // Rotate the visual chassis around the rear axle; the stable physics body stays on the road.
     if (lift > 0) {
-      rearPivot.set(0, -0.5, 0.85).applyQuaternion(auto.group.quaternion).add(auto.group.position);
+      rearPivot
+        .set(0, drivingBike ? -0.4 : -0.5, drivingBike ? 0.6825 : 0.85)
+        .applyQuaternion(rig.group.quaternion)
+        .add(rig.group.position);
       wheelieRotation.setFromAxisAngle(new THREE.Vector3(1, 0, 0), lift);
-      auto.group.quaternion.multiply(wheelieRotation);
-      auto.group.position
+      rig.group.quaternion.multiply(wheelieRotation);
+      rig.group.position
         .copy(rearPivot)
-        .sub(new THREE.Vector3(0, -0.5, 0.85).applyQuaternion(auto.group.quaternion));
+        .sub(
+          new THREE.Vector3(
+            0,
+            drivingBike ? -0.4 : -0.5,
+            drivingBike ? 0.6825 : 0.85,
+          ).applyQuaternion(rig.group.quaternion),
+        );
     }
+    if (drivingBike) {
+      rig.group.rotateZ(bikeVehicle.lean);
+      bike.update(vehicle.speed, bikeVehicle.lean, braking, elapsed, nightAmount);
+    }
+    bikeHalo.visible = bikeUnlocked && !drivingBike;
     boostStreaks.visible = powertrain.boosted && !paused && !reducedMotion;
     if (boostStreaks.visible) {
       for (let i = 0; i < 12; i++) {
@@ -465,12 +511,12 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     }
     autoShadow.position.set(current.x, groundHeight(current.x, current.z) + 0.085, current.z);
     autoShadow.rotation.z = -new THREE.Euler().setFromQuaternion(currentQ, 'YXZ').y;
-    for (let i = 0; i < 3; i++) {
-      const p = WHEEL_POINTS[i],
+    for (let i = 0; i < (drivingBike ? 2 : 3); i++) {
+      const p = drivingBike ? BIKE_WHEELS[i] : WHEEL_POINTS[i],
         length = vehicle.controller.wheelSuspensionLength(i) ?? 0.3;
-      auto.wheels[i].position.set(p.x, p.y - length, p.z);
-      auto.wheels[i].rotation.y = i === 0 ? (vehicle.controller.wheelSteering(0) ?? 0) : 0;
-      auto.spinners[i].rotation.x = vehicle.controller.wheelRotation(i) ?? 0;
+      rig.wheels[i].position.set(p.x, p.y - length, p.z);
+      rig.wheels[i].rotation.y = i === 0 ? (vehicle.controller.wheelSteering(0) ?? 0) : 0;
+      rig.spinners[i].rotation.x = vehicle.controller.wheelRotation(i) ?? 0;
     }
     for (const item of environment.dynamics) {
       item.mesh.position.copy(item.body.translation());
@@ -519,7 +565,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
               groundHeight(viewPlace.position.x, viewPlace.position.z) + 1.8,
               viewPlace.position.z,
             )
-          : auto.group.position;
+          : rig.group.position;
     target.lerp(focus, 1 - Math.exp(-dt * 5));
     if (mode === 'stars' || mode === 'roof') {
       const p = PLACES.find((p) => p.id === (mode === 'roof' ? 'eagle-eye' : 'space'))!.position;
@@ -701,6 +747,15 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     canvas.dataset.rpm = powertrain.rpm.toFixed(0);
     canvas.dataset.boost = String(powertrain.boosted && !paused);
     canvas.dataset.wheelie = lift.toFixed(3);
+    canvas.dataset.vehicle = drivingBike ? 'bike' : 'auto';
+    canvas.dataset.bikeUnlocked = String(bikeUnlocked);
+    canvas.dataset.bikeLean = bikeVehicle.lean.toFixed(3);
+    canvas.dataset.bandMembers = String(environment.recreation.band.length);
+    canvas.dataset.recreation = JSON.stringify({
+      amphitheatre: AMPHITHEATRE,
+      park: CHILDRENS_PARK,
+      bike: BIKE_BAY,
+    });
     canvas.dataset.eagles = JSON.stringify(
       weather.eagles.map((b) => ({
         x: b.group.position.x,
@@ -815,6 +870,82 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     },
     setDuty(enabled) {
       environment.life.setDuty(enabled);
+    },
+    unlockBike(enabled) {
+      bikeUnlocked = enabled;
+    },
+    recreation(kind) {
+      view('drive');
+      const point =
+        kind === 'concert'
+          ? { x: AMPHITHEATRE.x, z: AMPHITHEATRE.z - 22 }
+          : { x: CHILDRENS_PARK.x, z: CHILDRENS_PARK.z - 15 };
+      vehicle.reset(point.x, point.z, Math.PI);
+      traffic.clearBay(point);
+      current.copy(vehicle.body.translation());
+      previous.copy(current);
+      currentQ.copy(vehicle.body.rotation());
+      previousQ.copy(currentQ);
+      target.copy(current);
+      input.clear();
+      accumulator = 0;
+      resetCamera();
+      orbitYaw = Math.PI;
+      distance = kind === 'concert' ? 12 : 9;
+      elevation = 0.3;
+    },
+    mountBike() {
+      if (
+        !bikeUnlocked ||
+        drivingBike ||
+        mode !== 'drive' ||
+        vehicle.speed > 1.2 ||
+        Math.hypot(current.x - BIKE_BAY.x, current.z - BIKE_BAY.z) > 5.5
+      )
+        return false;
+      input.clear();
+      autoVehicle.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+      autoVehicle.body.setEnabled(false);
+      bikeVehicle.reset();
+      bikeVehicle.body.setEnabled(true);
+      vehicle = bikeVehicle;
+      drivingBike = true;
+      bike.rider.visible = true;
+      bike.kickstand.visible = false;
+      autoShadow.scale.set(0.55, 1.15, 1);
+      boostMaterial.color.set('#a8e3ff');
+      current.copy(vehicle.body.translation());
+      previous.copy(current);
+      currentQ.copy(vehicle.body.rotation());
+      previousQ.copy(currentQ);
+      target.copy(current);
+      accumulator = 0;
+      resetCamera();
+      distance = cameraStyle === 'close' ? 7 : 14;
+      return true;
+    },
+    returnToAuto() {
+      if (
+        !drivingBike ||
+        vehicle.speed > 1.2 ||
+        Math.hypot(current.x - BIKE_BAY.x, current.z - BIKE_BAY.z) > 7
+      )
+        return false;
+      input.clear();
+      bikeVehicle.body.setEnabled(false);
+      bikeVehicle.reset();
+      autoVehicle.body.setEnabled(true);
+      vehicle = autoVehicle;
+      drivingBike = false;
+      bike.group.position.set(BIKE_BAY.x, groundHeight(BIKE_BAY.x, BIKE_BAY.z) + 0.72, BIKE_BAY.z);
+      bike.group.rotation.set(0, BIKE_BAY.yaw, -0.13);
+      bike.rider.visible = false;
+      bike.kickstand.visible = true;
+      autoShadow.scale.set(0.9, 1.65, 1);
+      boostMaterial.color.set('#ffc767');
+      reset(PLACES.find((p) => p.id === 'eagle-eye'));
+      resetCamera();
+      return true;
     },
     serve(item) {
       environment.life.serve(item);
