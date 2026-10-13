@@ -1307,8 +1307,7 @@ try {
       }
       await page.keyboard.press('r');
       await page.waitForTimeout(1000);
-      const continueButton = page.locator('#toast button');
-      if (await continueButton.isVisible()) await continueButton.click();
+      await page.locator('#toast').waitFor({ state: 'hidden', timeout: 20000 });
       await capture(page, 'rr310-stopped-right-foot.png');
       await page.locator('#bike-return-button').click();
       await page.waitForFunction(() => document.getElementById('world').dataset.vehicle === 'auto');
