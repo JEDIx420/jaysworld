@@ -22,7 +22,7 @@ A Kerala-inspired portfolio you drive through in a black-and-yellow auto. Start 
 - OpsFlash is a dark command centre with console workstations and a holographic world map. Arrows or four touch controls switch search demand, social interactions, leads and revenue across five regions. All values are clearly labelled fictional demo data.
 - Each upshift needs at least three seconds of powered driving in the current gear. Torque builds gradually and compensates for climbing slopes. The 70 km/h road and 120 km/h boost limits are preserved. The two-second wheelie eases into touchdown, and early release or braking triggers a controlled descent.
 - Police and roadside residents reserve spaced verge positions, avoiding the duplicate placements that stacked officers together. Small portrait and landscape layouts keep instrument screens, stories and controls separate; compact computer screens scroll by touch.
-- Release checks build once in CI, cache Chromium and gate Pages on physics tests and focused browser journeys covering existing rooms/driving and the concert, keys, bike and touch HUD. The complete browser suite and remains available through manual workflow dispatch.
+- Release checks run locally before pushing. One GitHub job verifies formatting, unit/physics tests and the build, then publishes Pages. The complete browser suite remains available as an optional manual check in the same job.
 
 ## The village
 
@@ -89,6 +89,6 @@ npm run test:browser
 
 The browser suite serves the production build and runs twenty-two desktop/touch/media/fallback journeys. `JAYSWORLD_QA_SHARD=1/3` selects a worker; `JAYSWORLD_CHROMIUM_PATH` selects an installed browser; `JAYSWORLD_BASE_URL` checks a deployed site. Deterministic PCM fixtures verify browser playback independently of station uptime. `JAYSWORLD_LIVE_RADIO=1` uses the real Ente broadcast.
 
-Main pushes run formatting, unit/physics tests, one build and eight focused production-browser journeys across three workers. Pages deployment waits for those checks to succeed. The manual workflow’s full_browser_validation option runs all twenty-two journeys. Relative Vite asset paths support the `/jaysworld/` project path. The immediate rollback commit is v0.7 at `a4c1003d6ea761b7b021b3299ddaf8807f8ff18a`.
+Main pushes run formatting, unit/physics tests, one build and Pages deployment in a single job. Browser testing and visual review happen locally before the final push. The manual workflow’s full_browser_validation option runs all twenty-two journeys. Relative Vite asset paths support the `/jaysworld/` project path. The immediate rollback commit is v0.7 at `a4c1003d6ea761b7b021b3299ddaf8807f8ff18a`.
 
 See [the release plan](docs/GUIDED_ROADS_PLAN.md), [validation](docs/VALIDATION.md) and [radio sources](docs/RADIO_SOURCES.md). Physical iPhone/Safari testing and measured hardware FPS remain unverified; touch emulation is recorded separately.

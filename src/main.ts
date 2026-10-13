@@ -1165,7 +1165,7 @@ for (const dialog of dialogs) {
         else journey?.leaveView();
       }
     }
-    journey?.pause();
+    if (paused()) journey?.pause();
     if (dialog === radioDialog && project.open) project.focus({ preventScroll: true });
     if (!paused() && booted) canvas.focus({ preventScroll: true });
   });

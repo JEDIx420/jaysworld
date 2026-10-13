@@ -16,6 +16,8 @@ The mesh is original procedural geometry modeled from the supplied image: sculpt
 
 The bike has two suspension ray contacts, rear-wheel drive, RPM-coupled six-speed automatic shifting, an engine torque curve, drag, braking, walking-speed reverse, wet-grip adjustment, CCD collisions and assisted balancing. Both horizontal physics axes are locked in world space to prevent the east/west roll instability. Speed-limited yaw assistance makes both steering directions predictable; automatic stop brakes prevent creep. Visual lean follows the turn around the tyre contact line; a boost wheelie rotates around the rear axle and settles smoothly. Boost changes response and effects without increasing the 160 km/h ceiling. This is an accessible game simulation, not a validated motorcycle dynamics model.
 
+Driving controls consult the current menu state when an event arrives. Closing Settings accepts the first throttle or boost press immediately, and a queued dialog-close event no longer clears newly pressed controls. A unit regression and the desktop ride journey cover this handoff.
+
 The supplied image depicts the earlier bike. Published 2019 ratios are used, rather than the later 38 PS variant:
 
 | Parameter                 | Value                                    |
@@ -34,6 +36,8 @@ Primary sources: [TVS 2019 owner manual](https://www.tvsmotor.com/-/media/Featur
 
 ## Validation
 
+On 13 October 2026, local formatting, all 66 unit/physics tests, the production build and all eight focused release browser journeys passed. The final bike, stationary right-foot pose, portrait/landscape TFT and day/night stage renders were reviewed locally before pushing.
+
 Local Rapier benchmarks at 60 Hz on a flat surface measured approximately 3.13 s for 0–60 km/h, 6.93 s for 0–100 km/h, and 160 km/h maximum, with a 75 kg rider. These are simulated measurements; manufacturer published reference figures are approximately 2.93 s and 7.17 s. Gear, suspension, mass, braking, reverse, turning, wall collision, eight-heading balance and side impacts, real terrain, stationary right-foot contact, recovery, progression, persistence and reserved-layout tests are included in `tests/bike.test.ts`.
 
-The GitHub Pages gate retains the existing driving/room/traffic checks and adds desktop keys/mount/ride/park/reload, portrait/landscape touch HUD checks, both bike steering directions and the stopped-foot pose, and day/night concert and park captures. Concert checks verify real browser media playback using a deterministic PCM fixture, spatial volume, and suppression/restoration of the separate vehicle radio. They do not certify live broadcaster uptime. Browser checks run in the existing GitHub Actions runner. The local environment has no supported browser-control skill, so local browser QA was unavailable.
+The local release suite retains the existing driving/room/traffic checks and adds desktop keys/mount/ride/park/reload, portrait/landscape touch HUD checks, both bike steering directions and the stopped-foot pose, and day/night concert and park captures. Concert checks verify real browser media playback using a deterministic PCM fixture, spatial volume, and suppression/restoration of the separate vehicle radio. They do not certify live broadcaster uptime. Browser checks and visual review are completed locally with Chromium before the final push. One GitHub job then verifies formatting, unit/physics tests and the build and deploys Pages. The complete browser suite is also available through the manual workflow input, in that same single job.

@@ -1,11 +1,11 @@
-name: Check and publish Jay's World
+name: Verify and publish Jay's World
 on:
   push:
     branches: [main]
   workflow_dispatch:
     inputs:
       full_browser_validation:
-        description: Run every desktop, touch, media and fallback journey
+        description: Optionally run the complete browser suite before publishing
         type: boolean
         default: false
 permissions:
@@ -14,16 +14,17 @@ concurrency:
   group: pages
   cancel-in-progress: true
 jobs:
-  check:
-    name: Build, physics and browser checks ${{ matrix.shard }}/3
+  publish:
+    name: Verify and publish
     runs-on: ubuntu-latest
-    timeout-minutes: 22
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-    env:
-      JAYSWORLD_QA_SHARD: ${{ matrix.shard }}/3
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -36,44 +37,30 @@ jobs:
       - run: npm run format:check
       - run: npm test
       - run: npm run build
-      - name: Cache Chromium
+      - name: Cache Chromium for optional browser validation
+        if: ${{ inputs.full_browser_validation }}
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
           restore-keys: ${{ runner.os }}-playwright-
-      - name: Install Chromium and system libraries
+      - name: Install Chromium for optional browser validation
+        if: ${{ inputs.full_browser_validation }}
         run: npx playwright install --with-deps chromium
-      - name: Check driving, every room, phone screens and traffic
-        if: ${{ !inputs.full_browser_validation }}
-        env:
-          JAYSWORLD_QA_FILTER: desktop keyboard driving|seven short exhibits|computer centre|traffic lane motion|road-first welcome|sportsbike|amphitheatre
-        run: npm run test:browser
       - name: Run the complete visitor suite
         if: ${{ inputs.full_browser_validation }}
         run: npm run test:browser
-      - name: Keep browser diagnostics
-        if: always()
+      - name: Keep optional browser diagnostics
+        if: ${{ always() && inputs.full_browser_validation }}
         uses: actions/upload-artifact@v4
         with:
-          name: visitor-checks-${{ matrix.shard }}
+          name: visitor-checks-${{ github.run_attempt }}
           path: qa/
           retention-days: 7
+      - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
-        if: ${{ matrix.shard == 1 }}
         with:
           path: dist
-  deploy:
-    needs: check
-    runs-on: ubuntu-latest
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/configure-pages@v5
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4

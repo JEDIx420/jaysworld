@@ -1,3 +1,15 @@
+# v0.9.1 validation
+
+On 13 October 2026, formatting, all 66 unit/physics tests and the TypeScript/Vite production build passed locally. Eight focused production-browser journeys passed in local Chromium: desktop driving/roof, all seven rooms and beat restoration, onboarding and saved accomplishments, moving traffic and officer spacing, phone exhibits, desktop sportsbike progression/handling, portrait/landscape bike touch controls, and the amphitheatre/children's park.
+
+The sportsbike journey verifies the complete keys-to-Eagle-Towers handoff, hiding taxi controls, persistent unlock, immediate throttle/boost after closing Settings, both steering directions, upright balance, boost wheelie, braking, a still rider with his right boot planted, and parking back into the auto. Close front/rear bike renders, the stopped pose, phone TFT layouts and day/night stage renders were reviewed. A unit regression also covers accepting the first key after a menu closes between render frames.
+
+Concert checks use a deterministic PCM fixture to verify native playback, spatial volume and vehicle-radio suppression/restoration. They do not certify broadcaster uptime. Chromium uses SwiftShader and touch emulation; physical iOS Safari and hardware frame-time measurements remain unverified.
+
+All development and browser checks finish locally before the final push. The Pages workflow has one job which verifies formatting, unit/physics tests and the build, then publishes. Optional manual full-browser validation also runs within that same job.
+
+---
+
 # v0.8 validation
 
 This release extends v0.7 at `a4c1003d6ea761b7b021b3299ddaf8807f8ff18a`. All changes use the existing Three.js, Rapier, browser UI and static GitHub Pages deployment. No remote art or backend is added.

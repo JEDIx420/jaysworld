@@ -29,13 +29,14 @@ export class Input {
 
   constructor(
     canvas: HTMLCanvasElement,
-    callbacks: {
+    private readonly callbacks: {
       interact: () => void;
       places: () => void;
       reset: () => void;
       honk: () => void;
       orbit: (x: number, y: number) => void;
       zoom: (delta: number) => void;
+      isPaused?: () => boolean;
     },
   ) {
     const signal = this.abort.signal;
@@ -55,7 +56,7 @@ export class Input {
     window.addEventListener(
       'keydown',
       (e) => {
-        if (this.paused || e.defaultPrevented) return;
+        if (this.blocked() || e.defaultPrevented) return;
         if (
           (e.target as HTMLElement)?.closest?.('input,select,textarea') ||
           (['Space', 'Enter'].includes(e.code) && (e.target as HTMLElement)?.closest?.('button,a'))
@@ -101,7 +102,7 @@ export class Input {
     stick.addEventListener(
       'pointerdown',
       (e) => {
-        if (this.paused || this.stickPointer !== null) return;
+        if (this.blocked() || this.stickPointer !== null) return;
         this.stickPointer = e.pointerId;
         stick.setPointerCapture(e.pointerId);
         moveStick(e);
@@ -129,7 +130,7 @@ export class Input {
     brake.addEventListener(
       'pointerdown',
       (e) => {
-        if (!this.paused) {
+        if (!this.blocked()) {
           this.brakePointer = e.pointerId;
           brake.setPointerCapture(e.pointerId);
         }
@@ -145,7 +146,7 @@ export class Input {
     boost.addEventListener(
       'pointerdown',
       (e) => {
-        if (this.paused) return;
+        if (this.blocked()) return;
         this.boostPointer = e.pointerId;
         boost.setPointerCapture(e.pointerId);
         e.preventDefault();
@@ -162,7 +163,7 @@ export class Input {
     canvas.addEventListener(
       'pointerdown',
       (e) => {
-        if (this.paused) return;
+        if (this.blocked()) return;
         if (e.pointerType === 'touch')
           this.cameraTouches.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (this.cameraTouches.size === 2) {
@@ -209,7 +210,7 @@ export class Input {
     canvas.addEventListener(
       'wheel',
       (e) => {
-        if (!this.paused) {
+        if (!this.blocked()) {
           e.preventDefault();
           callbacks.zoom(e.deltaY);
         }
@@ -218,8 +219,14 @@ export class Input {
     );
   }
 
+  private blocked() {
+    // A menu can close between frames. Consult its current state so the first
+    // key/pointer press is accepted immediately, rather than lost to a stale flag.
+    return this.callbacks.isPaused?.() ?? this.paused;
+  }
+
   read(): DriveInput {
-    if (this.paused || document.hidden) return { ...REST_INPUT };
+    if (this.blocked() || document.hidden) return { ...REST_INPUT };
     const key = (a: string, b: string) => Number(this.keys.has(a) || this.keys.has(b));
     return {
       throttle: clamp(key('KeyW', 'ArrowUp') - key('KeyS', 'ArrowDown') + this.touch.throttle),

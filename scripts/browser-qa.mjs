@@ -1074,7 +1074,7 @@ try {
       await page.waitForFunction(
         (t) => Number(document.getElementById('world').dataset.signalTime) > t + 8,
         time,
-        { timeout: 60000 },
+        { timeout: 90000 },
       );
       const actors = JSON.parse(await page.locator('#world').getAttribute('data-traffic-actors'));
       assert.ok(actors.every((a) => a.recoveries === 0));

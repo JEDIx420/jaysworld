@@ -305,6 +305,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     recoveryTimer = 0;
   };
   const input = new Input(canvas, {
+    isPaused: () => options.isPaused() || document.hidden || contextLost,
     interact: options.interact,
     places: options.places,
     honk: options.honk,
