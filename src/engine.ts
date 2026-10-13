@@ -330,8 +330,8 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     } else
       distance = THREE.MathUtils.clamp(
         distance + delta * 0.02,
-        mode === 'croc' ? 5 : mode === 'storefront' ? 7 : 8,
-        mode === 'croc' ? 28 : 55,
+        mode === 'croc' ? 5 : mode === 'storefront' ? 7 : drivingBike ? 3.5 : 8,
+        mode === 'croc' ? 28 : drivingBike ? 25 : 55,
       );
   };
   const resize = () => {

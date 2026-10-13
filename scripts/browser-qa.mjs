@@ -1205,6 +1205,20 @@ try {
       assert.equal(await page.locator('#speedometer').isVisible(), false);
       assert.equal(await page.locator('#bike-hud').isVisible(), true);
       await capture(page, 'rr310-mounted.png');
+      await page.mouse.move(400, 240);
+      await page.mouse.down();
+      await page.mouse.move(1040, 240, { steps: 12 });
+      await page.mouse.up();
+      await page.mouse.wheel(0, -400);
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.zoom) < 4,
+        undefined,
+        { timeout: 15000 },
+      );
+      await page.waitForTimeout(1200);
+      await capture(page, 'rr310-close-detail.png');
+      await page.locator('#settings-button').click();
+      await page.locator('#camera-close').click();
       await page.locator('#world').focus();
       await page.keyboard.down('w');
       await page.keyboard.down('Shift');
