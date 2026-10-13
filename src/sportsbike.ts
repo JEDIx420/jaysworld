@@ -6,14 +6,14 @@ import { RR310 } from './bike-powertrain';
 type V = [number, number, number];
 const mat = (color: string, roughness = 0.4, metalness = 0.2) =>
   new THREE.MeshStandardMaterial({ color, roughness, metalness });
-const paint = mat('#141820', 0.21, 0.48),
+const paint = mat('#171c23', 0.22, 0.42),
   silver = mat('#a2a9b1', 0.24, 0.8),
   rubber = mat('#111318', 0.92, 0);
 const alloy = mat('#22252c', 0.3, 0.72),
   red = mat('#c42532', 0.3, 0.35),
   gold = mat('#d6a347', 0.24, 0.7);
 const seat = mat('#282a31', 0.93, 0),
-  suit = mat('#1b1e25', 0.8, 0),
+  suit = mat('#171a20', 0.72, 0),
   visor = mat('#162632', 0.1, 0.8);
 const white = new THREE.MeshStandardMaterial({
   color: '#e7f7ff',
@@ -61,6 +61,47 @@ function panel(parent: THREE.Object3D, points: V[], material: THREE.Material) {
   m.castShadow = m.receiveShadow = true;
   parent.add(m);
   return m;
+}
+/** Sculpted side skin, with an outward shoulder and a recessed lower air duct. */
+function fairing(parent: THREE.Object3D, side: number, material: THREE.Material) {
+  const sections = [
+    // z, top, bottom, shoulder width, lower width
+    [-0.86, 0.29, -0.01, 0.16, 0.12],
+    [-0.68, 0.38, -0.22, 0.285, 0.2],
+    [-0.48, 0.34, -0.45, 0.315, 0.235],
+    [-0.24, 0.24, -0.44, 0.31, 0.215],
+    [0.01, 0.12, -0.43, 0.285, 0.19],
+    [0.22, 0.04, -0.4, 0.23, 0.16],
+    [0.39, -0.2, -0.36, 0.17, 0.13],
+  ];
+  const vertices: number[] = [],
+    uv: number[] = [],
+    indices: number[] = [];
+  const rows = 12;
+  sections.forEach(([z, top, bottom, width, lower], j) => {
+    for (let i = 0; i <= rows; i++) {
+      const t = i / rows;
+      // A defined shoulder crease, rather than a flat triangular sheet.
+      const bulge = Math.sin(t * Math.PI) * 0.026;
+      const x = width * (1 - t) + lower * t + bulge;
+      vertices.push(side * x, top * (1 - t) + bottom * t, z);
+      uv.push(j / (sections.length - 1), 1 - t);
+    }
+  });
+  for (let j = 0; j < sections.length - 1; j++)
+    for (let i = 0; i < rows; i++) {
+      const n = j * (rows + 1) + i;
+      const face = [n, n + rows + 1, n + 1, n + 1, n + rows + 1, n + rows + 2];
+      indices.push(...(side > 0 ? face : [face[2], face[1], face[0], face[5], face[4], face[3]]));
+    }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const skin = new THREE.Mesh(geometry, material);
+  skin.castShadow = skin.receiveShadow = true;
+  parent.add(skin);
 }
 // Continuous cross-sections make the tank and fairing a sculpted surface, not a stack of boxes.
 function loft(parent: THREE.Object3D, sections: number[][], material: THREE.Material) {
@@ -111,11 +152,15 @@ function decal(side: number) {
   canvas.height = 512;
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = '#bac0c7';
-  ctx.font = 'italic bold 146px Arial';
-  ctx.fillText('Apache', 48, 214);
+  ctx.font = 'italic bold 178px cursive';
+  ctx.save();
+  ctx.translate(65, 160);
+  ctx.rotate(0.13);
+  ctx.fillText('Apache', 0, 0);
+  ctx.restore();
   ctx.fillStyle = '#ef293d';
   ctx.font = 'italic bold 68px Arial';
-  ctx.fillText('RR 310', 534, 319);
+  ctx.fillText('RR 310', 590, 240);
   ctx.lineWidth = 12;
   ctx.strokeStyle = '#d32135';
   ctx.beginPath();
@@ -124,12 +169,12 @@ function decal(side: number) {
   ctx.stroke();
   ctx.font = 'bold 34px Arial';
   ctx.fillStyle = '#7f8995';
-  ctx.fillText('RACING DNA', 84, 376);
+  ctx.fillText('RACE SPEC', 84, 418);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
   const m = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.91, 0.46),
+    new THREE.PlaneGeometry(0.82, 0.4),
     new THREE.MeshStandardMaterial({
       map: texture,
       transparent: true,
@@ -139,7 +184,7 @@ function decal(side: number) {
       side: THREE.DoubleSide,
     }),
   );
-  m.position.set(side * 0.335, -0.035, -0.07);
+  m.position.set(side * 0.329, 0.065, -0.29);
   m.rotation.y = (side * Math.PI) / 2;
   m.name = 'bike:apache-fairing-decal';
   return m;
@@ -256,7 +301,7 @@ export function makeSportsbike() {
         [side * 0.15, 0.13, -0.36],
       ],
     ] as [V, V][])
-      rod(chassis, a, b, 0.017, red);
+      rod(chassis, a, b, 0.017, b[2] > 0.5 ? red : alloy);
     rod(chassis, [side * 0.13, -0.17, 0.2], [side * 0.09, -0.4, 0.69], 0.034, alloy);
     rod(chassis, [side * 0.1, -0.4, 0.69], [side * 0.19, -0.31, 0.18], 0.022, silver);
     rod(chassis, [side * 0.17, -0.18, 0.25], [side * 0.24, -0.22, 0.29], 0.018, silver);
@@ -297,17 +342,42 @@ export function makeSportsbike() {
   loft(
     chassis,
     [
-      [0.38, 0.24, 0.17, 0.085],
-      [0.6, 0.33, 0.16, 0.09],
-      [0.88, 0.39, 0.07, 0.055],
-      [1, 0.4, 0.003, 0.004],
+      [0.38, 0.24, 0.175, 0.075],
+      [0.6, 0.33, 0.16, 0.075],
+      [0.84, 0.37, 0.115, 0.065],
+      [0.99, 0.35, 0.09, 0.045],
     ],
     paint,
   );
   oval(chassis, [0, 0.4, 0.67], [0.135, 0.045, 0.17], seat);
   for (const side of [-1, 1])
     rod(chassis, [side * 0.13, 0.26, 0.66], [side * 0.03, 0.33, 0.98], 0.009, red);
-  box(chassis, [0.12, 0.026, 0.035], [0, 0.37, 0.97], tail);
+  // RR 310's split, hooked LED signature, traced from the supplied rear photo.
+  // Both branches sweep down from the tail shoulders around the dark centre.
+  const tailLamp = new THREE.Group();
+  tailLamp.name = 'bike:rr310-tail-light';
+  chassis.add(tailLamp);
+  const tailHousing = mat('#0c0f15', 0.25, 0.3);
+  for (const side of [-1, 1]) {
+    const outline: V[] = [
+      [side * 0.025, 0.383, 0.995],
+      [side * 0.074, 0.354, 1.01],
+      [side * 0.1, 0.305, 1.002],
+      [side * 0.067, 0.258, 0.989],
+      [side * 0.025, 0.282, 0.997],
+    ];
+    tube(tailLamp, outline, 0.021, tailHousing, 12);
+    tube(tailLamp, outline, 0.009, tail, 12);
+    for (let i = 0; i < 7; i++)
+      oval(
+        tailLamp,
+        [side * (0.032 + i * 0.009), 0.38 - i * 0.009, 1.018],
+        [0.005, 0.004, 0.003],
+        tail,
+      );
+    rod(chassis, [side * 0.03, 0.1, 1.03], [side * 0.16, 0.1, 1.055], 0.007, rubber);
+    oval(chassis, [side * 0.17, 0.1, 1.055], [0.04, 0.014, 0.019], mat('#b48635'));
+  }
   // Angular twin-projector shark nose, enclosing side fairings and lower belly pan.
   const bodyMat = paint.clone();
   bodyMat.side = THREE.DoubleSide;
@@ -315,45 +385,57 @@ export function makeSportsbike() {
     chassis,
     [
       [-1, 0.13, 0.015, 0.035],
-      [-0.87, 0.19, 0.19, 0.12],
-      [-0.65, 0.23, 0.29, 0.16],
-      [-0.42, 0.17, 0.32, 0.19],
+      [-0.87, 0.19, 0.19, 0.13],
+      [-0.65, 0.22, 0.28, 0.17],
+      [-0.42, 0.2, 0.3, 0.13],
       [-0.25, 0.07, 0.29, 0.16],
     ],
     paint,
   );
   for (const s of [-1, 1]) {
+    fairing(chassis, s, bodyMat);
+    // Deep cooling duct and its sculpted lip remain separate from the painted skin.
     panel(
       chassis,
       [
-        [s * 0.27, 0.22, -0.55],
-        [s * 0.34, 0.08, -0.33],
-        [s * 0.32, -0.32, -0.25],
-        [s * 0.25, -0.41, 0.15],
-        [s * 0.16, -0.35, 0.4],
-        [s * 0.22, -0.04, 0.34],
-        [s * 0.32, 0.03, 0.07],
+        [s * 0.332, 0.045, -0.26],
+        [s * 0.305, -0.17, -0.21],
+        [s * 0.255, -0.24, 0.2],
+        [s * 0.289, -0.015, 0.09],
       ],
-      bodyMat,
+      rubber,
     );
-    panel(
+    tube(
       chassis,
       [
-        [s * 0.34, 0.08, -0.33],
-        [s * 0.31, -0.28, -0.23],
-        [s * 0.33, -0.13, 0.11],
-        [s * 0.32, 0.03, 0.07],
+        [s * 0.334, 0.055, -0.27],
+        [s * 0.307, -0.18, -0.22],
+        [s * 0.255, -0.245, 0.2],
       ],
+      0.012,
       alloy,
+      10,
     );
-    for (let n = 0; n < 5; n++)
+    for (let n = 0; n < 6; n++)
       rod(
         chassis,
-        [s * 0.335, -0.17 + n * 0.025, 0.13],
-        [s * 0.28, -0.2 + n * 0.025, 0.27],
-        0.006,
-        rubber,
+        [s * 0.28, -0.19 + n * 0.025, 0.05],
+        [s * 0.265, -0.2 + n * 0.022, 0.17],
+        0.004,
+        alloy,
       );
+    // Raised red shoulder stripe follows the RR 310 fairing rather than hovering off it.
+    tube(
+      chassis,
+      [
+        [s * 0.28, 0.37, -0.68],
+        [s * 0.319, 0.335, -0.46],
+        [s * 0.32, 0.225, -0.22],
+      ],
+      0.005,
+      red,
+      8,
+    );
     const lamp = oval(chassis, [s * 0.123, 0.14, -0.88], [0.075, 0.045, 0.026], alloy);
     lamp.rotation.z = s * 0.28;
     oval(chassis, [s * 0.127, 0.14, -0.902], [0.033, 0.031, 0.011], white);
@@ -389,40 +471,72 @@ export function makeSportsbike() {
     ],
     bodyMat,
   );
+  const screenVertices: number[] = [],
+    screenIndices: number[] = [];
+  const screenRows = 16,
+    screenCols = 20;
+  for (let row = 0; row <= screenRows; row++) {
+    const t = row / screenRows,
+      width = 0.22 * (1 - t) + 0.145 * t;
+    for (let col = 0; col <= screenCols; col++) {
+      const u = (col / screenCols) * 2 - 1;
+      screenVertices.push(
+        u * width,
+        0.3 + t * 0.31 - Math.abs(u) ** 3 * 0.022,
+        -0.78 + t * 0.29 + u * u * 0.043,
+      );
+    }
+  }
+  for (let row = 0; row < screenRows; row++)
+    for (let col = 0; col < screenCols; col++) {
+      const n = row * (screenCols + 1) + col;
+      screenIndices.push(
+        n,
+        n + screenCols + 1,
+        n + 1,
+        n + 1,
+        n + screenCols + 1,
+        n + screenCols + 2,
+      );
+    }
+  const screenGeometry = new THREE.BufferGeometry();
+  screenGeometry.setAttribute('position', new THREE.Float32BufferAttribute(screenVertices, 3));
+  screenGeometry.setIndex(screenIndices);
+  screenGeometry.computeVertexNormals();
   const windshield = new THREE.Mesh(
-    new THREE.SphereGeometry(
-      1,
-      32,
-      20,
-      Math.PI * 0.14,
-      Math.PI * 0.72,
-      Math.PI * 0.16,
-      Math.PI * 0.38,
-    ),
+    screenGeometry,
     new THREE.MeshPhysicalMaterial({
-      color: '#6e7e8d',
+      color: '#a3b9c5',
       transparent: true,
-      opacity: 0.48,
-      roughness: 0.08,
-      metalness: 0.15,
+      opacity: 0.38,
+      roughness: 0.09,
+      metalness: 0.12,
       side: THREE.DoubleSide,
+      depthWrite: false,
     }),
   );
-  windshield.scale.set(0.255, 0.45, 0.29);
-  windshield.position.set(0, 0.29, -0.62);
-  windshield.rotation.x = 0.15;
+  windshield.name = 'bike:rr310-windscreen';
   group.add(windshield);
-  for (const s of [-1, 1])
+  for (const side of [-1, 1]) {
     tube(
       chassis,
       [
-        [s * 0.15, 0.33, -0.77],
-        [s * 0.17, 0.5, -0.64],
-        [s * 0.1, 0.67, -0.51],
+        [side * 0.22, 0.3, -0.737],
+        [side * 0.18, 0.46, -0.59],
+        [side * 0.145, 0.588, -0.447],
       ],
-      0.006,
-      silver,
+      0.003,
+      alloy,
+      8,
     );
+    for (const t of [0.18, 0.42])
+      oval(
+        chassis,
+        [side * (0.22 - t * 0.075), 0.3 + t * 0.31, -0.78 + t * 0.29 + 0.048],
+        [0.007, 0.007, 0.003],
+        silver,
+      );
+  }
   box(chassis, [0.15, 0.014, 0.22], [0, 0.33, -0.38], alloy).rotation.x = -0.5;
   box(chassis, [0.12, 0.008, 0.15], [0, 0.35, -0.4], visor).rotation.x = -0.5;
   for (const s of [-1, 1]) {
@@ -452,12 +566,32 @@ export function makeSportsbike() {
     10,
   );
   const exhaust = new THREE.Group();
-  exhaust.position.set(0.31, -0.15, 0.62);
-  exhaust.rotation.x = -0.44;
+  exhaust.name = 'bike:rr310-exhaust';
+  exhaust.position.set(0.3, -0.15, 0.59);
+  exhaust.rotation.x = -0.48;
   chassis.add(exhaust);
-  cylinder(exhaust, 0.066, 0.085, 0.48, [0, 0, 0], silver, 32).rotation.x = Math.PI / 2;
-  cylinder(exhaust, 0.061, 0.067, 0.07, [0, 0, 0.27], alloy, 24).rotation.x = Math.PI / 2;
-  cylinder(exhaust, 0.045, 0.045, 0.009, [0, 0, 0.31], rubber, 24).rotation.x = Math.PI / 2;
+  loft(
+    exhaust,
+    [
+      [-0.26, 0, 0.04, 0.06],
+      [-0.18, 0, 0.08, 0.11],
+      [0.16, 0, 0.08, 0.105],
+      [0.27, 0, 0.06, 0.08],
+    ],
+    silver,
+  );
+  loft(
+    exhaust,
+    [
+      [0.18, 0, 0.083, 0.106],
+      [0.28, 0, 0.064, 0.084],
+    ],
+    rubber,
+  );
+  const outlet = cylinder(exhaust, 0.032, 0.032, 0.014, [0, 0, 0.288], alloy, 32);
+  outlet.rotation.x = Math.PI / 2;
+  for (const z of [-0.13, 0.08]) oval(exhaust, [0.079, 0.05, z], [0.004, 0.011, 0.012], alloy);
+  rod(chassis, [0.31, -0.1, 0.6], [0.2, 0.12, 0.54], 0.014, silver);
   const sprocket = cylinder(chassis, 0.085, 0.085, 0.015, [-0.1, -0.4, 0.69], silver, 32);
   sprocket.rotation.z = Math.PI / 2;
   for (const y of [-0.315, -0.48])
@@ -475,17 +609,38 @@ export function makeSportsbike() {
   rod(chassis, [0, 0.27, 0.85], [0, 0.03, 1.07], 0.018, alloy);
   box(chassis, [0.22, 0.1, 0.01], [0, 0.02, 1.085], silver);
   const kickstand = rod(chassis, [-0.18, -0.25, 0.2], [-0.31, -0.62, 0.31], 0.014, alloy);
-  // Black armoured rider: crouched spine, full-face helmet, gloved grips and foot pegs.
+  // Broad-shouldered leather rider with a separate, articulated right leg.
   const rider = new THREE.Group();
   rider.name = 'bike:rider';
   group.add(rider);
-  oval(rider, [0, 0.59, 0.12], [0.22, 0.35, 0.135], suit).rotation.x = -0.67;
-  oval(rider, [0, 0.37, 0.3], [0.18, 0.16, 0.17], suit);
+  const torso = new THREE.Group();
+  torso.position.set(0, 0.56, 0.16);
+  torso.rotation.x = -0.48;
+  rider.add(torso);
+  oval(torso, [0, 0, 0], [0.225, 0.29, 0.15], suit);
+  oval(torso, [0, 0.15, 0], [0.26, 0.18, 0.17], suit);
+  for (const side of [-1, 1]) {
+    oval(torso, [side * 0.235, 0.19, 0], [0.105, 0.11, 0.12], suit);
+    oval(torso, [side * 0.235, 0.215, -0.03], [0.09, 0.07, 0.095], alloy);
+    tube(
+      torso,
+      [
+        [side * 0.14, -0.18, -0.137],
+        [side * 0.18, 0.12, -0.163],
+        [side * 0.24, 0.22, -0.09],
+      ],
+      0.0025,
+      mat('#404650'),
+      6,
+    );
+  }
+  rod(torso, [0, -0.2, -0.147], [0, 0.26, -0.16], 0.0025, silver);
+  oval(rider, [0, 0.3, 0.33], [0.19, 0.12, 0.145], suit);
   const head = new THREE.Group();
-  head.position.set(0, 0.95, -0.17);
-  head.rotation.x = 0.18;
+  head.position.set(0, 0.98, -0.12);
+  head.rotation.x = 0.12;
   rider.add(head);
-  oval(head, [0, 0, 0], [0.155, 0.18, 0.19], paint);
+  oval(head, [0, 0, 0], [0.162, 0.182, 0.193], paint);
   const glass = new THREE.Mesh(
     new THREE.SphereGeometry(
       1,
@@ -498,20 +653,73 @@ export function makeSportsbike() {
     ),
     visor,
   );
-  glass.scale.set(0.159, 0.183, 0.195);
+  glass.scale.set(0.166, 0.185, 0.198);
   head.add(glass);
-  oval(head, [0, -0.085, -0.14], [0.115, 0.065, 0.08], paint);
-  for (const s of [-1, 1]) {
-    rod(rider, [s * 0.17, 0.67, 0.03], [s * 0.27, 0.42, -0.11], 0.065, suit);
-    rod(rider, [s * 0.27, 0.42, -0.11], [s * 0.31, 0.3, -0.33], 0.055, suit);
-    oval(rider, [s * 0.31, 0.3, -0.33], [0.06, 0.045, 0.07], rubber);
-    rod(rider, [s * 0.13, 0.39, 0.3], [s * 0.29, 0.05, 0.02], 0.083, suit);
-    oval(rider, [s * 0.3, 0.04, 0.02], [0.067, 0.087, 0.075], alloy);
-    rod(rider, [s * 0.29, 0.05, 0.02], [s * 0.23, -0.19, 0.3], 0.063, suit);
-    oval(rider, [s * 0.23, -0.19, 0.23], [0.075, 0.06, 0.15], rubber);
+  oval(head, [0, -0.09, -0.14], [0.123, 0.067, 0.085], paint);
+  box(head, [0.067, 0.015, 0.008], [0, -0.09, -0.224], rubber);
+  for (const side of [-1, 1]) {
+    oval(head, [side * 0.157, -0.015, -0.012], [0.008, 0.023, 0.025], alloy);
+    rod(rider, [side * 0.25, 0.76, 0.055], [side * 0.33, 0.48, -0.09], 0.077, suit);
+    oval(rider, [side * 0.33, 0.48, -0.09], [0.07, 0.075, 0.073], alloy);
+    rod(rider, [side * 0.33, 0.48, -0.09], [side * 0.31, 0.3, -0.33], 0.06, suit);
+    oval(rider, [side * 0.31, 0.3, -0.33], [0.064, 0.049, 0.075], rubber);
   }
+  const legs = [-1, 1].map((side) => {
+    const root = new THREE.Group();
+    root.name = side > 0 ? 'bike:right-leg' : 'bike:left-leg';
+    rider.add(root);
+    const thigh = cylinder(root, 0.089, 0.083, 1, [0, 0, 0], suit, 16);
+    const shin = cylinder(root, 0.073, 0.061, 1, [0, 0, 0], suit, 16);
+    const knee = oval(root, [0, 0, 0], [0.072, 0.1, 0.081], alloy);
+    const boot = new THREE.Group();
+    boot.name = side > 0 ? 'bike:right-boot' : 'bike:left-boot';
+    root.add(boot);
+    oval(boot, [0, 0.05, 0.035], [0.062, 0.1, 0.079], rubber);
+    box(boot, [0.125, 0.047, 0.25], [0, -0.024, -0.045], rubber);
+    box(boot, [0.13, 0.012, 0.255], [0, -0.05, -0.044], alloy);
+    bakeStatic(boot);
+    return { side, thigh, shin, knee, boot };
+  });
+  const align = (bone: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3) => {
+    bone.position.copy(a).add(b).multiplyScalar(0.5);
+    bone.scale.y = a.distanceTo(b);
+    bone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+  };
+  let rightFootDown = 1,
+    stopped = true,
+    previousTime = 0;
+  const pose = (speed: number, time: number, groundY: number, grounded: boolean) => {
+    const dt = Math.max(0, Math.min(0.1, time - previousTime));
+    previousTime = time;
+    if (speed > 0.85 || !grounded) stopped = false;
+    else if (speed < 0.25) stopped = true;
+    const desired = stopped ? 1 : 0;
+    rightFootDown += (desired - rightFootDown) * (1 - Math.exp(-dt * 16));
+    if (Math.abs(rightFootDown - desired) < 0.001) rightFootDown = desired;
+    for (const leg of legs) {
+      const down = leg.side > 0 ? rightFootDown : 0;
+      const hip = new THREE.Vector3(leg.side * 0.14, 0.3, 0.33);
+      const knee = new THREE.Vector3(
+        leg.side * (0.3 + down * 0.005),
+        0.035 - down * 0.11,
+        0.025 + down * 0.29,
+      );
+      const foot = new THREE.Vector3(
+        leg.side * (0.23 + down * 0.15),
+        -0.21 * (1 - down) + (groundY + 0.056) * down,
+        0.29 + down * 0.065,
+      );
+      align(leg.thigh, hip, knee);
+      align(leg.shin, knee, foot.clone().add(new THREE.Vector3(0, 0.08, 0.025)));
+      leg.knee.position.copy(knee);
+      leg.boot.position.copy(foot);
+      leg.boot.rotation.x = (1 - down) * -0.22;
+    }
+  };
+  pose(0, 0, -0.61, true);
   bakeStatic(head);
-  bakeStatic(rider, [head]);
+  bakeStatic(torso);
+  bakeStatic(rider, [head, torso, ...legs.map((leg) => leg.thigh.parent!)]);
   bakeStatic(chassis, [kickstand]);
   const headlight = new THREE.SpotLight('#d6ecff', 0, 32, 0.37, 0.85, 1.6);
   headlight.position.set(0, 0.15, -0.89);
@@ -524,10 +732,23 @@ export function makeSportsbike() {
     rider,
     kickstand,
     headlight,
-    update(speed: number, lean: number, brake: boolean, time: number, night: number) {
-      rider.rotation.z = lean * 0.12;
-      rider.position.y = Math.sin(time * 25) * Math.min(0.003, speed * 0.0002);
-      head.rotation.y = -lean * 0.22;
+    rightBoot: legs[1].boot,
+    get rightFootDown() {
+      return rightFootDown;
+    },
+    update(
+      speed: number,
+      lean: number,
+      brake: boolean,
+      time: number,
+      night: number,
+      groundY = -0.61,
+      grounded = true,
+    ) {
+      pose(speed, time, groundY, grounded);
+      rider.rotation.z = stopped ? 0 : lean * 0.08;
+      rider.position.y = 0;
+      head.rotation.y = stopped ? 0 : -lean * 0.18;
       tail.emissiveIntensity = brake ? 4 : 1.3;
       headlight.intensity = 8 + night * 34;
     },

@@ -1,7 +1,5 @@
 /** Original procedural sound design. No third-party engine recordings. */
 export class JourneyAudio {
-  private concertBeatAt = 0;
-  private concertBeat = 0;
   private studioBeatAt = 0;
   private studioBeat = 0;
   private context?: AudioContext;
@@ -191,35 +189,6 @@ export class JourneyAudio {
       'triangle',
     );
     this.studioBeat = (this.studioBeat + 1) % 8;
-  }
-  concert(distance: number, audible: boolean) {
-    if (!this.context || !this.enabled || !audible || document.hidden || distance > 65) return;
-    const now = this.context.currentTime;
-    if (now < this.concertBeatAt) return;
-    this.concertBeatAt = now + 60 / 114 / 2;
-    const level = Math.max(0, 1 - distance / 65) ** 2 * 0.027;
-    const roots = [82.41, 82.41, 110, 98],
-      root = roots[Math.floor(this.concertBeat / 8) % 4];
-    // An original instrumental loop: kick/snare, bass, power chords, keys and a lead riff.
-    this.tone(root, 0.21, level * 1.2, 'triangle');
-    if (this.concertBeat % 4 === 0) this.tone(130, 0.13, level * 1.7, 'sine', 42);
-    if (this.concertBeat % 4 === 2) {
-      this.tone(190, 0.075, level, 'triangle', 90);
-      this.tone(2900, 0.055, level * 0.5, 'sawtooth', 1100);
-    }
-    this.tone(7200, 0.025, level * 0.13, 'square', 4200);
-    if (this.concertBeat % 2 === 0) {
-      this.tone(root * 2, 0.2, level * 0.38, 'sawtooth');
-      this.tone(root * 3, 0.19, level * 0.25, 'sawtooth');
-      this.tone(root * 4, 0.3, level * 0.2, 'sine');
-    }
-    this.tone(
-      root * [4, 4, 6, 4, 7, 6, 4, 3][this.concertBeat % 8],
-      0.17,
-      level * 0.28,
-      'triangle',
-    );
-    this.concertBeat = (this.concertBeat + 1) % 32;
   }
   private tone(
     frequency: number,

@@ -127,6 +127,7 @@ export class VillageRadio {
   private phase: RadioPhase = 'off';
   private level = 0.32;
   private ducked = false;
+  private concertMuted = false;
   private context?: AudioContext;
   private hiss?: GainNode;
   private noise?: AudioBufferSourceNode;
@@ -162,7 +163,7 @@ export class VillageRadio {
     void this.context.resume().catch(() => {});
   }
   private volume() {
-    const level = this.level * (this.ducked ? 0.16 : 1);
+    const level = this.level * (this.concertMuted ? 0 : this.ducked ? 0.16 : 1);
     if (this.audio) this.audio.volume = level;
     if (this.context && this.hiss) {
       this.hiss.gain.setTargetAtTime(
@@ -221,6 +222,11 @@ export class VillageRadio {
     this.ducked = active;
     this.volume();
   }
+  concert(active: boolean) {
+    if (active === this.concertMuted) return;
+    this.concertMuted = active;
+    this.volume();
+  }
   power() {
     if (this.phase === 'off') this.play(this.stations[this.index]);
     else this.stop();
@@ -248,7 +254,7 @@ export class VillageRadio {
     audio.dataset.station = station.id;
     document.body.append(audio);
     audio.preload = 'none';
-    audio.volume = this.level * (this.ducked ? 0.16 : 1);
+    audio.volume = this.level * (this.concertMuted ? 0 : this.ducked ? 0.16 : 1);
     // Keep the live stream on the native media path: station CORS policies need not permit Web Audio.
     audio.src = station.url;
     const current = () => generation === this.generation && this.audio === audio;

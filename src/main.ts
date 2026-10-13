@@ -8,6 +8,7 @@ import { PLACES, nearestPlace, type Place } from './projects';
 import { VillageRadio } from './radio';
 import { VenueControls, RetroExhibit } from './retro';
 import { JourneyAudio } from './audio';
+import { ConcertAudio } from './concert-audio';
 import { FareGame, type Snack } from './fares';
 import { passengerStop } from './passenger-stops';
 import {
@@ -43,6 +44,7 @@ const bikeKeysDialog = $<HTMLDialogElement>('bike-keys-dialog');
 const dialogs = [project, places, settings, radioDialog, bikeKeysDialog],
   radio = new VillageRadio(),
   audio = new JourneyAudio(),
+  concert = new ConcertAudio($('concert-audio'), $('concert-audio-button')),
   visited = new Set<string>();
 let saved: unknown;
 try {
@@ -668,6 +670,7 @@ function startExperience() {
   $('welcome').classList.add('quiet');
   $('driving-hint').classList.add('quiet');
   if (!sceneFailed) radio.playDefault();
+  concert.unlock();
   void audio
     .enable()
     .then(() => {
@@ -1126,6 +1129,17 @@ $('weather-button').addEventListener('click', () => {
   journey?.weather(kinds[weatherMode]);
   $('weather-button').textContent = 'Weather · ' + (kinds[weatherMode] ?? 'auto');
 });
+$('concert-audio-button').addEventListener('click', () => {
+  const soundOff = !audio.enabled;
+  void audio
+    .enable()
+    .then(() => {
+      $('sound-button').textContent = 'Sound on';
+      $('sound-button').setAttribute('aria-pressed', 'true');
+    })
+    .catch(() => {});
+  concert.toggle(soundOff);
+});
 $('sound-button').addEventListener('click', async () => {
   try {
     const enabled = await audio.toggle();
@@ -1257,7 +1271,12 @@ void import('./engine')
       onError: fallback,
       onAudio: (v, p, t, b, gear, rpm) => {
         audio.update(v, p, t, b, gear, rpm, ridingBike);
-        audio.concert(distance2(position, AMPHITHEATRE), !p);
+        radio.concert(
+          concert.update(
+            distance2(position, AMPHITHEATRE),
+            experienceStarted && audio.enabled && !p,
+          ),
+        );
         audio.studio(
           distance2(position, PLACES.find((v) => v.id === 'music')!.position),
           (viewMode === 'drive' || viewMode === 'storefront') && !dialogs.some((d) => d.open),
@@ -1303,6 +1322,7 @@ if (import.meta.hot)
   import.meta.hot.dispose(() => {
     journey?.dispose();
     radio.dispose();
+    concert.dispose();
     audio.dispose();
     exhibit.dispose();
     clearTimeout(toastTimer);

@@ -141,7 +141,7 @@ async function run(name, contextOptions, check) {
       if (m.type() === 'error') errors.push(m.text());
     });
     if (process.env.JAYSWORLD_LIVE_RADIO !== '1')
-      await page.route('https://cast1.my-control-panel.com/**', (route) =>
+      await page.route(/https:\/\/(?:cast1\.my-control-panel\.com|listen\.181fm\.com)\//, (route) =>
         route.fulfill({
           status: 200,
           contentType: 'audio/wav',
@@ -400,16 +400,16 @@ try {
           await page.waitForSelector('.drum-machine[data-playing=true]');
           assert.equal(await page.locator('#radio-dialog').getAttribute('data-phase'), 'playing');
           const radioBefore = await page.evaluate(() => {
-            const a = document.querySelector('audio');
+            const a = document.querySelector('audio[data-station]');
             return { time: a.currentTime, volume: a.volume, ended: a.ended, duration: a.duration };
           });
           await page.waitForFunction(
-            (time) => document.querySelector('audio')?.currentTime > time + 0.1,
+            (time) => document.querySelector('audio[data-station]')?.currentTime > time + 0.1,
             radioBefore.time,
             { timeout: 10000 },
           );
           const radioAfter = await page.evaluate(() => {
-            const a = document.querySelector('audio');
+            const a = document.querySelector('audio[data-station]');
             return { time: a.currentTime, volume: a.volume, ended: a.ended, duration: a.duration };
           });
           assert.ok(
@@ -833,7 +833,7 @@ try {
       await page.keyboard.press('ArrowLeft');
       await page.waitForSelector('#radio-dialog[data-phase=playing]', { state: 'attached' });
       assert.match(await page.locator('#radio-name').textContent(), /True Blues/);
-      assert.equal(await page.locator('audio').count(), 1);
+      assert.equal(await page.locator('audio[data-station]').count(), 1);
       await page.keyboard.press('ArrowRight');
       await page.keyboard.press('ArrowLeft');
       await page.waitForSelector('#radio-dialog[data-phase=playing]', { state: 'attached' });
@@ -1204,6 +1204,14 @@ try {
       assert.equal(await page.locator('#fare-card').isVisible(), false);
       assert.equal(await page.locator('#speedometer').isVisible(), false);
       assert.equal(await page.locator('#bike-hud').isVisible(), true);
+      await page.waitForFunction(() => {
+        const world = document.getElementById('world');
+        return (
+          Number(world.dataset.speed) < 0.1 &&
+          Number(world.dataset.bikeRightFoot) > 0.99 &&
+          Number(world.dataset.upright) > 0.999
+        );
+      });
       await capture(page, 'rr310-mounted.png');
       await page.mouse.move(400, 240);
       await page.mouse.down();
@@ -1217,6 +1225,12 @@ try {
       );
       await page.waitForTimeout(1200);
       await capture(page, 'rr310-close-detail.png');
+      await page.mouse.move(1000, 240);
+      await page.mouse.down();
+      await page.mouse.move(360, 240, { steps: 12 });
+      await page.mouse.up();
+      await page.waitForTimeout(1200);
+      await capture(page, 'rr310-tail-detail.png');
       await page.locator('#settings-button').click();
       await page.locator('#camera-close').click();
       await page.locator('#world').focus();
@@ -1244,6 +1258,56 @@ try {
       await page.waitForFunction(
         () => Math.abs(Number(document.getElementById('world').dataset.x) + 49.2) < 0.8,
       );
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.bikeRightFoot) > 0.99,
+      );
+      // Exercise both directions from the same bay, including the formerly unstable east/west heading.
+      for (const [key, direction] of [
+        ['d', -1],
+        ['a', 1],
+      ]) {
+        await page.keyboard.press('r');
+        await page.waitForTimeout(800);
+        const heading = Number(await page.locator('#world').getAttribute('data-bike-heading'));
+        await page.keyboard.down('w');
+        await page.keyboard.down(key);
+        await page.waitForFunction(
+          ({ heading, direction }) => {
+            const world = document.getElementById('world');
+            const change = Math.atan2(
+              Math.sin(Number(world.dataset.bikeHeading) - heading),
+              Math.cos(Number(world.dataset.bikeHeading) - heading),
+            );
+            return (
+              change * direction > 0.18 &&
+              Number(world.dataset.speed) > 1 &&
+              Number(world.dataset.bikeRightFoot) < 0.1
+            );
+          },
+          { heading, direction },
+          { timeout: 20000 },
+        );
+        assert.ok(Number(await page.locator('#world').getAttribute('data-upright')) > 0.999);
+        assert.ok(
+          Number(await page.locator('#world').getAttribute('data-bike-lean')) * direction > 0,
+        );
+        await capture(page, `rr310-turn-${key}.png`);
+        await page.keyboard.up(key);
+        await page.keyboard.up('w');
+        await page.keyboard.down('Space');
+        await page.waitForFunction(
+          () => Number(document.getElementById('world').dataset.speed) < 0.1,
+          undefined,
+          { timeout: 15000 },
+        );
+        await page.keyboard.up('Space');
+        await page.waitForFunction(
+          () => Number(document.getElementById('world').dataset.bikeRightFoot) > 0.99,
+        );
+      }
+      await page.keyboard.press('r');
+      await page.waitForTimeout(1000);
+      await capture(page, 'rr310-stopped-right-foot.png');
       await page.locator('#bike-return-button').click();
       await page.waitForFunction(() => document.getElementById('world').dataset.vehicle === 'auto');
       assert.equal(await page.locator('#bike-hud').isVisible(), false);
@@ -1345,6 +1409,23 @@ try {
       await page.waitForFunction(
         () => Math.abs(Number(document.getElementById('world').dataset.x) + 182) < 1,
       );
+      await page.waitForFunction(
+        () => document.getElementById('concert-audio').dataset.phase === 'playing',
+        undefined,
+        { timeout: 15000 },
+      );
+      const sound = await page.evaluate(() => {
+        const concert = document.querySelector('audio[data-concert="classic-rock"]');
+        const radio = document.querySelector('audio[data-station]');
+        return {
+          concert: { paused: concert.paused, muted: concert.muted, volume: concert.volume },
+          radioVolume: radio.volume,
+        };
+      });
+      assert.equal(sound.concert.paused, false);
+      assert.equal(sound.concert.muted, false);
+      assert.ok(sound.concert.volume > 0.05);
+      assert.equal(sound.radioVolume, 0, 'vehicle radio does not overlap the classic-rock concert');
       await page.waitForTimeout(1200);
       await capture(page, 'brickyard-day.png');
       await page.locator('#settings-button').click();
@@ -1367,6 +1448,12 @@ try {
       await page.locator('#settings-dialog [data-close]').click();
       await page.waitForTimeout(1600);
       await capture(page, 'childrens-park.png');
+      await park(page, 'eagle-eye');
+      await page.waitForFunction(() => {
+        const concert = document.querySelector('audio[data-concert="classic-rock"]');
+        const radio = document.querySelector('audio[data-station]');
+        return concert.paused && radio.volume > 0;
+      });
       assert.equal(await page.locator('#world').getAttribute('data-bike-unlocked'), 'false');
       await clean(errors);
     },

@@ -111,47 +111,160 @@ function performer(role: string, x: number, z: number) {
   const group = new THREE.Group();
   group.name = 'concert:member:' + role;
   group.position.set(x, 0.95, z);
-  ellipsoid(group, [0, 1.02, 0], [0.25, 0.35, 0.17], black);
+  const looks: Record<
+    string,
+    {
+      shirt: string;
+      trousers: string;
+      complexion: string;
+      hair: string;
+      height: number;
+      width: number;
+    }
+  > = {
+    lead: {
+      shirt: '#11151c',
+      trousers: '#11151c',
+      complexion: '#b58465',
+      hair: '#171a20',
+      height: 1,
+      width: 1,
+    },
+    guitar: {
+      shirt: '#315b75',
+      trousers: '#303747',
+      complexion: '#d1a17c',
+      hair: '#4b3027',
+      height: 1.08,
+      width: 0.92,
+    },
+    bass: {
+      shirt: '#763b40',
+      trousers: '#181c28',
+      complexion: '#8d5c42',
+      hair: '#191519',
+      height: 1.03,
+      width: 1.2,
+    },
+    keys: {
+      shirt: '#dfc795',
+      trousers: '#334954',
+      complexion: '#bc8062',
+      hair: '#81766d',
+      height: 0.95,
+      width: 0.95,
+    },
+    drums: {
+      shirt: '#d4d8d6',
+      trousers: '#273847',
+      complexion: '#ac7550',
+      hair: '#392e26',
+      height: 0.92,
+      width: 1.08,
+    },
+  };
+  const look = looks[role],
+    shirt = material(look.shirt),
+    trousers = material(look.trousers);
+  const complexion = material(look.complexion),
+    hair = material(look.hair);
+  group.scale.set(look.width, look.height, 1);
+  group.userData.look = { ...look, role };
+  const seated = role === 'drums';
+  ellipsoid(group, [0, seated ? 0.8 : 1.02, 0], [0.25, 0.35, 0.17], shirt);
+  if (role === 'guitar') {
+    for (const side of [-1, 1])
+      box(group, [0.09, 0.31, 0.035], [side * 0.13, 1.05, -0.17], material('#627d90'));
+    box(group, [0.015, 0.49, 0.02], [0, 1.05, -0.18], cream);
+  }
+  if (role === 'keys') {
+    box(group, [0.025, 0.5, 0.02], [0, 1.06, -0.175], black);
+    for (const side of [-1, 1]) box(group, [0.09, 0.08, 0.015], [side * 0.14, 1.15, -0.175], wood);
+  }
   const head = new THREE.Group();
-  head.position.set(0, 1.54, 0);
+  head.position.set(0, seated ? 1.31 : 1.54, 0);
   group.add(head);
-  ellipsoid(head, [0, 0, 0], [0.18, 0.22, 0.17], skin);
-  ellipsoid(head, [0, 0.12, 0.025], [0.185, 0.12, 0.17], black);
-  for (const s of [-1, 1]) {
-    rod(group, [s * 0.12, 0.83, 0], [s * 0.14, 0.12, -0.03], 0.085, black);
-    box(group, [0.19, 0.12, 0.33], [s * 0.14, 0.08, -0.08], role === 'lead' ? cream : black);
+  ellipsoid(head, [0, 0, 0], [0.18, 0.22, 0.17], complexion);
+  ellipsoid(head, [0, 0.12, 0.025], [0.185, 0.12, 0.17], hair);
+  if (role === 'guitar') {
+    // Long brown hair and a tall, slim denim silhouette.
+    ellipsoid(head, [0, -0.015, 0.1], [0.19, 0.24, 0.1], hair);
+    for (const side of [-1, 1])
+      ellipsoid(head, [side * 0.16, -0.1, 0.045], [0.058, 0.21, 0.075], hair);
+  } else if (role === 'bass') {
+    ellipsoid(head, [0, -0.12, -0.1], [0.15, 0.105, 0.095], hair);
+    for (const side of [-1, 1])
+      box(head, [0.125, 0.045, 0.025], [side * 0.08, 0.035, -0.158], black);
+    rod(head, [-0.025, 0.035, -0.175], [0.025, 0.035, -0.175], 0.006, steel);
+  } else if (role === 'keys') {
+    for (const side of [-1, 1]) {
+      const lens = new THREE.Mesh(new THREE.TorusGeometry(0.052, 0.006, 6, 16), steel);
+      lens.position.set(side * 0.075, 0.025, -0.16);
+      head.add(lens);
+    }
+    rod(head, [-0.025, 0.025, -0.171], [0.025, 0.025, -0.171], 0.006, steel);
+  } else if (role === 'drums') {
+    cylinder(head, 0.187, 0.187, 0.055, [0, 0.115, 0], red, 24);
+    ellipsoid(head, [0.12, 0.015, 0.1], [0.11, 0.11, 0.1], hair);
+  }
+  for (const side of [-1, 1]) {
+    if (seated) {
+      rod(group, [side * 0.13, 0.65, 0], [side * 0.25, 0.38, -0.25], 0.085, trousers);
+      rod(group, [side * 0.25, 0.38, -0.25], [side * 0.25, 0.12, -0.3], 0.075, trousers);
+    } else {
+      const spread = role === 'bass' ? 0.23 : role === 'guitar' ? 0.19 : 0.14;
+      rod(group, [side * 0.12, 0.83, 0], [side * spread, 0.12, -0.03], 0.085, trousers);
+    }
+    box(
+      group,
+      [0.19, 0.12, 0.33],
+      [
+        side * (seated ? 0.25 : role === 'bass' ? 0.23 : role === 'guitar' ? 0.19 : 0.14),
+        0.08,
+        seated ? -0.3 : -0.08,
+      ],
+      role === 'lead' ? material('#f5f5ef') : role === 'guitar' ? wood : black,
+    );
   }
   if (role === 'lead') {
-    cylinder(head, 0.4, 0.4, 0.035, [0, 0.2, 0], green, 32);
-    const crown = cylinder(head, 0.21, 0.26, 0.28, [0, 0.34, 0], green, 24);
-    crown.rotation.z = -0.08;
-    cylinder(head, 0.262, 0.262, 0.065, [0, 0.225, 0], black, 24);
+    // A real hat proportion: modest brim, shaped crown, dark band and centre dent.
+    cylinder(head, 0.285, 0.285, 0.022, [0, 0.195, 0], green, 32).scale.z = 0.9;
+    const crown = cylinder(head, 0.17, 0.205, 0.2, [0, 0.285, 0], green, 24);
+    crown.rotation.z = -0.055;
+    crown.scale.z = 0.87;
+    cylinder(head, 0.208, 0.208, 0.035, [0, 0.21, 0], black, 24).scale.z = 0.87;
+    ellipsoid(head, [0, 0.382, 0], [0.11, 0.008, 0.024], material('#20703e'));
   }
   const right = new THREE.Group(),
     left = new THREE.Group();
-  right.position.set(-0.24, 1.2, 0);
-  left.position.set(0.24, 1.2, 0);
+  const shoulderY = seated ? 0.97 : 1.2;
+  right.position.set(-0.24, shoulderY, 0);
+  left.position.set(0.24, shoulderY, 0);
   group.add(right, left);
   for (const arm of [right, left]) {
-    rod(arm, [0, 0, 0], [0, -0.22, -0.12], 0.065, black);
-    rod(arm, [0, -0.22, -0.12], [0.09, -0.42, -0.24], 0.057, black);
-    ellipsoid(arm, [0.09, -0.43, -0.24], [0.065, 0.07, 0.05], skin);
+    const bare = role === 'bass' || role === 'drums';
+    rod(arm, [0, 0, 0], [0, -0.22, -0.12], 0.065, bare ? complexion : shirt);
+    rod(arm, [0, -0.22, -0.12], [0.09, -0.42, -0.24], 0.057, bare ? complexion : shirt);
+    ellipsoid(arm, [0.09, -0.43, -0.24], [0.065, 0.07, 0.05], complexion);
+    if (seated) rod(arm, [0.09, -0.43, -0.24], [0.09, -0.48, -0.67], 0.007, cream);
     bakeStatic(arm);
   }
   let instrument: THREE.Group | undefined;
   if (['lead', 'guitar', 'bass'].includes(role)) {
     instrument = guitar(role === 'lead', role === 'bass');
-    instrument.rotation.set(0, Math.PI, -0.6);
+    instrument.rotation.set(0, Math.PI, role === 'bass' ? -0.42 : -0.6);
     instrument.position.set(0, 0.88, -0.28);
     instrument.scale.setScalar(0.7);
     group.add(instrument);
     rod(group, [-0.2, 1.22, -0.15], [0.17, 0.6, -0.27], 0.022, black);
     left.rotation.z = -0.7;
     right.rotation.x = -0.18;
+  } else if (role === 'keys') {
+    right.rotation.x = left.rotation.x = -0.8;
   }
   bakeStatic(head);
   bakeStatic(group, [right, left, head, ...(instrument ? [instrument] : [])]);
-  return { group, head, right, left, role };
+  return { group, head, right, left, role, look };
 }
 
 export function createRecreation(scene: THREE.Scene, world: RAPIER.World) {
@@ -257,13 +370,13 @@ export function createRecreation(scene: THREE.Scene, world: RAPIER.World) {
     [0, 4.2, 10.7],
     '#141921',
     '#f3dcc0',
-    'LIVE · FIVE PIECES / ONE BIG SOUND',
+    'CLASSIC ROCK · FIVE PIECES / ONE BIG SOUND',
   ).rotation.y = Math.PI;
   const sign = new THREE.Group();
   sign.rotation.y = Math.PI;
   textBoard(
     sign,
-    'BRICKYARD · LIVE ROCK',
+    'BRICKYARD · CLASSIC ROCK',
     8,
     0.8,
     [0, 2.2, 0],
@@ -516,9 +629,17 @@ export function createRecreation(scene: THREE.Scene, world: RAPIER.World) {
       if (!near) return;
       band.forEach((p, i) => {
         p.head.rotation.y = Math.sin(time * 0.7 + i) * 0.15;
-        p.group.rotation.z = Math.sin(time * 1.9 + i) * 0.025;
-        p.right.rotation.x = -0.15 + Math.sin(time * (p.role === 'drums' ? 10 : 7) + i) * 0.16;
-        p.left.rotation.x = Math.sin(time * (p.role === 'drums' ? 10 : 2) + i + 1.6) * 0.16;
+        if (p.role === 'drums') {
+          p.right.rotation.x = -0.2 + Math.sin(time * 10) * 0.32;
+          p.left.rotation.x = -0.2 + Math.sin(time * 10 + Math.PI) * 0.32;
+        } else if (p.role === 'keys') {
+          p.right.rotation.x = -0.8 + Math.sin(time * 5) * 0.06;
+          p.left.rotation.x = -0.8 + Math.sin(time * 5 + 1.2) * 0.06;
+        } else {
+          p.group.rotation.z = Math.sin(time * (p.role === 'bass' ? 1.1 : 1.9) + i) * 0.025;
+          p.right.rotation.x = -0.15 + Math.sin(time * (p.role === 'bass' ? 4 : 7) + i) * 0.16;
+          p.left.rotation.x = Math.sin(time * 2 + i + 1.6) * 0.1;
+        }
       });
       audience.forEach((p, i) => {
         p.group.visible = !performance || i < 12;

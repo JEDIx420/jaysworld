@@ -17,7 +17,7 @@ jobs:
   check:
     name: Build, physics and browser checks ${{ matrix.shard }}/3
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 22
     strategy:
       fail-fast: false
       matrix:

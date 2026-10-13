@@ -29,7 +29,9 @@ export class BikeVehicle {
         .setCanSleep(false)
         .setLinearDamping(0.005)
         .setAngularDamping(1.6)
-        .enabledRotations(true, true, false),
+        // Rapier rotation locks are WORLD axes. Lock both horizontal axes: locking Z
+        // alone leaves local roll free when the bike points east or west.
+        .enabledRotations(false, true, false),
     );
     world.createCollider(
       RAPIER.ColliderDesc.cuboid(0.24, 0.28, 0.69)
@@ -58,7 +60,7 @@ export class BikeVehicle {
       this.controller.setWheelSuspensionStiffness(i, 85);
       this.controller.setWheelSuspensionCompression(i, 5);
       this.controller.setWheelSuspensionRelaxation(i, 5.8);
-      this.controller.setWheelMaxSuspensionTravel(i, 0.18);
+      this.controller.setWheelMaxSuspensionTravel(i, 0.25);
       this.controller.setWheelMaxSuspensionForce(i, 7500);
       this.controller.setWheelFrictionSlip(i, 2.8);
       this.controller.setWheelSideFrictionStiffness(i, 2.4);
@@ -87,7 +89,7 @@ export class BikeVehicle {
     this.throttle +=
       ((input.throttle > 0 && !braking ? 1 : 0) - this.throttle) *
       (1 - Math.exp(-dt * (input.boost ? 18 : 10)));
-    const steerRange = Math.min(0.5, Math.atan((1.365 * 6) / Math.max(2, this.speed * this.speed)));
+    const steerRange = 0.57 / (1 + this.speed * this.speed * 0.0028);
     this.steering += (-input.steer * steerRange - this.steering) * (1 - Math.exp(-dt * 10));
     this.controller.setWheelSteering(0, this.steering);
     const drag =
@@ -100,7 +102,8 @@ export class BikeVehicle {
     const engineBrake = input.throttle === 0 && speed > 1 ? 1.2 : 0;
     for (let i = 0; i < 2; i++) {
       this.controller.setWheelFrictionSlip(i, 2.8 * this.grip);
-      this.controller.setWheelBrake(i, braking ? (i ? 26 : 40) : engineBrake);
+      const holding = input.throttle === 0 && this.speed < 0.35;
+      this.controller.setWheelBrake(i, braking || holding ? (i ? 26 : 40) : engineBrake);
       this.controller.setWheelEngineForce(
         i,
         i === 0
@@ -113,7 +116,23 @@ export class BikeVehicle {
       );
     }
     this.controller.updateVehicle(dt, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC);
-    // Assisted balancing and a moderate contact load make keyboard/touch cornering predictable.
+    // Steering assistance supplies the yaw moment a balanced motorcycle produces
+    // through countersteer. Tyres still provide traction, braking and suspension.
+    const grounded = this.controller.wheelIsInContact(0) || this.controller.wheelIsInContact(1);
+    const yawLimit = Math.min(1.6, (9 * this.grip) / Math.max(3, this.speed));
+    const desiredYaw = grounded
+      ? Math.max(-yawLimit, Math.min(yawLimit, (speed * Math.tan(this.steering)) / RR310.wheelbase))
+      : 0;
+    const yaw = this.body.angvel().y;
+    this.body.setAngvel(
+      { x: 0, y: yaw + (desiredYaw - yaw) * (1 - Math.exp(-dt * 12)), z: 0 },
+      true,
+    );
+    if (grounded && input.throttle === 0 && this.speed < 0.08) {
+      const velocity = this.body.linvel();
+      this.body.setLinvel({ x: 0, y: velocity.y, z: 0 }, true);
+    }
+    // A moderate contact load keeps keyboard/touch cornering predictable.
     if (this.speed > 8 && this.controller.wheelIsInContact(1))
       this.body.applyImpulse(
         { x: 0, y: -this.body.mass() * Math.min(5, this.speed * 0.09) * dt, z: 0 },
@@ -126,9 +145,7 @@ export class BikeVehicle {
         { x: (v.x * cap) / this.speed, y: v.y, z: (v.z * cap) / this.speed },
         true,
       );
-    const desiredLean = -Math.atan(
-      (this.speed * this.speed * Math.tan(this.steering)) / RR310.wheelbase / 9.81,
-    );
+    const desiredLean = Math.atan((this.speed * desiredYaw) / 9.81);
     this.lean +=
       (Math.max(-0.68, Math.min(0.68, desiredLean)) - this.lean) * (1 - Math.exp(-dt * 7));
   }

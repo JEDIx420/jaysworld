@@ -343,3 +343,47 @@ body.bike-mode.visiting #bike-hud {
     font-size: 7px;
   }
 }
+
+.concert-audio {
+  left: 24px;
+  bottom: 102px;
+  padding: 9px 12px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid #86a59566;
+  border-radius: 12px;
+  background: #102b27ed;
+  color: #f3e9d4;
+}
+.concert-audio[hidden] {
+  display: none;
+}
+.concert-audio button {
+  background: transparent;
+  color: inherit;
+  border: 0;
+  padding: 6px;
+}
+.concert-audio a {
+  font-size: 11px;
+  color: #bbd3c8;
+  text-decoration: none;
+}
+@media (max-width: 640px) and (orientation: portrait) {
+  .concert-audio {
+    left: 12px;
+    bottom: 246px;
+    gap: 5px;
+    padding: 6px;
+  }
+  .concert-audio a {
+    max-width: 100px;
+  }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .concert-audio {
+    left: 12px;
+    bottom: 20px;
+  }
+}

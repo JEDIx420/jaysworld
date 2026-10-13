@@ -4,13 +4,16 @@ A Kerala-inspired portfolio you drive through in a black-and-yellow auto. Start 
 
 **Live:** https://jedix420.github.io/jaysworld/
 
-**v0.9** extends the existing Three.js and Rapier game. Everything builds into static files for GitHub Pages; no account, secret or backend is required.
+**v0.9.1** extends the existing Three.js and Rapier game. Everything builds into static files for GitHub Pages; no account, secret or backend is required.
 
 ## This release
 
+- v0.9.1 corrects the world-axis balance lock that let the bike tip after turning. Both horizontal physics axes are now stabilized; steering has a speed-limited yaw assist, and the visual rider leans into corners around the tyre contact line. A separate right leg plants its sole at a stop without idle animation. Added regression checks cover eight headings, side impacts, both steering directions and the real hill mesh.
+- Rebuilt the reference bike’s sculpted fairing, swept screen, high tail and broad aluminium exhaust. The tail light now uses two hooked red branches traced from the supplied rear photo. The black rider has broader leather-clad shoulders and armour. Band members have different builds, faces, clothes and hairstyles, plus role-specific playing movements and a smaller green fedora. Actual classic-rock radio at the stage uses 181.FM The Eagle, fades with distance and mutes the vehicle radio while playing.
+
 - Laurie Baker inspired exposed-brick amphitheatre opposite the market, with curved seating, jali screens and a five-piece modern rock production. The black-clad lead has white shoes, a green fedora and a black/white Telecaster. A shaded children's play garden sits beyond it.
 - Complete all eight accomplishments and seven project visits, collect keys at the final observatory stop, then return to the detailed Sinister Black RR 310 parked outside Eagle Towers. The bike has a black rider, separate two-wheel suspension and six-speed drivetrain, cornering lean and boost wheelies. Taxi controls disappear in favour of an RR 310 Track inspired TFT. Keys persist on the device.
-- See [the v0.9 plan and validation notes](docs/BRICKYARD_RR310_RELEASE.md) for reference specifications, simulated performance, model detail and release checks.
+- See [the release plan and validation notes](docs/BRICKYARD_RR310_RELEASE.md) for reference specifications, simulated performance, model detail and release checks.
 
 ## Retained v0.8 improvements
 
@@ -84,8 +87,8 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-The browser suite serves the production build and runs nineteen desktop/touch/media/fallback journeys. `JAYSWORLD_QA_SHARD=1/3` selects a worker; `JAYSWORLD_CHROMIUM_PATH` selects an installed browser; `JAYSWORLD_BASE_URL` checks a deployed site. Deterministic PCM fixtures verify browser playback independently of station uptime. `JAYSWORLD_LIVE_RADIO=1` uses the real Ente broadcast.
+The browser suite serves the production build and runs twenty-two desktop/touch/media/fallback journeys. `JAYSWORLD_QA_SHARD=1/3` selects a worker; `JAYSWORLD_CHROMIUM_PATH` selects an installed browser; `JAYSWORLD_BASE_URL` checks a deployed site. Deterministic PCM fixtures verify browser playback independently of station uptime. `JAYSWORLD_LIVE_RADIO=1` uses the real Ente broadcast.
 
-Main pushes run formatting, unit/physics tests, one build and four focused production-browser journeys. Pages deployment waits for those checks to succeed. The manual workflow’s full_browser_validation option runs all nineteen journeys. Relative Vite asset paths support the `/jaysworld/` project path. The immediate rollback commit is v0.7 at `a4c1003d6ea761b7b021b3299ddaf8807f8ff18a`.
+Main pushes run formatting, unit/physics tests, one build and eight focused production-browser journeys across three workers. Pages deployment waits for those checks to succeed. The manual workflow’s full_browser_validation option runs all twenty-two journeys. Relative Vite asset paths support the `/jaysworld/` project path. The immediate rollback commit is v0.7 at `a4c1003d6ea761b7b021b3299ddaf8807f8ff18a`.
 
 See [the release plan](docs/GUIDED_ROADS_PLAN.md), [validation](docs/VALIDATION.md) and [radio sources](docs/RADIO_SOURCES.md). Physical iPhone/Safari testing and measured hardware FPS remain unverified; touch emulation is recorded separately.

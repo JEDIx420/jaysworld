@@ -468,11 +468,29 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
       paused ? 1 : accumulator / FIXED_STEP,
     );
     const powertrain = vehicle.powertrain;
-    const lift = reducedMotion ? 0 : powertrain.wheelie;
+    const lift = reducedMotion || paused ? 0 : powertrain.wheelie;
+    for (let i = 0; i < (drivingBike ? 2 : 3); i++) {
+      const p = drivingBike ? BIKE_WHEELS[i] : WHEEL_POINTS[i],
+        length = vehicle.controller.wheelSuspensionLength(i) ?? 0.3;
+      rig.wheels[i].position.set(p.x, p.y - length, p.z);
+      rig.wheels[i].rotation.y = i === 0 ? (vehicle.controller.wheelSteering(0) ?? 0) : 0;
+      rig.spinners[i].rotation.x = vehicle.controller.wheelRotation(i) ?? 0;
+    }
+    if (drivingBike) {
+      // Lean about the tyre contact line, so cornering never sinks the mesh into the road.
+      const contactY = (bike.wheels[0].position.y - 0.293 + bike.wheels[1].position.y - 0.306) / 2;
+      const pivot = new THREE.Vector3(0, contactY, 0);
+      const worldPivot = pivot
+        .clone()
+        .applyQuaternion(rig.group.quaternion)
+        .add(rig.group.position);
+      rig.group.rotateZ(paused ? 0 : bikeVehicle.lean);
+      rig.group.position.copy(worldPivot).sub(pivot.applyQuaternion(rig.group.quaternion));
+    }
     // Rotate the visual chassis around the rear axle; the stable physics body stays on the road.
     if (lift > 0) {
       rearPivot
-        .set(0, drivingBike ? -0.4 : -0.5, drivingBike ? 0.6825 : 0.85)
+        .set(0, drivingBike ? bike.wheels[1].position.y : -0.5, drivingBike ? 0.6825 : 0.85)
         .applyQuaternion(rig.group.quaternion)
         .add(rig.group.position);
       wheelieRotation.setFromAxisAngle(new THREE.Vector3(1, 0, 0), lift);
@@ -482,14 +500,28 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
         .sub(
           new THREE.Vector3(
             0,
-            drivingBike ? -0.4 : -0.5,
+            drivingBike ? bike.wheels[1].position.y : -0.5,
             drivingBike ? 0.6825 : 0.85,
           ).applyQuaternion(rig.group.quaternion),
         );
     }
     if (drivingBike) {
-      rig.group.rotateZ(bikeVehicle.lean);
-      bike.update(vehicle.speed, bikeVehicle.lean, braking, elapsed, nightAmount);
+      const grounded =
+        bikeVehicle.controller.wheelIsInContact(0) || bikeVehicle.controller.wheelIsInContact(1);
+      bike.group.updateMatrixWorld(true);
+      const bootWorld = bike.group.localToWorld(new THREE.Vector3(0.38, 0, 0.355));
+      const groundLocal = bike.group.worldToLocal(
+        new THREE.Vector3(bootWorld.x, groundHeight(bootWorld.x, bootWorld.z) + 0.02, bootWorld.z),
+      );
+      bike.update(
+        vehicle.speed,
+        paused ? 0 : bikeVehicle.lean,
+        braking,
+        elapsed,
+        nightAmount,
+        groundLocal.y,
+        grounded,
+      );
     }
     bikeHalo.visible = bikeUnlocked && !drivingBike;
     boostStreaks.visible = powertrain.boosted && !paused && !reducedMotion;
@@ -511,13 +543,6 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     }
     autoShadow.position.set(current.x, groundHeight(current.x, current.z) + 0.085, current.z);
     autoShadow.rotation.z = -new THREE.Euler().setFromQuaternion(currentQ, 'YXZ').y;
-    for (let i = 0; i < (drivingBike ? 2 : 3); i++) {
-      const p = drivingBike ? BIKE_WHEELS[i] : WHEEL_POINTS[i],
-        length = vehicle.controller.wheelSuspensionLength(i) ?? 0.3;
-      rig.wheels[i].position.set(p.x, p.y - length, p.z);
-      rig.wheels[i].rotation.y = i === 0 ? (vehicle.controller.wheelSteering(0) ?? 0) : 0;
-      rig.spinners[i].rotation.x = vehicle.controller.wheelRotation(i) ?? 0;
-    }
     for (const item of environment.dynamics) {
       item.mesh.position.copy(item.body.translation());
       item.mesh.quaternion.copy(item.body.rotation());
@@ -750,6 +775,8 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     canvas.dataset.vehicle = drivingBike ? 'bike' : 'auto';
     canvas.dataset.bikeUnlocked = String(bikeUnlocked);
     canvas.dataset.bikeLean = bikeVehicle.lean.toFixed(3);
+    canvas.dataset.bikeRightFoot = bike.rightFootDown.toFixed(3);
+    canvas.dataset.bikeHeading = new THREE.Euler().setFromQuaternion(currentQ, 'YXZ').y.toFixed(4);
     canvas.dataset.bandMembers = String(environment.recreation.band.length);
     canvas.dataset.recreation = JSON.stringify({
       amphitheatre: AMPHITHEATRE,
