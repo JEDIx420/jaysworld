@@ -154,7 +154,7 @@ function nextToast() {
     canvas.focus({ preventScroll: true });
   });
   node.append(close);
-  toastTimer = window.setTimeout(nextToast, message.duration);
+  if (!message.choices) toastTimer = window.setTimeout(nextToast, message.duration);
   announce((message.title ? message.title + '. ' : '') + message.text);
 }
 function toast(text: string, title?: string, choices?: ToastMessage['choices'], duration = 4500) {
@@ -1210,6 +1210,7 @@ void import('./engine')
       onDrive: () => {
         $('welcome').classList.add('quiet');
         $('driving-hint').classList.add('quiet');
+        if ($('toast').querySelector('.toast-choices')) nextToast();
       },
       onTelemetry: (v, x, z, angle, gear, rpm, boost) => {
         speed = v;
