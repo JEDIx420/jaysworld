@@ -458,6 +458,14 @@ export function createRecreation(scene: THREE.Scene, world: RAPIER.World) {
     beam: THREE.Mesh;
     material: THREE.MeshBasicMaterial;
   }[] = [];
+  // Front washes illuminate faces and instruments independently of audience sweeps.
+  const washes = [-1, 1].map((side) => {
+    const wash = new THREE.SpotLight(side < 0 ? '#ffe1b5' : '#b5dcff', 28, 18, 0.7, 0.9, 1.4);
+    wash.position.set(side * 4.3, 4.9, 2.8);
+    wash.target.position.set(side * -1.5, 1.8, 7.3);
+    root.add(wash, wash.target);
+    return wash;
+  });
   const colors = ['#64cbff', '#c27aff', '#ffae54', '#5df0c2'];
   for (let i = 0; i < 4; i++) {
     const pivot = new THREE.Group();
@@ -660,6 +668,9 @@ export function createRecreation(scene: THREE.Scene, world: RAPIER.World) {
         l.light.intensity = performance && i > 1 ? 0 : 24 + night * 90;
         l.beam.visible = !performance || i < 2;
         l.material.opacity = 0.035 + night * 0.06;
+      });
+      washes.forEach((wash) => {
+        wash.intensity = 22 + night * 44;
       });
       ledMat.emissiveIntensity = 1.5 + Math.sin(time * 2) * 0.3 + night;
     },

@@ -367,11 +367,17 @@ export function makeSportsbike() {
       [side * 0.025, 0.282, 0.997],
     ];
     tube(tailLamp, outline, 0.021, tailHousing, 12);
-    tube(tailLamp, outline, 0.009, tail, 12);
+    tube(
+      tailLamp,
+      outline.map(([x, y, z]) => [x, y, z + 0.023]),
+      0.009,
+      tail,
+      12,
+    );
     for (let i = 0; i < 7; i++)
       oval(
         tailLamp,
-        [side * (0.032 + i * 0.009), 0.38 - i * 0.009, 1.018],
+        [side * (0.032 + i * 0.009), 0.38 - i * 0.009, 1.043],
         [0.005, 0.004, 0.003],
         tail,
       );
