@@ -4,11 +4,12 @@ A Kerala-inspired portfolio you drive through in a black-and-yellow auto. Start 
 
 **Live:** https://jedix420.github.io/jaysworld/
 
-**v0.9.1** extends the existing Three.js and Rapier game. Everything builds into static files for GitHub Pages; no account, secret or backend is required.
+**v0.9.2** extends the existing Three.js and Rapier game. Everything builds into static files for GitHub Pages; no account, secret or backend is required.
 
 ## This release
 
 - v0.9.1 corrects the world-axis balance lock that let the bike tip after turning. Both horizontal physics axes are now stabilized; steering has a speed-limited yaw assist, and the visual rider leans into corners around the tyre contact line. A separate right leg plants its sole at a stop without idle animation. Added regression checks cover eight headings, side impacts, both steering directions and the real hill mesh.
+- v0.9.2 follows the road's pitch and bank so the driven rear tyre keeps traction on the complete observatory climb. Hill starts, stops, relaunch, walking reverse, landing and side impacts have dedicated regressions. Pedestrian protection uses the bike's narrow, full-length footprint and predicts its turn through bends. The rear lamp has fitted, bevelled red lenses, diffused LED bands and stronger brake illumination.
 - Rebuilt the reference bike’s sculpted fairing, swept screen, high tail and broad aluminium exhaust. The tail light now uses two hooked red branches traced from the supplied rear photo. The black rider has broader leather-clad shoulders and armour. Band members have different builds, faces, clothes and hairstyles, plus role-specific playing movements and a smaller green fedora. Actual classic-rock radio at the stage uses 181.FM The Eagle, fades with distance and mutes the vehicle radio while playing.
 
 - Laurie Baker inspired exposed-brick amphitheatre opposite the market, with curved seating, jali screens and a five-piece modern rock production. The black-clad lead has white shoes, a green fedora and a black/white Telecaster. A shaded children's play garden sits beyond it.
@@ -87,8 +88,8 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-The browser suite serves the production build and runs twenty-two desktop/touch/media/fallback journeys. `JAYSWORLD_QA_SHARD=1/3` selects a worker; `JAYSWORLD_CHROMIUM_PATH` selects an installed browser; `JAYSWORLD_BASE_URL` checks a deployed site. Deterministic PCM fixtures verify browser playback independently of station uptime. `JAYSWORLD_LIVE_RADIO=1` uses the real Ente broadcast.
+The browser suite serves the production build and runs twenty-three desktop/touch/media/fallback journeys. `JAYSWORLD_QA_SHARD=1/3` selects a worker; `JAYSWORLD_CHROMIUM_PATH` selects an installed browser; `JAYSWORLD_BASE_URL` checks a deployed site. Deterministic PCM fixtures verify browser playback independently of station uptime. `JAYSWORLD_LIVE_RADIO=1` uses the real Ente broadcast.
 
-Main pushes run formatting, unit/physics tests, one build and Pages deployment in a single job. Browser testing and visual review happen locally before the final push. The manual workflow’s full_browser_validation option runs all twenty-two journeys. Relative Vite asset paths support the `/jaysworld/` project path. The immediate rollback commit is v0.7 at `a4c1003d6ea761b7b021b3299ddaf8807f8ff18a`.
+Main pushes run formatting, unit/physics tests, one build and Pages deployment in a single job. Browser testing and visual review happen locally before the final push. The manual workflow’s full_browser_validation option runs all twenty-three journeys. Relative Vite asset paths support the `/jaysworld/` project path. The immediate rollback commit is v0.7 at `a4c1003d6ea761b7b021b3299ddaf8807f8ff18a`.
 
 See [the release plan](docs/GUIDED_ROADS_PLAN.md), [validation](docs/VALIDATION.md) and [radio sources](docs/RADIO_SOURCES.md). Physical iPhone/Safari testing and measured hardware FPS remain unverified; touch emulation is recorded separately.

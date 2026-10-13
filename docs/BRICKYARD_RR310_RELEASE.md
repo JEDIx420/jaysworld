@@ -1,4 +1,12 @@
-# v0.9.1 — The Brickyard and the keys to the village
+# v0.9.2 — The Brickyard and the keys to the village
+
+## Hill traction and rear lamps
+
+The v0.9.2 follow-up fixes a reproduced hill failure: the earlier balance lock held the chassis horizontal, compressing the front spring while lifting the driven rear tyre out of contact. Four short static-ground ray samples now set a smoothed road pitch and bank before tyre forces update, while the horizontal rotation locks still prevent impact-induced falling. Ground sampling rejects walls and non-road normals. The rear tyre stays loaded through the entire winding observatory ascent and descent. Low-speed reverse includes grade compensation so a rider can back uphill out of a tight spot.
+
+Pedestrian protection now covers the bike's narrow body and both wheel/nose ends, rather than using the auto's larger circular footprint. Its braking lookahead follows the current turn around a bend, avoiding false stops for verge residents while keeping swept protection for people on the actual path.
+
+The rear light is a fitted, bevelled black housing with two solid red polycarbonate lens shapes, flat diffused LED bands and a dark centre matching the supplied split-hook reference. Each bike owns its lamp materials. Braking increases illumination and casts a short red glow onto the rear assembly.
 
 ## Build plan and result
 

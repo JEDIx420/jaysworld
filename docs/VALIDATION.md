@@ -1,3 +1,15 @@
+# v0.9.2 validation
+
+On 13 October 2026, all 70 unit/physics tests and the TypeScript/Vite production build passed locally. Four new regressions cover the complete winding observatory road uphill/downhill in dry and wet conditions; starts, braking, relaunch and uphill reverse on a 35% gradient across eight headings; traction recovery after airtime/side impact and reversing away from a wall; and bike-specific pedestrian clearance and curved braking prediction.
+
+The local production-browser hill journey drives continuously from Eagle Towers to the observatory terrace, brakes and stays stopped for two simulation seconds with the right boot planted, pulls away, turns around, and rides back. It uses the normal UI controls, terrain, colliders, traffic and residents. It does not move the body or change simulation speed. Frame-to-frame continuity rejects recovery teleports. The passing ride recorded a 23 m hilltop, zero missing rear-tyre contacts across 1,167 sampled frames, zero stopped drift, and a maximum road-centre distance of 2.20 m. Day, night and braking renders of the fitted rear lamp were reviewed.
+
+The workflow remains one verify-and-publish job. Local browser checks complete before the final push; the optional full suite now contains 23 journeys.
+
+The final local release gate passed formatting, all 70 unit/physics tests, the production build and all nine focused browser journeys. Alongside the continuous hill ride and rear-lamp captures, these cover existing desktop driving/roof, all seven rooms/audio, onboarding/saved progress, traffic/officer spacing, portrait/landscape exhibit screens, keys/mount/boost/turn/brake/park/reload and bike touch HUD, and the concert/children's park. The single final push happens after these checks are complete.
+
+---
+
 # v0.9.1 validation
 
 On 13 October 2026, formatting, all 66 unit/physics tests and the TypeScript/Vite production build passed locally. Eight focused production-browser journeys passed in local Chromium: desktop driving/roof, all seven rooms and beat restoration, onboarding and saved accomplishments, moving traffic and officer spacing, phone exhibits, desktop sportsbike progression/handling, portrait/landscape bike touch controls, and the amphitheatre/children's park.

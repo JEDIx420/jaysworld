@@ -16,7 +16,7 @@ import { closureTravel, nearestRoad } from './placement';
 import { createTraffic, type RivalJob } from './traffic';
 import { createWeather } from './weather';
 import { createVenueRooms } from './venue-rooms';
-import { BikeVehicle, BIKE_WHEELS } from './bike-vehicle';
+import { BikeVehicle, BIKE_WHEELS, BIKE_SAFETY_RADIUS } from './bike-vehicle';
 import { makeSportsbike } from './sportsbike';
 import { BIKE_BAY, AMPHITHEATRE, CHILDRENS_PARK } from './recreation-layout';
 
@@ -400,7 +400,23 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
           ? { throttle: 0, steer: 0, brake: true, boost: false }
           : input.read();
         const velocity = vehicle.body.linvel();
-        if (shouldYield(current, { x: velocity.x, z: velocity.z }, current.y, residents)) {
+        const footprint = drivingBike
+          ? {
+              radius: BIKE_SAFETY_RADIUS,
+              halfLength: BIKE_WHEELS[1].z,
+              yaw: bikeVehicle.headingYaw,
+            }
+          : undefined;
+        if (
+          shouldYield(
+            current,
+            { x: velocity.x, z: velocity.z },
+            current.y,
+            residents,
+            footprint,
+            drivingBike ? vehicle.body.angvel().y : 0,
+          )
+        ) {
           command.brake = true;
           command.throttle = 0;
           yielding = true;
@@ -423,7 +439,7 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
         current.copy(vehicle.body.translation());
         currentQ.copy(vehicle.body.rotation());
         const safe = Math.min(
-          safeTravel(previous, current, current.y, residents),
+          safeTravel(previous, current, current.y, residents, footprint),
           closureTravel(previous, current),
         );
         if (safe < 1) {
@@ -778,6 +794,12 @@ export async function createJourney(options: JourneyOptions): Promise<Journey> {
     canvas.dataset.boost = String(powertrain.boosted && !paused);
     canvas.dataset.wheelie = lift.toFixed(3);
     canvas.dataset.vehicle = drivingBike ? 'bike' : 'auto';
+    canvas.dataset.bikeFrontContact = String(
+      drivingBike && bikeVehicle.controller.wheelIsInContact(0),
+    );
+    canvas.dataset.bikeRearContact = String(
+      drivingBike && bikeVehicle.controller.wheelIsInContact(1),
+    );
     canvas.dataset.bikeUnlocked = String(bikeUnlocked);
     canvas.dataset.bikeLean = bikeVehicle.lean.toFixed(3);
     canvas.dataset.bikeRightFoot = bike.rightFootDown.toFixed(3);

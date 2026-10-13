@@ -1,5 +1,5 @@
 import RAPIER from '@dimforge/rapier3d-compat';
-import { Quaternion, Vector3 } from 'three';
+import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import type { DriveInput } from './input';
 import { groundHeight } from './terrain';
 import { FIXED_STEP } from './vehicle';
@@ -10,6 +10,7 @@ export const BIKE_WHEELS = [
   { x: 0, y: -0.02, z: -RR310.wheelbase / 2 },
   { x: 0, y: -0.02, z: RR310.wheelbase / 2 },
 ] as const;
+export const BIKE_SAFETY_RADIUS = 0.45;
 /** Two tyre contacts, rear-wheel drive and assisted balance; lean is applied to the rider/model. */
 export class BikeVehicle {
   readonly body: RAPIER.RigidBody;
@@ -21,6 +22,13 @@ export class BikeVehicle {
   private grip = 1;
   private forward = new Vector3();
   private quaternion = new Quaternion();
+  private heading = new Euler(0, 0, 0, 'YXZ');
+  private surfaceRotation = new Quaternion();
+  private surfaceMatrix = new Matrix4();
+  private groundForward = new Vector3();
+  private groundRight = new Vector3();
+  private groundNormal = new Vector3();
+  private groundRay = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
   lean = 0;
   constructor(readonly world: RAPIER.World) {
     this.body = world.createRigidBody(
@@ -77,10 +85,62 @@ export class BikeVehicle {
     const v = this.body.linvel();
     return Math.hypot(v.x, v.z);
   }
+  get headingYaw() {
+    return this.heading.setFromQuaternion(this.quaternion.copy(this.body.rotation()), 'YXZ').y;
+  }
   wet(amount: number) {
     this.grip = 1 - Math.max(0, Math.min(1, amount)) * 0.17;
   }
+  private followGround(dt: number) {
+    // Balance locks must not hold the chassis horizontal on an incline. A horizontal
+    // chassis loads the front spring and lifts the driven rear tyre out of ray range.
+    // Read static ground beneath the contact patch, then follow its pitch and bank
+    // explicitly; impacts still cannot knock the rider sideways onto the road.
+    const position = this.body.translation();
+    this.quaternion.copy(this.body.rotation());
+    const yaw = this.heading.setFromQuaternion(this.quaternion, 'YXZ').y;
+    const fx = -Math.sin(yaw),
+      fz = -Math.cos(yaw);
+    const rx = Math.cos(yaw),
+      rz = -Math.sin(yaw);
+    const height = (x: number, z: number) => {
+      this.groundRay.origin.x = x;
+      this.groundRay.origin.y = position.y + 0.7;
+      this.groundRay.origin.z = z;
+      const hit = this.world.castRayAndGetNormal(
+        this.groundRay,
+        1.9,
+        true,
+        RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC,
+        undefined,
+        undefined,
+        this.body,
+      );
+      // A ray starting inside a wall reports zero distance. It is not road height.
+      return hit && hit.timeOfImpact > 0.02 && hit.normal.y > 0.6
+        ? this.groundRay.origin.y - hit.timeOfImpact
+        : undefined;
+    };
+    const half = RR310.wheelbase / 2;
+    const front = height(position.x + fx * half, position.z + fz * half);
+    const rear = height(position.x - fx * half, position.z - fz * half);
+    const right = height(position.x + rx * 0.3, position.z + rz * 0.3);
+    const left = height(position.x - rx * 0.3, position.z - rz * 0.3);
+    if (front === undefined || rear === undefined || right === undefined || left === undefined)
+      return;
+    this.groundForward.set(fx * RR310.wheelbase, front - rear, fz * RR310.wheelbase).normalize();
+    this.groundRight.set(rx * 0.6, right - left, rz * 0.6).normalize();
+    this.groundNormal.crossVectors(this.groundRight, this.groundForward).normalize();
+    if (this.groundNormal.y < 0.6) return;
+    this.groundForward.projectOnPlane(this.groundNormal).normalize();
+    this.groundRight.crossVectors(this.groundForward, this.groundNormal).normalize();
+    this.surfaceMatrix.makeBasis(this.groundRight, this.groundNormal, this.groundForward.negate());
+    this.surfaceRotation.setFromRotationMatrix(this.surfaceMatrix);
+    this.quaternion.slerp(this.surfaceRotation, 1 - Math.exp(-dt * 20));
+    this.body.setRotation(this.quaternion, true);
+  }
   beforeStep(input: DriveInput, dt = FIXED_STEP) {
+    this.followGround(dt);
     const speed = this.signedSpeed;
     this.powertrain.update(dt, speed, input);
     // Negative throttle brakes at road speed and walks the bike backwards only when stopped.
@@ -110,7 +170,7 @@ export class BikeVehicle {
           ? 0
           : reverse
             ? speed > -1.6
-              ? -240
+              ? -240 - Math.max(0, -this.forward.y) * this.body.mass() * 9.81
               : 0
             : this.throttle * this.powertrain.driveForce,
       );

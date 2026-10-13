@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
+import { routeBetween } from '../src/village.ts';
 
 const root = resolve(import.meta.dirname, '..'),
   output = resolve(root, 'qa');
@@ -182,6 +183,8 @@ async function run(name, contextOptions, check) {
                 rect: d.getBoundingClientRect().toJSON(),
               })),
               view: document.getElementById('world')?.dataset.view,
+              world: { ...document.getElementById('world')?.dataset },
+              hillRide: window.__hillRide ?? null,
               radio: {
                 phase: document.getElementById('radio-dialog')?.dataset.phase,
                 status: document.getElementById('radio-status')?.textContent,
@@ -1395,6 +1398,321 @@ try {
         { timeout: 15000 },
       );
       await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+      await clean(errors);
+    },
+  );
+  await run(
+    'sportsbike complete hill climb, descent and hill restart with fitted rear lamps',
+    { viewport: { width: 960, height: 640 }, hasTouch: true },
+    async (page, context, errors) => {
+      page.on('console', (message) => {
+        if (message.text().startsWith('HILL ')) console.log(message.text());
+      });
+      await context.addInitScript(() =>
+        localStorage.setItem(
+          'jaysworld-journey-v1',
+          JSON.stringify({
+            version: 1,
+            bikeKeys: true,
+            visits: ['about', 'eagle-eye', 'opsflash', 'rift', 'music', 'saltwater', 'space'],
+            earned: [
+              'first-road',
+              'company',
+              'fare',
+              'beat',
+              'roof',
+              'wetland',
+              'stars',
+              'explorer',
+            ],
+          }),
+        ),
+      );
+      await ready(page);
+      await start(page);
+      await park(page, 'eagle-eye');
+      await page.keyboard.press('Escape');
+      await page.locator('#interaction-button').click();
+      await page.waitForFunction(() => document.getElementById('world').dataset.vehicle === 'bike');
+      await page.locator('#settings-button').click();
+      await page.locator('#camera-close').click();
+      await page.locator('#world').focus();
+      const stick = await page.locator('#joystick').boundingBox();
+      assert.ok(stick && stick.width > 0, 'riding joystick is available');
+      const center = { x: stick.x + stick.width / 2, y: stick.y + stick.height / 2 };
+      await page.mouse.move(center.x, center.y);
+      await page.mouse.down();
+      const route = routeBetween({ x: -49.2, z: 0.3 }, { x: 50, z: -212 }).points;
+      // The driver only moves the held UI joystick. It does not move the physics
+      // body, change the simulation rate, disable residents or skip road sections.
+      await page.evaluate(
+        ({ route, center, radius }) => {
+          const state = (window.__hillRide = {
+            route,
+            progress: 0,
+            stage: 'up',
+            ticks: 0,
+            missingRear: 0,
+            worstLaneError: 0,
+            maxElevation: 0,
+            samples: [],
+            held: true,
+            resume: false,
+            done: false,
+            abort: false,
+            stopTime: 0,
+            stopPosition: null,
+            startTime: Number(document.getElementById('world').dataset.signalTime),
+          });
+          const stick = document.getElementById('joystick');
+          let braking = false;
+          const move = (throttle, steer, brake = false) => {
+            stick.dispatchEvent(
+              new PointerEvent('pointermove', {
+                pointerId: 1,
+                pointerType: 'mouse',
+                bubbles: true,
+                clientX: center.x + steer * radius,
+                clientY: center.y - throttle * radius,
+              }),
+            );
+            if (braking !== brake) {
+              document.getElementById('world').dispatchEvent(
+                new KeyboardEvent(brake ? 'keydown' : 'keyup', {
+                  code: 'Space',
+                  key: ' ',
+                  bubbles: true,
+                  cancelable: true,
+                }),
+              );
+              braking = brake;
+            }
+          };
+          let lastTicks = '',
+            lastSample = -1;
+          const frame = () => {
+            if (state.abort) return;
+            if (state.done) {
+              move(0, 0, true);
+              return;
+            }
+            const d = document.getElementById('world').dataset;
+            if (d.frameTicks !== lastTicks) {
+              lastTicks = d.frameTicks;
+              const x = Number(d.x),
+                z = Number(d.z),
+                speed = Number(d.speed),
+                time = Number(d.signalTime);
+              state.ticks++;
+              if (state.previousPosition) {
+                const jump = Math.hypot(x - state.previousPosition.x, z - state.previousPosition.z);
+                state.maxFrameJump = Math.max(state.maxFrameJump || 0, jump);
+                if (jump > 5) state.recovered = true;
+              }
+              state.previousPosition = { x, z };
+              if (d.bikeRearContact !== 'true') state.missingRear++;
+              state.maxElevation = Math.max(state.maxElevation, Number(d.elevation));
+              if (Math.floor(time) !== lastSample) {
+                lastSample = Math.floor(time);
+                state.samples.push({
+                  time,
+                  x,
+                  z,
+                  speed,
+                  elevation: Number(d.elevation),
+                  rear: d.bikeRearContact,
+                  safety: d.safety,
+                  stage: state.stage,
+                });
+                if (lastSample % 10 === 0)
+                  console.log(
+                    'HILL ' +
+                      JSON.stringify({
+                        stage: state.stage,
+                        progress: state.progress,
+                        x,
+                        z,
+                        speed,
+                        elevation: Number(d.elevation),
+                        rear: d.bikeRearContact,
+                        safety: d.safety,
+                      }),
+                  );
+              }
+              let closest = state.progress;
+              for (
+                let i = state.progress;
+                i <= Math.min(state.progress + 24, state.route.length - 1);
+                i++
+              )
+                if (
+                  Math.hypot(x - state.route[i].x, z - state.route[i].z) <
+                  Math.hypot(x - state.route[closest].x, z - state.route[closest].z)
+                )
+                  closest = i;
+              state.progress = closest;
+              const laneError = Math.hypot(x - state.route[closest].x, z - state.route[closest].z);
+              if (
+                ['up', 'down'].includes(state.stage) &&
+                closest > 10 &&
+                closest < state.route.length - 4
+              )
+                state.worstLaneError = Math.max(state.worstLaneError, laneError);
+              if (state.stage === 'hold') {
+                move(0, 0, true);
+                if (speed < 0.08) {
+                  if (!state.stopPosition) {
+                    state.stopPosition = { x, z };
+                    state.stopTime = time;
+                  }
+                  state.stopDrift = Math.hypot(x - state.stopPosition.x, z - state.stopPosition.z);
+                  if (time - state.stopTime > 2) state.still = true;
+                }
+                if (state.resume) {
+                  state.stage = 'turn';
+                  state.route = [...state.route].reverse();
+                  state.progress = 0;
+                  state.turnTime = time;
+                }
+              } else if (state.stage === 'turn') {
+                const behind = state.route[Math.min(4, state.route.length - 1)];
+                const heading = Math.atan2(-(behind.x - x), -(behind.z - z));
+                const raw = heading - Number(d.yaw);
+                const error = Math.atan2(Math.sin(raw), Math.cos(raw));
+                if (Math.abs(error) < 0.18 && time - state.turnTime > 0.5) {
+                  state.stage = 'down';
+                } else {
+                  move(speed < 1.5 ? 1 : 0, -Math.sign(error));
+                }
+              } else {
+                const goal = state.route.at(-1);
+                if (closest >= state.route.length - 2 && Math.hypot(x - goal.x, z - goal.z) < 3.5) {
+                  if (state.stage === 'up') {
+                    state.stage = 'hold';
+                    move(0, 0, true);
+                  } else {
+                    state.done = true;
+                    move(0, 0, true);
+                  }
+                } else {
+                  const lookAhead = 4 + speed * 0.3;
+                  let target = Math.min(closest + 1, state.route.length - 1);
+                  while (
+                    target < state.route.length - 1 &&
+                    Math.hypot(state.route[target].x - x, state.route[target].z - z) < lookAhead
+                  )
+                    target++;
+                  const dx = state.route[target].x - x,
+                    dz = state.route[target].z - z;
+                  const rawError = Math.atan2(-dx, -dz) - Number(d.yaw);
+                  const error = Math.atan2(Math.sin(rawError), Math.cos(rawError));
+                  const range = 0.57 / (1 + speed * speed * 0.0028);
+                  const steer = Math.max(
+                    -1,
+                    Math.min(
+                      1,
+                      -Math.atan2(2 * 1.365 * Math.sin(error), Math.hypot(dx, dz)) / range,
+                    ),
+                  );
+                  const targetSpeed = closest < 10 ? 3 : Math.abs(error) > 1 ? 3 : 6.5;
+                  move(speed < targetSpeed ? 1 : 0, steer, speed > targetSpeed + 0.5);
+                }
+              }
+            }
+            requestAnimationFrame(frame);
+          };
+          requestAnimationFrame(frame);
+        },
+        { route, center, radius: stick.width * 0.4 },
+      );
+      try {
+        await page.waitForFunction(
+          () => window.__hillRide.stage === 'hold' && window.__hillRide.still,
+          undefined,
+          { timeout: 240000 },
+        );
+        const climb = await page.evaluate(() => ({
+          ...window.__hillRide,
+          foot: Number(document.getElementById('world').dataset.bikeRightFoot),
+          rear: document.getElementById('world').dataset.bikeRearContact,
+          elevation: Number(document.getElementById('world').dataset.elevation),
+          x: Number(document.getElementById('world').dataset.x),
+          z: Number(document.getElementById('world').dataset.z),
+        }));
+        assert.ok(climb.maxElevation > 22, 'complete climb reaches the observatory terrace');
+        assert.ok(
+          climb.elevation > 22 && Math.hypot(climb.x - 50, climb.z + 212) < 6,
+          'stop is actually on the hilltop terrace',
+        );
+        assert.ok(!climb.recovered, 'climb never resets or teleports the bike');
+        assert.ok(climb.stopDrift < 0.05, 'hill stop stays planted');
+        assert.ok(
+          climb.foot > 0.99 && climb.rear === 'true',
+          'right boot and rear tyre are grounded',
+        );
+        assert.ok(climb.worstLaneError < 2.8, 'continuous ride stays within the roadway');
+        await capture(page, 'rr310-hill-stopped.png');
+        await page.evaluate(() => {
+          window.__hillRide.resume = true;
+        });
+        await page.waitForFunction(() => window.__hillRide.done, undefined, { timeout: 240000 });
+        const ride = await page.evaluate(() => window.__hillRide);
+        assert.ok(!ride.recovered, 'return ride also completes without a reset or teleport');
+        assert.ok(ride.worstLaneError < 2.8, 'descent also stays within the road');
+        assert.ok(ride.missingRear / ride.ticks < 0.04, 'rear wheel keeps road traction');
+        await writeFile(
+          resolve(output, 'rr310-complete-hill-ride.json'),
+          JSON.stringify(ride, null, 2),
+        );
+      } finally {
+        await page.evaluate(() => {
+          window.__hillRide.abort = true;
+        });
+        await writeFile(
+          resolve(output, 'rr310-hill-ride-diagnostics.json'),
+          JSON.stringify(await page.evaluate(() => window.__hillRide), null, 2),
+        );
+        await page.mouse.up();
+      }
+      await page.keyboard.down('Space');
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.speed) < 0.1,
+      );
+      await page.keyboard.up('Space');
+      await page.keyboard.press('r');
+      await page.locator('#toast').waitFor({ state: 'hidden', timeout: 20000 });
+      await page.locator('#settings-button').click();
+      for (
+        let i = 0;
+        i < 4 && !(await page.locator('#time-button').textContent()).includes('day');
+        i++
+      )
+        await page.locator('#time-button').click();
+      await page.locator('#camera-close').click();
+      await page.mouse.move(760, 230);
+      await page.mouse.down();
+      await page.mouse.move(560, 280, { steps: 6 });
+      await page.mouse.up();
+      await page.mouse.wheel(0, -400);
+      await page.waitForFunction(() => Number(document.getElementById('world').dataset.zoom) < 4);
+      await page.waitForTimeout(1000);
+      await capture(page, 'rr310-rear-lenses-day.png');
+      await page.locator('#settings-button').click();
+      for (
+        let i = 0;
+        i < 4 && !(await page.locator('#time-button').textContent()).includes('night');
+        i++
+      )
+        await page.locator('#time-button').click();
+      await page.locator('#settings-dialog [data-close]').click();
+      await page.waitForFunction(
+        () => Number(document.getElementById('world').dataset.night) > 0.9,
+      );
+      await capture(page, 'rr310-rear-lenses-night.png');
+      await page.keyboard.down('Space');
+      await page.waitForTimeout(400);
+      await capture(page, 'rr310-rear-lenses-braking.png');
+      await page.keyboard.up('Space');
       await clean(errors);
     },
   );

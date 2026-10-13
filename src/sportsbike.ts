@@ -20,10 +20,14 @@ const white = new THREE.MeshStandardMaterial({
   emissive: '#cae8ff',
   emissiveIntensity: 1.8,
 });
-const tail = new THREE.MeshStandardMaterial({
-  color: '#941811',
-  emissive: '#ff1205',
-  emissiveIntensity: 1,
+const tail = new THREE.MeshPhysicalMaterial({
+  color: '#b71915',
+  emissive: '#d81710',
+  emissiveIntensity: 0.65,
+  roughness: 0.23,
+  metalness: 0.08,
+  clearcoat: 1,
+  clearcoatRoughness: 0.12,
 });
 
 function rod(parent: THREE.Object3D, a: V, b: V, r: number, material: THREE.Material) {
@@ -190,6 +194,8 @@ function decal(side: number) {
   return m;
 }
 export function makeSportsbike() {
+  const tailLens = tail.clone();
+  const tailLED = new THREE.MeshBasicMaterial({ color: '#ed2317', toneMapped: false });
   const group = new THREE.Group();
   group.name = 'vehicle:apache-rr310';
   const chassis = new THREE.Group();
@@ -345,53 +351,117 @@ export function makeSportsbike() {
       [0.38, 0.24, 0.175, 0.075],
       [0.6, 0.33, 0.16, 0.075],
       [0.84, 0.37, 0.115, 0.065],
-      [0.99, 0.35, 0.09, 0.045],
+      [0.99, 0.35, 0.135, 0.052],
     ],
     paint,
   );
   oval(chassis, [0, 0.4, 0.67], [0.135, 0.045, 0.17], seat);
   for (const side of [-1, 1])
     rod(chassis, [side * 0.13, 0.26, 0.66], [side * 0.03, 0.33, 0.98], 0.009, red);
-  // RR 310's split, hooked LED signature, traced from the supplied rear photo.
-  // Both branches sweep down from the tail shoulders around the dark centre.
+  // A fitted lamp assembly: sculpted red lenses and diffused LED bands sit inside
+  // the black tail cowl, with the reference's split hooks around a dark centre.
   const tailLamp = new THREE.Group();
   tailLamp.name = 'bike:rr310-tail-light';
+  tailLamp.position.set(0, 0.312, 0.995);
+  tailLamp.rotation.x = -0.2;
   chassis.add(tailLamp);
-  const tailHousing = mat('#0c0f15', 0.25, 0.3);
-  tailHousing.side = THREE.DoubleSide;
-  panel(
-    tailLamp,
-    [
-      [-0.034, 0.396, 1.015],
-      [0.034, 0.396, 1.015],
-      [0.111, 0.355, 1.015],
-      [0.122, 0.3, 1.009],
-      [0.065, 0.244, 0.995],
-      [-0.065, 0.244, 0.995],
-      [-0.122, 0.3, 1.009],
-      [-0.111, 0.355, 1.015],
-    ],
-    tailHousing,
+  const housing = new THREE.Shape();
+  housing.moveTo(-0.024, 0.083);
+  housing.lineTo(0.024, 0.083);
+  housing.bezierCurveTo(0.062, 0.081, 0.115, 0.064, 0.131, 0.021);
+  housing.bezierCurveTo(0.148, -0.013, 0.125, -0.043, 0.085, -0.074);
+  housing.quadraticCurveTo(0.071, -0.085, 0.057, -0.078);
+  housing.lineTo(0, -0.06);
+  housing.lineTo(-0.057, -0.078);
+  housing.quadraticCurveTo(-0.071, -0.085, -0.085, -0.074);
+  housing.bezierCurveTo(-0.125, -0.043, -0.148, -0.013, -0.131, 0.021);
+  housing.bezierCurveTo(-0.115, 0.064, -0.062, 0.081, -0.024, 0.083);
+  const housingMesh = new THREE.Mesh(
+    new THREE.ExtrudeGeometry(housing, {
+      depth: 0.026,
+      bevelEnabled: true,
+      bevelSize: 0.004,
+      bevelThickness: 0.003,
+      bevelSegments: 3,
+      curveSegments: 16,
+    }),
+    mat('#101116', 0.36, 0.2),
   );
+  housingMesh.position.z = -0.013;
+  housingMesh.castShadow = true;
+  tailLamp.add(housingMesh);
   for (const side of [-1, 1]) {
-    const outline: V[] = [
-      [side * 0.025, 0.383, 0.995],
-      [side * 0.074, 0.354, 1.01],
-      [side * 0.1, 0.305, 1.002],
-      [side * 0.067, 0.258, 0.989],
-      [side * 0.025, 0.282, 0.997],
-    ];
-    tube(tailLamp, outline, 0.014, tailHousing, 12);
-    tube(
-      tailLamp,
-      outline.map(([x, y, z]) => [x, y, z + 0.023]),
-      0.0065,
-      tail,
-      12,
+    const lens = new THREE.Shape();
+    lens.moveTo(side * 0.021, 0.071);
+    lens.bezierCurveTo(side * 0.048, 0.07, side * 0.094, 0.055, side * 0.113, 0.024);
+    lens.bezierCurveTo(side * 0.135, -0.007, side * 0.117, -0.033, side * 0.08, -0.064);
+    lens.quadraticCurveTo(side * 0.066, -0.075, side * 0.054, -0.066);
+    lens.lineTo(side * 0.025, -0.049);
+    lens.lineTo(side * 0.036, -0.035);
+    lens.lineTo(side * 0.064, -0.051);
+    lens.quadraticCurveTo(side * 0.07, -0.054, side * 0.074, -0.048);
+    lens.bezierCurveTo(side * 0.101, -0.026, side * 0.109, -0.011, side * 0.096, 0.011);
+    lens.bezierCurveTo(side * 0.078, 0.039, side * 0.043, 0.05, side * 0.021, 0.052);
+    lens.closePath();
+    const lensMesh = new THREE.Mesh(
+      new THREE.ExtrudeGeometry(lens, {
+        depth: 0.011,
+        bevelEnabled: true,
+        bevelSize: 0.002,
+        bevelThickness: 0.002,
+        bevelSegments: 3,
+        curveSegments: 20,
+      }),
+      tailLens,
     );
+    lensMesh.position.z = 0.016;
+    lensMesh.name = 'bike:tail-lens-' + side;
+    tailLamp.add(lensMesh);
+    const path = new THREE.CatmullRomCurve3(
+      [
+        new THREE.Vector3(side * 0.023, 0.061, 0.03),
+        new THREE.Vector3(side * 0.081, 0.043, 0.03),
+        new THREE.Vector3(side * 0.112, 0.002, 0.03),
+        new THREE.Vector3(side * 0.092, -0.04, 0.03),
+        new THREE.Vector3(side * 0.066, -0.061, 0.03),
+        new THREE.Vector3(side * 0.03, -0.042, 0.03),
+      ],
+      false,
+      'centripetal',
+    );
+    const vertices: number[] = [],
+      indices: number[] = [];
+    for (let i = 0; i <= 48; i++) {
+      const p = path.getPoint(i / 48),
+        t = path.getTangent(i / 48);
+      const width = 0.0065;
+      vertices.push(
+        p.x - t.y * width,
+        p.y + t.x * width,
+        p.z,
+        p.x + t.y * width,
+        p.y - t.x * width,
+        p.z,
+      );
+      if (i < 48) {
+        const n = i * 2;
+        indices.push(n, n + 1, n + 2, n + 1, n + 3, n + 2);
+      }
+    }
+    const diffuser = new THREE.BufferGeometry();
+    diffuser.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    diffuser.setIndex(indices);
+    diffuser.computeVertexNormals();
+    const led = new THREE.Mesh(diffuser, tailLED);
+    led.material.side = THREE.DoubleSide;
+    tailLamp.add(led);
     rod(chassis, [side * 0.03, 0.1, 1.03], [side * 0.16, 0.1, 1.055], 0.007, rubber);
     oval(chassis, [side * 0.17, 0.1, 1.055], [0.04, 0.014, 0.019], mat('#b48635'));
   }
+  const brakeGlow = new THREE.PointLight('#f32213', 0.25, 1.5, 2);
+  brakeGlow.position.set(0, -0.03, 0.08);
+  tailLamp.add(brakeGlow);
+  bakeStatic(tailLamp);
   // Angular twin-projector shark nose, enclosing side fairings and lower belly pan.
   const bodyMat = paint.clone();
   bodyMat.side = THREE.DoubleSide;
@@ -761,7 +831,7 @@ export function makeSportsbike() {
   bakeStatic(head);
   bakeStatic(torso);
   bakeStatic(rider, [head, torso, ...legs.map((leg) => leg.thigh.parent!)]);
-  bakeStatic(chassis, [kickstand]);
+  bakeStatic(chassis, [kickstand, tailLamp]);
   const headlight = new THREE.SpotLight('#d6ecff', 0, 32, 0.37, 0.85, 1.6);
   headlight.position.set(0, 0.15, -0.89);
   headlight.target.position.set(0, -0.5, -12);
@@ -790,7 +860,9 @@ export function makeSportsbike() {
       rider.rotation.z = stopped ? 0 : lean * 0.08;
       rider.position.y = 0;
       head.rotation.y = stopped ? 0 : -lean * 0.18;
-      tail.emissiveIntensity = brake ? 2.8 : 1;
+      tailLens.emissiveIntensity = brake ? 2.1 : 0.65;
+      tailLED.color.set(brake ? '#ff3824' : '#ed2317');
+      brakeGlow.intensity = brake ? 1.2 : 0.25;
       headlight.intensity = 8 + night * 34;
     },
   };
