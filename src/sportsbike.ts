@@ -358,6 +358,21 @@ export function makeSportsbike() {
   tailLamp.name = 'bike:rr310-tail-light';
   chassis.add(tailLamp);
   const tailHousing = mat('#0c0f15', 0.25, 0.3);
+  tailHousing.side = THREE.DoubleSide;
+  panel(
+    tailLamp,
+    [
+      [-0.034, 0.396, 1.015],
+      [0.034, 0.396, 1.015],
+      [0.111, 0.355, 1.015],
+      [0.122, 0.3, 1.009],
+      [0.065, 0.244, 0.995],
+      [-0.065, 0.244, 0.995],
+      [-0.122, 0.3, 1.009],
+      [-0.111, 0.355, 1.015],
+    ],
+    tailHousing,
+  );
   for (const side of [-1, 1]) {
     const outline: V[] = [
       [side * 0.025, 0.383, 0.995],
@@ -366,11 +381,11 @@ export function makeSportsbike() {
       [side * 0.067, 0.258, 0.989],
       [side * 0.025, 0.282, 0.997],
     ];
-    tube(tailLamp, outline, 0.021, tailHousing, 12);
+    tube(tailLamp, outline, 0.014, tailHousing, 12);
     tube(
       tailLamp,
       outline.map(([x, y, z]) => [x, y, z + 0.023]),
-      0.009,
+      0.0065,
       tail,
       12,
     );
@@ -611,7 +626,34 @@ export function makeSportsbike() {
       alloy,
       6,
     );
-  box(chassis, [0.1, 0.045, 0.49], [0, -0.04, 0.72], alloy).rotation.x = -0.25;
+  // Wide moulded rear hugger curves over the tyre, as in the rear reference.
+  const huggerVertices: number[] = [],
+    huggerIndices: number[] = [];
+  for (let row = 0; row <= 20; row++) {
+    const angle = -0.9 + (row / 20) * 1.85;
+    for (let col = 0; col <= 8; col++) {
+      const u = (col / 8) * 2 - 1;
+      huggerVertices.push(
+        u * 0.095,
+        -0.4 + Math.cos(angle) * 0.344 + (1 - u * u) * 0.013,
+        0.6825 + Math.sin(angle) * 0.344,
+      );
+    }
+  }
+  for (let row = 0; row < 20; row++)
+    for (let col = 0; col < 8; col++) {
+      const n = row * 9 + col;
+      huggerIndices.push(n, n + 1, n + 9, n + 1, n + 10, n + 9);
+    }
+  const huggerGeometry = new THREE.BufferGeometry();
+  huggerGeometry.setAttribute('position', new THREE.Float32BufferAttribute(huggerVertices, 3));
+  huggerGeometry.setIndex(huggerIndices);
+  huggerGeometry.computeVertexNormals();
+  const huggerMaterial = rubber.clone();
+  huggerMaterial.side = THREE.DoubleSide;
+  const hugger = new THREE.Mesh(huggerGeometry, huggerMaterial);
+  hugger.castShadow = true;
+  chassis.add(hugger);
   rod(chassis, [0, 0.27, 0.85], [0, 0.03, 1.07], 0.018, alloy);
   box(chassis, [0.22, 0.1, 0.01], [0, 0.02, 1.085], silver);
   const kickstand = rod(chassis, [-0.18, -0.25, 0.2], [-0.31, -0.62, 0.31], 0.014, alloy);
