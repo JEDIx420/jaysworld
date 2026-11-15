@@ -11,6 +11,7 @@ export interface Place {
   links: { label: string; href: string }[];
 }
 const linkedIn = 'https://www.linkedin.com/in/jayanand-j-163144126';
+export const COFFEE_URL = 'https://buymeacoffee.com/jayanand';
 
 export const PLACES: readonly Place[] = [
   {
@@ -25,7 +26,7 @@ export const PLACES: readonly Place[] = [
     links: [
       { label: 'Connect on LinkedIn', href: linkedIn },
       { label: 'Explore my GitHub', href: 'https://github.com/JEDIx420' },
-      { label: 'Buy me a coffee', href: 'https://buymeacoffee.com/jayanand' },
+      { label: 'Buy me a coffee', href: COFFEE_URL },
     ],
   },
   {

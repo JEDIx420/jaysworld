@@ -1,4 +1,4 @@
-import { PLACES, type Place } from './projects';
+import { COFFEE_URL, PLACES, type Place } from './projects';
 import { VENUE_PAGES } from './venue-content';
 import { createBeatMachine } from './beats';
 import { bankScreen, commandScreen } from './venue-screens';
@@ -201,15 +201,15 @@ export class RetroExhibit {
     fallback.innerHTML = `<div class="presentation-nodes">${card.nodes.map((n, i) => `<div><small>0${i + 1}</small><strong>${n}</strong></div>`).join('')}</div>`;
     stage.append(fallback);
     const links = this.dialog.querySelector('.retro-links')!;
-    if (this.page === pages.length - 1)
-      for (const link of place.links) {
-        const a = document.createElement('a');
-        a.href = link.href;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.textContent = link.label;
-        links.append(a);
-      }
+    for (const link of place.links) {
+      if (this.page !== pages.length - 1 && link.href !== COFFEE_URL) continue;
+      const a = document.createElement('a');
+      a.href = link.href;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = link.label;
+      links.append(a);
+    }
     this.dialog.dataset.page = String(this.page);
     this.dialog.dataset.progress = String(this.progress);
     this.actions.slide(this.page, this.progress);
