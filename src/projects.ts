@@ -25,6 +25,7 @@ export const PLACES: readonly Place[] = [
     links: [
       { label: 'Connect on LinkedIn', href: linkedIn },
       { label: 'Explore my GitHub', href: 'https://github.com/JEDIx420' },
+      { label: 'Buy me a coffee', href: 'https://buymeacoffee.com/jayanand' },
     ],
   },
   {
