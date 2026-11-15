@@ -2069,6 +2069,30 @@ body.started .start-driving {
   pointer-events: none;
   visibility: hidden;
 }
+.journey-support {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #80683966;
+  border-radius: 6px;
+  color: #423313;
+  background: #e8d8ac66;
+  font-size: 12px;
+  text-decoration: none;
+  pointer-events: auto;
+}
+.journey-support:hover {
+  background: #e8d8ac;
+}
+.journey-support:focus-visible {
+  outline: 2px solid #695322;
+  outline-offset: 3px;
+}
+body.started .journey-support {
+  display: none;
+}
 /* Village craft: a compact duty switch, useful directions, and venue-specific journals. */
 #taxi-toggle {
   display: flex;

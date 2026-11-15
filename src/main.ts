@@ -730,7 +730,13 @@ window.addEventListener(
   (e) => {
     const el = e.target as HTMLElement;
     if (el.closest('input,textarea,select') || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.code === 'Enter' && !experienceStarted && booted && !dialogs.some((d) => d.open)) {
+    if (
+      e.code === 'Enter' &&
+      !el.closest('a') &&
+      !experienceStarted &&
+      booted &&
+      !dialogs.some((d) => d.open)
+    ) {
       e.preventDefault();
       startExperience();
       return;
