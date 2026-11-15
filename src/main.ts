@@ -4,7 +4,7 @@ import './venues.css';
 import './journey-hud.css';
 import './bike.css';
 import '@fontsource/noto-sans-malayalam/malayalam-400.css';
-import { PLACES, nearestPlace, type Place } from './projects';
+import { COFFEE_URL, PLACES, nearestPlace, type Place } from './projects';
 import { VillageRadio } from './radio';
 import { VenueControls, RetroExhibit } from './retro';
 import { JourneyAudio } from './audio';
@@ -697,7 +697,8 @@ $('start-driving').addEventListener('click', startExperience);
 // Any first click after loading unlocks audio in the same trusted event.
 window.addEventListener(
   'click',
-  () => {
+  (event) => {
+    if ((event.target as Element).closest<HTMLAnchorElement>('a')?.href === COFFEE_URL) return;
     if (booted && !sceneFailed) startExperience();
   },
   { capture: true },

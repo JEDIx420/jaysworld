@@ -2093,6 +2093,11 @@ body.started .start-driving {
 body.started .journey-support {
   display: none;
 }
+@media (max-height: 500px) and (pointer: coarse) {
+  .journey-support {
+    margin-top: 0.5rem;
+  }
+}
 /* Village craft: a compact duty switch, useful directions, and venue-specific journals. */
 #taxi-toggle {
   display: flex;
